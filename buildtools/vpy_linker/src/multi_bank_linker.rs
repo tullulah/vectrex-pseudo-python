@@ -13,6 +13,7 @@ use std::path::Path;
 
 /// Simple label extractor - extracts labels from ASM without full assembly
 /// Returns map of label_name -> offset_in_bytes (approximation)
+#[allow(dead_code)]
 fn extract_labels_from_asm(asm: &str) -> HashMap<String, u16> {
     let mut labels = HashMap::new();
     let mut current_offset = 0u16;
@@ -124,7 +125,9 @@ impl MultiBankLinker {
         let mut definitions = String::new();
         let mut in_defs = false;
         for line in asm_content.lines() {
-            if line.contains("=== RAM VARIABLE DEFINITIONS") {
+            // Detect RAM variable definitions section (multiple possible markers)
+            if line.contains("=== RAM VARIABLE DEFINITIONS") 
+               || line.contains("=== RAM Variables") {
                 in_defs = true;
                 definitions.push_str(line);
                 definitions.push('\n');
@@ -231,18 +234,30 @@ impl MultiBankLinker {
                 }
             }
             
-            // Skip definitions section - already collected in FIRST PASS
-            if line.contains("=== RAM VARIABLE DEFINITIONS") {
+            // CRITICAL FIX (2026-01-20): DON'T skip definitions - they need to be in each bank!
+            // Each bank assembles independently, so it needs its own copy of RAM variable definitions
+            // OLD CODE: collected definitions in FIRST PASS, then skipped them here, then re-prepended in full_code
+            // PROBLEM: Re-prepending didn't work because definitions got stripped again in assemble_bank
+            // NEW CODE: Keep definitions in current_code so they persist through all processing steps
+            
+            // Detect start of definitions section
+            if line.contains("=== RAM VARIABLE DEFINITIONS") 
+               || line.contains("=== RAM Variables") {
                 in_definitions = true;
+                // ADD to current_code instead of skip
+                current_code.push_str(line);
+                current_code.push('\n');
                 continue;
             }
             
-            // Skip EQU definitions - already collected in FIRST PASS
+            // Process EQU definitions - ADD them to current_code
             if in_definitions {
-                // Skip until we hit empty line or non-EQU line
+                current_code.push_str(line);
+                current_code.push('\n');
+                // Stop at empty line or non-EQU line
                 if line.trim().is_empty() || (!line.contains("EQU") && !line.starts_with(';')) {
                     in_definitions = false;
-                    definitions_ended = true;  // Mark that definitions section has ended
+                    definitions_ended = true;
                 }
                 continue;
             }
@@ -263,6 +278,15 @@ impl MultiBankLinker {
                         };
                         eprintln!("🔍 [SPLIT DEBUG] Saving Bank #{}: org=0x{:04X}, current_code_len={}, full_code_len={}", 
                             bank_id, org, current_code.len(), full_code.len());
+                        // DEBUG: Check if definitions are in current_code
+                        let current_has_equ = current_code.contains(" EQU ");
+                        let current_has_result = current_code.contains("RESULT");
+                        eprintln!("🔍 [SPLIT DEBUG] Bank #{}: current_code has_equ={}, has_result={}", 
+                            bank_id, current_has_equ, current_has_result);
+                        if bank_id == 0 && current_code.len() > 0 {
+                            eprintln!("🔍 [SPLIT DEBUG] Bank #0 current_code preview (first 500 chars):\n{}", 
+                                &current_code[..500.min(current_code.len())]);
+                        }
                         sections.insert(bank_id, BankSection {
                             bank_id,
                             org,
@@ -306,7 +330,11 @@ impl MultiBankLinker {
             
             // Detect end of bank sections: wrappers section or other post-bank code
             // This allows us to exit in_bank_section when we encounter these markers
-            if in_bank_section && line.starts_with("; ===== ") {
+            // CRITICAL FIX (2026-01-17): Do NOT exit in_bank_section for visual separator lines
+            // like "; ================================================" which appear around BANK markers.
+            // Only exit for actual wrapper section markers like "; ===== CROSS-BANK CALL WRAPPERS ====="
+            let is_visual_separator = line.starts_with("; =====") && line.chars().all(|c| c == ';' || c == ' ' || c == '=');
+            if in_bank_section && line.starts_with("; ===== ") && !is_visual_separator {
                 // Save current bank before exiting in_bank_section
                 // But DO NOT clear current_bank_id/org - let EOF handler save it properly
                 in_bank_section = false;
@@ -351,12 +379,39 @@ impl MultiBankLinker {
         
         // ===== FINALIZE RUNTIME HELPERS =====
         // Merge post_bank_code (wrappers and other helpers after banks)
-        runtime_helpers.push_str(&post_bank_code);
+        // BUT EXCLUDE ASSETS - assets must stay in their original bank, NOT in helpers bank
+        let asset_markers = [
+            "; EMBEDDED ASSETS",
+            "; Generated from",
+            "_VECTORS:",
+            "_MUSIC:",
+            "_SFX:",
+            "_LEVEL:",
+            "_PATH0:",
+            "_PATH1:",
+        ];
+        let post_bank_code_without_assets = {
+            let cut_pos = asset_markers.iter()
+                .filter_map(|m| post_bank_code.find(m))
+                .min()
+                .unwrap_or(post_bank_code.len());
+            if cut_pos < post_bank_code.len() {
+                eprintln!("     - Excluding assets from runtime_helpers (cut at position {} / {})", cut_pos, post_bank_code.len());
+            }
+            post_bank_code[..cut_pos].to_string()
+        };
+        runtime_helpers.push_str(&post_bank_code_without_assets);
         
         // Also extract wrappers from current_code if they're there (in case marker detection didn't split them)
         let (bank_code_only, extracted_wrappers) = extract_wrappers(&current_code);
         if !extracted_wrappers.is_empty() {
-            runtime_helpers.push_str(&extracted_wrappers);
+            // Filter assets from extracted_wrappers too
+            let wrappers_cut_pos = asset_markers.iter()
+                .filter_map(|m| extracted_wrappers.find(m))
+                .min()
+                .unwrap_or(extracted_wrappers.len());
+            let wrappers_without_assets = &extracted_wrappers[..wrappers_cut_pos];
+            runtime_helpers.push_str(wrappers_without_assets);
         }
         
         // ===== SAVE LAST BANK WITH RUNTIME HELPERS =====
@@ -569,6 +624,19 @@ impl MultiBankLinker {
         // NOTE: Vectors are added in generate_multibank_rom after binary assembly, not here
         // This ensures they're placed at the correct ROM offset without ORG conflicts
 
+        // DEBUG: Show final section sizes
+        eprintln!("XXXXXXXXXXXXXXXXXXXXX DEBUG: About to iterate over {} sections", sections.len());
+        for (bank_id, section) in &sections {
+            let has_assets = section.asm_code.contains("_VECTORS:") || section.asm_code.contains("_MUSIC:");
+            eprintln!("[DEBUG FINAL SECTIONS] Bank #{}: asm_code.len()={}, has_assets={}", 
+                     bank_id, section.asm_code.len(), has_assets);
+            if *bank_id == 1 {
+                // Show first 500 chars of Bank #1
+                let preview = &section.asm_code[..std::cmp::min(500, section.asm_code.len())];
+                eprintln!("[DEBUG BANK #1 PREVIEW]: {:?}", preview);
+            }
+        }
+
         Ok(sections)
     }
     
@@ -589,6 +657,16 @@ impl MultiBankLinker {
     ) -> Result<Vec<u8>, String> {
         // Bank ASM already contains everything
         let mut full_asm = bank_section.asm_code.clone();
+        
+        // DEBUG: Check if definitions are present
+        let has_equ = full_asm.contains(" EQU ");
+        let has_result = full_asm.contains("RESULT");
+        eprintln!("[DEBUG assemble_bank] Bank #{}: has_equ={}, has_result={}, asm_code.len()={}", 
+            bank_section.bank_id, has_equ, has_result, full_asm.len());
+        if bank_section.bank_id == 0 {
+            eprintln!("[DEBUG assemble_bank] Bank #0 asm_code preview (first 500 chars):\n{}", 
+                &full_asm[..500.min(full_asm.len())]);
+        }
         
         // CRITICAL FIX (2026-01-14): Bank #31 must use ORG $4000, not $0000
         // The fixed bank window is at 0x4000-0x7FFF in the CPU address space
@@ -649,6 +727,11 @@ impl MultiBankLinker {
         // offsets (they're not known yet), so we convert at codegen time.
         let full_asm_longbranch = convert_short_to_long_branches(full_asm);
         
+        // DEBUG: Check if definitions survived to this point
+        let longbranch_has_equ = full_asm_longbranch.contains(" EQU ");
+        eprintln!("[DEBUG] Bank #{}: full_asm_longbranch has_equ={}, len={}", 
+            bank_section.bank_id, longbranch_has_equ, full_asm_longbranch.len());
+        
         // DEBUG: Write ASM snapshots to temp files for inspection
         // - bank_XX_full.asm : full content (includes headers/external symbols)
         // - bank_XX.asm      : trimmed view (only bank code; headers removed)
@@ -663,7 +746,7 @@ impl MultiBankLinker {
             }
 
             // Trimmed snapshot for readability (drop repeated headers/INCLUDE/externals for banks 0-30)
-            let trimmed = if bank_section.bank_id as u8 == helper_bank_id {
+            let _trimmed_asm = if bank_section.bank_id as u8 == helper_bank_id {
                 full_asm_longbranch.clone()
             } else {
                 // Keep first ORG; then keep from CODE SECTION onwards, skipping INCLUDE/external EQU block for readability
@@ -698,11 +781,10 @@ impl MultiBankLinker {
                     if upper.starts_with("; EXTERNAL SYMBOLS") {
                         continue;
                     }
-                    if let Some(second) = trimmed.split_whitespace().nth(1) {
-                        if second == "EQU" {
-                            continue;
-                        }
-                    }
+                    // CRITICAL FIX (2026-01-20): DON'T skip EQU lines - each bank needs them!
+                    // Each bank assembles independently, so RAM variable definitions must be present
+                    // Original code had: if second == "EQU" { continue; } which broke multibank builds
+                    // Solution: Keep EQU lines in each bank's ASM
 
                     trimmed_body.push(line.to_string());
                 }
@@ -733,11 +815,10 @@ impl MultiBankLinker {
                         if upper.starts_with("; EXTERNAL SYMBOLS") {
                             continue;
                         }
-                        if let Some(second) = trimmed.split_whitespace().nth(1) {
-                            if second == "EQU" {
-                                continue;
-                            }
-                        }
+                        // CRITICAL FIX (2026-01-20): DON'T skip EQU lines - each bank needs them!
+                        // Each bank assembles independently, so RAM variable definitions must be present
+                        // Original code had: if second == "EQU" { continue; } which broke multibank builds
+                        // Solution: Keep EQU lines in each bank's ASM
                         saw_body = true;
                         fallback.push(line.to_string());
                     }
@@ -756,8 +837,10 @@ impl MultiBankLinker {
             };
 
             let temp_trimmed_path = temp_dir.join(format!("bank_{:02}.asm", bank_section.bank_id));
-            if let Ok(mut file) = File::create(&temp_trimmed_path) {
-                let _ = file.write_all(trimmed.as_bytes());
+            // CRITICAL FIX (2026-01-20): Use full_asm_longbranch directly - it already has definitions!
+            // DON'T write trimmed (which filters out EQU lines)
+            if let Err(e) = fs::write(&temp_trimmed_path, &full_asm_longbranch) {
+                eprintln!("     [WARN] Failed to write bank ASM: {}", e);
             }
         }
         
@@ -825,7 +908,8 @@ impl MultiBankLinker {
         }
         
         // Get binary data (already Vec<u8>, no .0 field)
-        let mut binary_data = binary;        
+        let mut binary_data = binary;
+        
         // Pad to bank size (16KB)
         let bank_size = self.rom_bank_size as usize;
         if binary_data.len() > bank_size {
@@ -897,19 +981,23 @@ impl MultiBankLinker {
             
             eprintln!("     - PASS 1 Iteration {}: Extracting symbols from all banks...", iteration + 1);
             
-            // CRITICAL: Process helper bank FIRST so its symbols (PRINT_TEXT_STR_*, etc.)
-            // are available for other banks in the same iteration
-            let helper_first_order: Vec<u8> = {
-                let mut order = vec![helper_bank_id];
+            // CRITICAL FIX (2026-01-20): Process Banks #0-#30 FIRST, then Bank #31 LAST
+            // Reason: Bank #31 contains ASSET_ADDR_TABLE which references assets in Banks #1-#30
+            // We need those asset symbols defined BEFORE we can assemble Bank #31
+            let banks_first_order: Vec<u8> = {
+                let mut order = Vec::new();
+                // First: Banks #0-#30 (code + assets - these define the asset symbols)
                 for id in 0..self.rom_bank_count {
                     if id != helper_bank_id {
                         order.push(id);
                     }
                 }
+                // Last: Bank #31 (helpers + lookup tables - these REFERENCE asset symbols)
+                order.push(helper_bank_id);
                 order
             };
             
-            for bank_id in helper_first_order {
+            for bank_id in banks_first_order {
                 if let Some(section) = sections.get(&bank_id) {
                     let mut bank_asm = convert_short_to_long_branches(&section.asm_code);
                     
@@ -957,14 +1045,11 @@ impl MultiBankLinker {
                             // For other banks (ORG $0000), addresses are already relative ($0000+offset)
                             // So we DON'T add bank_base - the addresses are already correct!
                             
-                            let mut skipped_count = 0;
                             for (label, addr) in symbol_table {
-                                // CRITICAL: Asset vectors (_VECTORS, _PATH) should ONLY come from bank #31
-                                // Skip vector/music assets from non-helper banks (they're duplicates in the generated ASM)
-                                if (label.contains("_VECTORS") || label.contains("_PATH") || label.contains("_MUSIC")) && bank_id as u8 != helper_bank_id {
-                                    skipped_count += 1;
-                                    continue;  // Skip this symbol - it's a duplicate
-                                }
+                                // CRITICAL FIX (2026-01-20): DON'T skip asset symbols from Banks #1-#30
+                                // Assets are distributed across banks by allocator - they're NOT duplicates
+                                // Each asset has a unique address in its assigned bank ($0000-$3FFF switchable window)
+                                // These symbols MUST be in all_symbols for cross-bank references to work
                                 
                                 let runtime_addr = addr;  // Use address as-is (ORG already included)
                                 
@@ -974,43 +1059,46 @@ impl MultiBankLinker {
                                              bank_id, label, addr, runtime_addr);
                                 }
                                 
-                                // Prefer symbols from fixed bank (#31) in case of conflicts
-                                if !all_symbols.contains_key(&label) || bank_id as u8 == helper_bank_id {
-                                    all_symbols.insert(label, runtime_addr);
-                                }
-                            }
-                            if skipped_count > 0 {
-                                eprintln!("       ⏭ Bank {}: Skipped {} asset symbols (_VECTORS/_PATH/_MUSIC)", bank_id, skipped_count);
-                            }
-                            eprintln!("       Bank #{}: {} symbols", bank_id, sym_count);
-                            if skipped_count > 0 {
-                                eprintln!("       ⏭ Bank {}: Skipped {} asset symbols (_VECTORS/_PATH/_MUSIC)", bank_id, skipped_count);
-                            }
-                            eprintln!("       Bank #{}: {} symbols ({} after skipping)", bank_id, sym_count, sym_count - skipped_count);
-                        }
-                        Err(e) => {
-                            // Assembly failed - try to extract labels anyway via simple parsing
-                            eprintln!("       ⚠ Bank #{} assembly skipped: {}", bank_id, e);
-                            
-                            // Extract labels from ASM without full assembly
-                            let parsed_labels = extract_labels_from_asm(&bank_asm);
-                            let bank_base = if bank_id as u8 == helper_bank_id {
-                                0x4000u16
-                            } else {
-                                0x0000u16
-                            };
-                            
-                            for (label, offset) in parsed_labels {
-                                // CRITICAL: Asset vectors (_VECTORS, _PATH) should ONLY come from bank #31
-                                if (label.contains("_VECTORS") || label.contains("_PATH") || label.contains("_MUSIC")) && bank_id as u8 != helper_bank_id {
-                                    continue;  // Skip this symbol - it's a duplicate
+                                // DEBUG: Log VECTOR_BANK_TABLE and VECTOR_ADDR_TABLE
+                                if label.contains("VECTOR_BANK_TABLE") || label.contains("VECTOR_ADDR_TABLE") {
+                                    eprintln!("         ⚠️ IMPORTANT: Bank #{} found symbol '{}' at addr 0x{:04X}", 
+                                             bank_id, label, runtime_addr);
                                 }
                                 
-                                let runtime_addr = bank_base + offset;
+                                // Prefer symbols from fixed bank (#31) in case of conflicts
                                 if !all_symbols.contains_key(&label) || bank_id as u8 == helper_bank_id {
-                                    eprintln!("         → Extracted label '{}' at 0x{:04X}", label, runtime_addr);
+                                    // DEBUG: Log music asset symbols
+                                    if label.contains("_MUSIC") {
+                                        eprintln!("         → Adding music asset '{}' at 0x{:04X} from Bank #{}", label, runtime_addr, bank_id);
+                                    }
                                     all_symbols.insert(label, runtime_addr);
                                 }
+                            }
+                            eprintln!("       Bank #{}: {} symbols extracted", bank_id, sym_count);
+                        }
+                        Err(e) => {
+                            // Bank failed to assemble - this is expected for cross-bank references
+                            // Continue with other banks to collect their symbols
+                            // We'll retry this bank in the next iteration with more symbols available
+                            if iteration < max_iterations - 1 {
+                                // Extract the symbol name from error "Símbolo no definido: SYMBOLNAME"
+                                let missing_symbol = if e.contains(": ") {
+                                    e.split(": ").last().unwrap_or("unknown")
+                                } else {
+                                    "unknown"
+                                };
+                                eprintln!("       ⚠️ Bank #{} deferred (missing: {})", bank_id, missing_symbol);
+                                // Continue - don't fail yet, more iterations may resolve this
+                            } else {
+                                // Final iteration - this is a real error
+                                eprintln!("       ❌ FATAL: Bank #{} assembly failed in final PASS 1 iteration", bank_id);
+                                eprintln!("          Error: {}", e);
+                                eprintln!("          This usually indicates:");
+                                eprintln!("            - Cross-bank symbol references still unresolved");
+                                eprintln!("            - Missing external symbol definitions");
+                                eprintln!("            - Syntax errors in generated ASM");
+                                eprintln!("\n          Multibank build cannot proceed - symbol table incomplete.");
+                                return Err(format!("Bank #{} assembly failed in PASS 1: {}", bank_id, e));
                             }
                         }
                     }
@@ -1028,43 +1116,21 @@ impl MultiBankLinker {
         
         eprintln!("     - Extracted {} global symbols", all_symbols.len());
         
-        // DEBUG: Check if START is in the symbols
-        if all_symbols.contains_key("START") {
-            eprintln!("       ✓ Symbol START found at 0x{:04X}", all_symbols["START"]);
-        } else {
-            eprintln!("       ⚠ Symbol START NOT FOUND - will cause linker errors");
+        // CRITICAL: START symbol MUST exist - it's the entry point
+        if !all_symbols.contains_key("START") {
+            eprintln!("       ❌ FATAL: Symbol START not found in symbol table");
+            eprintln!("          START is the program entry point - multibank build cannot proceed.");
+            return Err("Symbol START not found - cannot generate multibank ROM".to_string());
         }
+        eprintln!("       ✓ Symbol START found at 0x{:04X}", all_symbols["START"]);
         
-        // DEBUG: Show vector asset symbols
+        // DEBUG: Show vector asset symbols (no reassignment to helpers bank)
         for asset in &["_PLAYER_VECTORS", "_PLAYER_PATH0", "_ENEMY_VECTORS", "_ENEMY_PATH0"] {
             if let Some(&addr) = all_symbols.get(*asset) {
                 eprintln!("       • {} at 0x{:04X}", asset, addr);
             }
         }
-        
-        // FIX: Vector assets should point to bank #31 addresses (0x4000+)
-        // Scan for vector/music symbols and correct their bank addresses if needed
-        let mut corrected_symbols = HashMap::new();
-        for (name, addr) in &all_symbols {
-            let corrected_addr = if (name.contains("_VECTORS") || name.contains("_MUSIC") || name.contains("_PATH")) && *addr < 0x4000 {
-                // This symbol appears to be in bank #0 range but should be in bank #31
-                // Check if there's a version in bank #31
-                let bank31_version = name.clone();
-                if let Some(&bank31_addr) = all_symbols.iter().find(|(n, a)| *n == &bank31_version && **a >= 0x4000).map(|(_, a)| a) {
-                    eprintln!("       ✓ Corrected {}: 0x{:04X} → 0x{:04X} (bank #31)", name, addr, bank31_addr);
-                    bank31_addr
-                } else {
-                    // No corrected version found, assume it should be in bank #31
-                    let bank31_addr = 0x4000 + (addr & 0x3FFF);
-                    eprintln!("       ✓ Reassigned {} to bank #31: 0x{:04X}", name, bank31_addr);
-                    bank31_addr
-                }
-            } else {
-                *addr
-            };
-            corrected_symbols.insert(name.clone(), corrected_addr);
-        }
-        let all_symbols = corrected_symbols;
+        // No reassignment: asset symbols keep their original bank address
 
         // **PASS 2**: Assemble helper bank with all symbols available
         let helper_section = sections.get(&helper_bank_id)
@@ -1279,18 +1345,24 @@ impl MultiBankLinker {
             eprintln!("DEBUG: Flattened Bank #31 content before write starts: {}...", snippet.replace("\n", "\\n"));
         }
 
-        if let Err(e) = fs::write(&flattened_path, flattened) {
-            eprintln!("       ⚠ Failed to write flattened ASM: {}", e);
-        } else {
+        fs::write(&flattened_path, flattened)
+            .map_err(|e| format!("Failed to write flattened ASM to {:?}: {}", flattened_path, e))?;
+        {
             eprintln!("       [DEBUG] Flattened ASM written to {}", flattened_path.display());
             eprintln!("       [DEBUG] File size: {} bytes", fs::metadata(&flattened_path).map(|m| m.len()).unwrap_or(0));
         }
 
         // Emit per-bank ASM snapshots (bank_00.asm .. bank_31.asm) with explicit ORG for inspection
+        eprintln!("DEBUG: Writing bank ASM files. sections.keys() = {:?}", sections.keys().collect::<Vec<_>>());
         for bank_id in 0..self.rom_bank_count {
             let bank_path = temp_dir.join(format!("bank_{:02}.asm", bank_id));
             if let Some(section) = sections.get(&bank_id) {
                 let has_org = section.asm_code.contains("ORG ");
+                let has_assets = section.asm_code.contains("_VECTORS:") || section.asm_code.contains("_MUSIC:");
+                eprintln!("DEBUG: Bank #{}: asm_code.len()={}, has_org={}, has_assets={}", 
+                    bank_id, section.asm_code.len(), has_org, has_assets);
+                eprintln!("DEBUG: Bank #{} asm_code preview (first 300 chars):\n{}", 
+                    bank_id, &section.asm_code[..300.min(section.asm_code.len())]);
                 let mut bank_code = String::new();
                 if bank_id == 31 && !has_org {
                     bank_code.push_str("ORG $4000  ; Fixed bank window\n");
@@ -1298,15 +1370,14 @@ impl MultiBankLinker {
                     bank_code.push_str("ORG $0000  ; Switchable bank window\n");
                 }
                 bank_code.push_str(&section.asm_code);
-                if let Err(e) = fs::write(&bank_path, bank_code) {
-                    eprintln!("       ⚠ Failed to write bank_{:02}.asm: {}", bank_id, e);
-                }
+                fs::write(&bank_path, bank_code)
+                    .map_err(|e| format!("Failed to write bank_{:02}.asm: {}", bank_id, e))?;
             } else {
+                eprintln!("DEBUG: Bank #{} NOT FOUND in sections!", bank_id);
                 // Create an explicit empty placeholder to keep numbering consistent
                 let placeholder = format!("; [empty bank {:02}]\n", bank_id);
-                if let Err(e) = fs::write(&bank_path, placeholder) {
-                    eprintln!("       ⚠ Failed to write empty bank_{:02}.asm: {}", bank_id, e);
-                }
+                fs::write(&bank_path, placeholder)
+                    .map_err(|e| format!("Failed to write empty bank_{:02}.asm: {}", bank_id, e))?;
             }
         }
         
@@ -1321,18 +1392,18 @@ impl MultiBankLinker {
 
             if let Some(section) = sections.get(&bank_id) {
                 eprintln!("     - Assembling Bank #{} ({} bytes code)...", bank_id, section.size_estimate);
-                // CRITICAL FIX (2026-01-17): Only pass symbols from Bank #31 (helper bank) + BIOS
-                // NOT symbols from other user banks (0-30) as they would cause assembly conflicts
-                // Bank #31 is always visible at $4000-$7FFF (fixed window)
-                // Symbols from Bank #0-30 should NOT be passed as external symbols to other banks
+                // CRITICAL FIX (2026-01-20): Filter external symbols for this bank
+                // Include:
+                // 1. Bank #31 code range ($4000-$7FFF fixed window) - always visible
+                // 2. BIOS range ($E000-$FFFF) - always visible
+                // 3. RAM variables ($C800-$CFFF) - always visible
+                // 4. Asset symbols (_VECTORS, _PATH, _MUSIC) from ANY bank - cross-bank references
                 let external_symbols: HashMap<String, u16> = all_symbols.iter()
-                    .filter(|(_name, addr)| {
+                    .filter(|(name, addr)| {
                         let a = **addr;
-                        // Only include:
-                        // 1. Bank #31 code range ($4000-$7FFF fixed window)
-                        // 2. BIOS range ($E000-$FFFF)  
-                        // 3. RAM variables ($C800-$CFFF)
-                        (a >= 0x4000 && a < 0x8000) || (a >= 0xE000) || (a >= 0xC800 && a < 0xD000)
+                        let is_fixed_or_bios = (a >= 0x4000 && a < 0x8000) || (a >= 0xE000) || (a >= 0xC800 && a < 0xD000);
+                        let is_asset = name.contains("_VECTORS") || name.contains("_PATH") || name.contains("_MUSIC");
+                        is_fixed_or_bios || is_asset
                     })
                     .map(|(k, v)| (k.clone(), *v))
                     .collect();
@@ -1372,8 +1443,9 @@ impl MultiBankLinker {
         }
         // CUSTOM_RESET is placed at the start of the fixed bank and assembled with ORG $0000 → runtime address $4000
         let reset_handler_addr: u16 = 0x4000;
-        rom_data[reset_vector_offset] = (reset_handler_addr & 0x00FF) as u8;
-        rom_data[reset_vector_offset + 1] = (reset_handler_addr >> 8) as u8;
+        // 6809 uses big-endian for 16-bit addresses: high byte first, then low byte
+        rom_data[reset_vector_offset] = (reset_handler_addr >> 8) as u8;       // High byte ($40)
+        rom_data[reset_vector_offset + 1] = (reset_handler_addr & 0x00FF) as u8; // Low byte ($00)
 
         // Patch header: copy header bytes from single-bank .bin if available, otherwise generate default header
         // Derive .bin path next to the .rom

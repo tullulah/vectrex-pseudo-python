@@ -5,6 +5,7 @@
 
 use vpy_parser::{Expr, BinOp, CmpOp, LogicOp};
 use super::builtins;
+use super::context;  // For checking mutable arrays
 use crate::AssetInfo;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -234,13 +235,16 @@ fn emit_binop(left: &Expr, op: BinOp, right: &Expr, out: &mut String, assets: &[
 fn emit_compare(left: &Expr, op: CmpOp, right: &Expr, out: &mut String, assets: &[AssetInfo]) {
     let id = LABEL_COUNTER.fetch_add(1, Ordering::SeqCst);
     
-    emit_simple_expr(left, out, assets);
-    out.push_str("    LDD RESULT\n");
-    out.push_str("    PSHS D\n");
-    
+    // CRITICAL FIX: Evaluate RIGHT first, push to stack
+    // Then evaluate LEFT, compare D (LEFT) with stack (RIGHT)
+    // CMPD does: D - [S], so we want LEFT - RIGHT
     emit_simple_expr(right, out, assets);
     out.push_str("    LDD RESULT\n");
-    out.push_str("    CMPD ,S++\n");
+    out.push_str("    PSHS D\n");          // Push RIGHT to stack
+    
+    emit_simple_expr(left, out, assets);
+    out.push_str("    LDD RESULT\n");      // D = LEFT
+    out.push_str("    CMPD ,S++\n");       // Compare LEFT - RIGHT (sets flags correctly)
     
     let branch_true = match op {
         CmpOp::Eq => "LBEQ",
@@ -261,13 +265,19 @@ fn emit_compare(left: &Expr, op: CmpOp, right: &Expr, out: &mut String, assets: 
 }
 
 fn emit_index(array: &Expr, index: &Expr, out: &mut String, assets: &[AssetInfo]) {
-    // For array indexing, we need the DATA address, not the variable pointer
-    // If array is a simple identifier, load DATA address directly
+    // CRITICAL FIX (2026-01-19): Use correct label based on array type
+    // Mutable arrays (GlobalLet): VAR_{NAME}_DATA (in RAM)
+    // Const arrays: ARRAY_{NAME}_DATA (in ROM)
+    // Use context::is_mutable_array() to check which type
     if let Expr::Ident(id) = array {
-        // Direct array access - load DATA address
-        // CRITICAL: Normalize to uppercase (unifier may have mixed case)
-        out.push_str(&format!("    LDX #ARRAY_{}_DATA  ; Array data address (ROM literal)\n", id.name.to_uppercase()));
-        out.push_str("    PSHS X\n");
+        let name_upper = id.name.to_uppercase();
+        let label = if context::is_mutable_array(&id.name) {
+            format!("VAR_{}_DATA", name_upper)  // RAM
+        } else {
+            format!("ARRAY_{}_DATA", name_upper)  // ROM
+        };
+        out.push_str(&format!("    LDX #{}  ; Array data\n", label));
+        out.push_str("    PSHS X\n");  // CRITICAL: Save X before evaluating index
     } else {
         // Complex array expression - evaluate it
         emit_simple_expr(array, out, assets);

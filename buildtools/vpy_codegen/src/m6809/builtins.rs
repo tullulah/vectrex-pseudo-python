@@ -16,10 +16,38 @@ use super::level;
 use super::utilities;
 use crate::{AssetInfo, AssetType};
 use crate::vecres::VecResource;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicUsize, AtomicBool, Ordering};
 
 /// Unique label counter for builtin function labels
 static LABEL_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+/// Flag indicating if we're generating code for multibank ROM
+/// When true, asset references use banked access (DRAW_VECTOR_BANKED, PLAY_MUSIC_BANKED)
+static IS_MULTIBANK: AtomicBool = AtomicBool::new(false);
+
+/// Flag indicating if assets are distributed across banks (requires bank switching)
+/// This is separate from IS_MULTIBANK because small assets stay in Bank #0 even in multibank mode
+static USE_BANKED_ASSETS: AtomicBool = AtomicBool::new(false);
+
+/// Set multibank mode for code generation
+pub fn set_multibank_mode(multibank: bool) {
+    IS_MULTIBANK.store(multibank, Ordering::SeqCst);
+}
+
+/// Set banked assets mode (called when assets are actually distributed)
+pub fn set_banked_assets_mode(banked: bool) {
+    USE_BANKED_ASSETS.store(banked, Ordering::SeqCst);
+}
+
+/// Check if we're in multibank mode
+pub fn is_multibank() -> bool {
+    IS_MULTIBANK.load(Ordering::SeqCst)
+}
+
+/// Check if assets require bank switching (distributed across banks)
+pub fn use_banked_assets() -> bool {
+    USE_BANKED_ASSETS.load(Ordering::SeqCst)
+}
 
 /// Builtin function arities (COPIED FROM core/src/codegen.rs)
 /// This table defines the expected number of arguments for each builtin
@@ -30,7 +58,6 @@ static BUILTIN_ARITIES: &[(&str, usize)] = &[
     ("DRAW_LINE", 5),       // x0, y0, x1, y1, intensity
     ("DRAW_RECT", 5),       // x, y, width, height, intensity
     ("SET_INTENSITY", 1),   // intensity
-    ("WAIT_RECAL", 0),      // no args
     ("RESET0REF", 0),       // no args
     
     // Vector asset functions
@@ -128,10 +155,6 @@ pub fn emit_builtin(
     
     match up.as_str() {
         // ===== Core Display Builtins =====
-        "WAIT_RECAL" => {
-            emit_wait_recal(out);
-            true
-        }
         "SET_INTENSITY" => {
             emit_set_intensity(args, out, assets);
             true
@@ -166,11 +189,11 @@ pub fn emit_builtin(
         }
         "J1_BUTTON_1" => {
             let label_id = LABEL_COUNTER.fetch_add(1, Ordering::SeqCst);
-            out.push_str("    LDA $C811      ; Vec_Button_1_1 (transition bits)\n");
+            out.push_str("    LDA $C80F      ; Vec_Btn_State (updated by Read_Btns)\n");
             out.push_str("    ANDA #$01      ; Test bit 0\n");
-            out.push_str(&format!("    BEQ .J1B1_{}_OFF\n", label_id));
+            out.push_str(&format!("    LBEQ .J1B1_{}_OFF\n", label_id));
             out.push_str("    LDD #1\n");
-            out.push_str(&format!("    BRA .J1B1_{}_END\n", label_id));
+            out.push_str(&format!("    LBRA .J1B1_{}_END\n", label_id));
             out.push_str(&format!(".J1B1_{}_OFF:\n", label_id));
             out.push_str("    LDD #0\n");
             out.push_str(&format!(".J1B1_{}_END:\n", label_id));
@@ -179,11 +202,11 @@ pub fn emit_builtin(
         }
         "J1_BUTTON_2" => {
             let label_id = LABEL_COUNTER.fetch_add(1, Ordering::SeqCst);
-            out.push_str("    LDA $C811      ; Vec_Button_1_1 (transition bits)\n");
+            out.push_str("    LDA $C80F      ; Vec_Btn_State (updated by Read_Btns)\n");
             out.push_str("    ANDA #$02      ; Test bit 1\n");
-            out.push_str(&format!("    BEQ .J1B2_{}_OFF\n", label_id));
+            out.push_str(&format!("    LBEQ .J1B2_{}_OFF\n", label_id));
             out.push_str("    LDD #1\n");
-            out.push_str(&format!("    BRA .J1B2_{}_END\n", label_id));
+            out.push_str(&format!("    LBRA .J1B2_{}_END\n", label_id));
             out.push_str(&format!(".J1B2_{}_OFF:\n", label_id));
             out.push_str("    LDD #0\n");
             out.push_str(&format!(".J1B2_{}_END:\n", label_id));
@@ -192,11 +215,11 @@ pub fn emit_builtin(
         }
         "J1_BUTTON_3" => {
             let label_id = LABEL_COUNTER.fetch_add(1, Ordering::SeqCst);
-            out.push_str("    LDA $C811      ; Vec_Button_1_1 (transition bits)\n");
+            out.push_str("    LDA $C80F      ; Vec_Btn_State (updated by Read_Btns)\n");
             out.push_str("    ANDA #$04      ; Test bit 2\n");
-            out.push_str(&format!("    BEQ .J1B3_{}_OFF\n", label_id));
+            out.push_str(&format!("    LBEQ .J1B3_{}_OFF\n", label_id));
             out.push_str("    LDD #1\n");
-            out.push_str(&format!("    BRA .J1B3_{}_END\n", label_id));
+            out.push_str(&format!("    LBRA .J1B3_{}_END\n", label_id));
             out.push_str(&format!(".J1B3_{}_OFF:\n", label_id));
             out.push_str("    LDD #0\n");
             out.push_str(&format!(".J1B3_{}_END:\n", label_id));
@@ -205,11 +228,11 @@ pub fn emit_builtin(
         }
         "J1_BUTTON_4" => {
             let label_id = LABEL_COUNTER.fetch_add(1, Ordering::SeqCst);
-            out.push_str("    LDA $C811      ; Vec_Button_1_1 (transition bits)\n");
+            out.push_str("    LDA $C80F      ; Vec_Btn_State (updated by Read_Btns)\n");
             out.push_str("    ANDA #$08      ; Test bit 3\n");
-            out.push_str(&format!("    BEQ .J1B4_{}_OFF\n", label_id));
+            out.push_str(&format!("    LBEQ .J1B4_{}_OFF\n", label_id));
             out.push_str("    LDD #1\n");
-            out.push_str(&format!("    BRA .J1B4_{}_END\n", label_id));
+            out.push_str(&format!("    LBRA .J1B4_{}_END\n", label_id));
             out.push_str(&format!(".J1B4_{}_OFF:\n", label_id));
             out.push_str("    LDD #0\n");
             out.push_str(&format!(".J1B4_{}_END:\n", label_id));
@@ -375,10 +398,34 @@ pub fn emit_builtin(
                 });
                 
                 if asset_exists {
+                    // Find asset index for multibank lookup
+                    let music_assets: Vec<_> = assets.iter()
+                        .filter(|a| matches!(a.asset_type, AssetType::Music))
+                        .collect();
+                    
+                    // DEBUG: Log music assets order
+                    eprintln!("[DEBUG PLAY_MUSIC] Looking for '{}' in music assets:", asset_name);
+                    for (idx, a) in music_assets.iter().enumerate() {
+                        eprintln!("  [{}] = '{}' {}", idx, a.name, if a.name == *asset_name { "<-- MATCH" } else { "" });
+                    }
+                    
+                    let asset_index = music_assets.iter()
+                        .position(|a| a.name == *asset_name)
+                        .unwrap_or(0);
+                    eprintln!("[DEBUG PLAY_MUSIC] Final index for '{}' = {}\n", asset_name, asset_index);
+                    
                     let symbol = format!("_{}_MUSIC", asset_name.to_uppercase().replace("-", "_").replace(" ", "_"));
-                    out.push_str(&format!("    ; PLAY_MUSIC(\"{}\") - play music asset\n", asset_name));
-                    out.push_str(&format!("    LDX #{}  ; Load music data pointer\n", symbol));
-                    out.push_str("    JSR PLAY_MUSIC_RUNTIME\n");
+                    out.push_str(&format!("    ; PLAY_MUSIC(\"{}\") - play music asset (index={})\n", asset_name, asset_index));
+                    
+                    if use_banked_assets() {
+                        // MULTIBANK MODE: Use banked access via lookup tables
+                        out.push_str(&format!("    LDX #{}        ; Music asset index for lookup\n", asset_index));
+                        out.push_str("    JSR PLAY_MUSIC_BANKED  ; Play with automatic bank switching\n");
+                    } else {
+                        // SINGLE-BANK MODE: Direct access to asset label
+                        out.push_str(&format!("    LDX #{}  ; Load music data pointer\n", symbol));
+                        out.push_str("    JSR PLAY_MUSIC_RUNTIME\n");
+                    }
                     out.push_str("    LDD #0\n");
                     out.push_str("    STD RESULT\n");
                 } else {
@@ -501,7 +548,7 @@ pub fn emit_builtin(
             true
         }
         "DRAW_CIRCLE" => {
-            drawing::emit_draw_circle(args, out);
+            emit_draw_circle_full(args, out, assets);
             true
         }
         "DRAW_RECT" => {
@@ -535,7 +582,7 @@ pub fn emit_builtin(
         
         // Level System (6 builtins)
         "LOAD_LEVEL" => {
-            level::emit_load_level(args, out);
+            level::emit_load_level(args, out, assets);
             true
         }
         "SHOW_LEVEL" => {
@@ -608,13 +655,6 @@ pub fn emit_builtin(
         // ===== Default: Not a builtin =====
         _ => false,
     }
-}
-
-fn emit_wait_recal(out: &mut String) {
-    out.push_str("    ; WAIT_RECAL: Wait for screen refresh\n");
-    out.push_str("    JSR Wait_Recal\n");
-    out.push_str("    LDD #0\n");
-    out.push_str("    STD RESULT\n");
 }
 
 fn emit_set_intensity(args: &[Expr], out: &mut String, assets: &[AssetInfo]) {
@@ -751,7 +791,15 @@ fn emit_draw_vector(args: &[Expr], out: &mut String, assets: &[AssetInfo]) {
     // The asset must exist in the ROM (checked during compilation)
     match &args[0] {
         Expr::StringLit(asset_name) => {
-             // Find path count
+            // Find asset index in the vector assets list (for multibank lookup tables)
+            let vector_assets: Vec<_> = assets.iter()
+                .filter(|a| matches!(a.asset_type, AssetType::Vector))
+                .collect();
+            let asset_index = vector_assets.iter()
+                .position(|a| a.name == *asset_name)
+                .unwrap_or(0);
+            
+            // Find path count
             let path_count = if let Some(asset) = assets.iter().find(|a| a.name == *asset_name && matches!(a.asset_type, AssetType::Vector)) {
                  if let Ok(resource) = VecResource::load(std::path::Path::new(&asset.path)) {
                     resource.visible_paths().len()
@@ -764,7 +812,7 @@ fn emit_draw_vector(args: &[Expr], out: &mut String, assets: &[AssetInfo]) {
 
             let symbol = format!("_{}", asset_name.to_uppercase().replace("-", "_").replace(" ", "_"));
             
-            out.push_str(&format!("    ; Asset: {} ({} paths)\n", asset_name, path_count));
+            out.push_str(&format!("    ; Asset: {} (index={}, {} paths)\n", asset_name, asset_index, path_count));
             
             // Evaluate x position (arg 1) - save immediately to avoid overwrite
             expressions::emit_simple_expr(&args[1], out, assets);
@@ -787,17 +835,25 @@ fn emit_draw_vector(args: &[Expr], out: &mut String, assets: &[AssetInfo]) {
             out.push_str("    CLR MIRROR_Y\n");
             out.push_str("    CLR DRAW_VEC_INTENSITY  ; Use intensity from vector data\n");
             
-            // Single DP switch for all paths (CRITICAL PATTERN FROM CORE)
-            out.push_str("    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)\n");
-            
-            // Loop through all paths
-            for i in 0..path_count {
-                out.push_str(&format!("    LDX #{}_PATH{}  ; Load path {}\n", symbol, i, i));
-                out.push_str("    JSR Draw_Sync_List_At_With_Mirrors\n");
+            if use_banked_assets() {
+                // MULTIBANK MODE: Use banked access via lookup tables in Bank #31
+                // The DRAW_VECTOR_BANKED helper handles bank switching automatically
+                out.push_str(&format!("    LDX #{}        ; Asset index for lookup\n", asset_index));
+                out.push_str("    JSR DRAW_VECTOR_BANKED  ; Draw with automatic bank switching\n");
+            } else {
+                // SINGLE-BANK MODE: Direct access to asset labels
+                // Single DP switch for all paths (CRITICAL PATTERN FROM CORE)
+                out.push_str("    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)\n");
+                
+                // Loop through all paths
+                for i in 0..path_count {
+                    out.push_str(&format!("    LDX #{}_PATH{}  ; Load path {}\n", symbol, i, i));
+                    out.push_str("    JSR Draw_Sync_List_At_With_Mirrors\n");
+                }
+                
+                // Restore DP (CRITICAL PATTERN FROM CORE)
+                out.push_str("    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)\n");
             }
-            
-            // Restore DP (CRITICAL PATTERN FROM CORE)
-            out.push_str("    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)\n");
             
             out.push_str("    LDD #0\n    STD RESULT\n");
         }
@@ -1019,6 +1075,48 @@ fn collect_strings_from_expr(expr: &Expr, strings: &mut std::collections::BTreeM
         }
         _ => {}
     }
+}
+
+/// DRAW_CIRCLE with full variable support
+/// Uses DRAW_CIRCLE_RUNTIME helper and expressions evaluation
+fn emit_draw_circle_full(args: &[Expr], out: &mut String, assets: &[AssetInfo]) {
+    if args.len() != 3 && args.len() != 4 {
+        out.push_str("    ; ERROR: DRAW_CIRCLE requires 3 or 4 arguments\n");
+        return;
+    }
+    
+    out.push_str("    ; DRAW_CIRCLE: Draw circle at (xc, yc) with diameter\n");
+    
+    // Evaluate xc and store in DRAW_CIRCLE_XC
+    expressions::emit_simple_expr(&args[0], out, assets);
+    out.push_str("    LDA RESULT+1\n");
+    out.push_str("    STA DRAW_CIRCLE_XC\n");
+    
+    // Evaluate yc and store in DRAW_CIRCLE_YC
+    expressions::emit_simple_expr(&args[1], out, assets);
+    out.push_str("    LDA RESULT+1\n");
+    out.push_str("    STA DRAW_CIRCLE_YC\n");
+    
+    // Evaluate diam and store in DRAW_CIRCLE_DIAM
+    expressions::emit_simple_expr(&args[2], out, assets);
+    out.push_str("    LDA RESULT+1\n");
+    out.push_str("    STA DRAW_CIRCLE_DIAM\n");
+    
+    // Evaluate intensity (default $5F if not provided)
+    if args.len() == 4 {
+        expressions::emit_simple_expr(&args[3], out, assets);
+        out.push_str("    LDA RESULT+1\n");
+        out.push_str("    STA DRAW_CIRCLE_INTENSITY\n");
+    } else {
+        out.push_str("    LDA #$5F\n");
+        out.push_str("    STA DRAW_CIRCLE_INTENSITY\n");
+    }
+    
+    // Call runtime helper
+    out.push_str("    JSR DRAW_CIRCLE_RUNTIME\n");
+    
+    out.push_str("    LDD #0\n");
+    out.push_str("    STD RESULT\n");
 }
 
 /// Emit all PRINT_TEXT string data in helpers bank

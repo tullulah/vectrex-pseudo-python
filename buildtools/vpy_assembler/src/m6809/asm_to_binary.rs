@@ -463,9 +463,14 @@ pub fn load_vectrex_symbols(equates: &mut HashMap<String, u16>) {
     }
     
     if !found {
-        eprintln!("⚠ Warning: Could not load VECTREX.I from any expected path, using fallback hardcoded symbols");
-        // Fallback to hardcoded symbols if VECTREX.I is not found
-        load_vectrex_symbols_fallback(equates);
+        eprintln!("❌ FATAL: Could not load VECTREX.I from any expected path");
+        eprintln!("   Searched paths:");
+        for path in possible_paths.iter() {
+            eprintln!("     - {:?}", path);
+        }
+        eprintln!("\n   VECTREX.I is required for BIOS symbol definitions.");
+        eprintln!("   Cannot proceed with assembly - BIOS symbols undefined.");
+        panic!("VECTREX.I not found - cannot assemble without BIOS symbols");
     }
 }
 
@@ -511,38 +516,6 @@ fn parse_vectrex_symbols(content: &str, equates: &mut HashMap<String, u16>) {
             }
         }
     }
-}
-
-/// Fallback hardcoded symbols (only used if VECTREX.I cannot be loaded)
-fn load_vectrex_symbols_fallback(equates: &mut HashMap<String, u16>) {
-    // These are the CORRECTED values from VECTREX.I
-    equates.insert("WAIT_RECAL".to_string(), 0xF192);
-    equates.insert("Wait_Recal".to_string(), 0xF192);
-    equates.insert("MOVETO_D".to_string(), 0xF312);
-    equates.insert("Moveto_d".to_string(), 0xF312);
-    equates.insert("MOVETO_IX_FF".to_string(), 0xF308);
-    equates.insert("MOVETO_IX".to_string(), 0xF310);
-    equates.insert("MOVETO_D_7F".to_string(), 0xF2FC);
-    equates.insert("ZERO_REF".to_string(), 0xF35B);
-    equates.insert("Zero_Ref".to_string(), 0xF35B);
-    equates.insert("DRAW_LINEC".to_string(), 0xF3DF);
-    equates.insert("DRAW_LINE_D".to_string(), 0xF3DF);
-    equates.insert("Draw_Line_d".to_string(), 0xF3DF);
-    equates.insert("DRAW_VLC".to_string(), 0xF3CE);
-    equates.insert("DRAW_VL_MODE".to_string(), 0xF46E);
-    equates.insert("DRAW_VL_A".to_string(), 0xF3DA);
-    equates.insert("DRAW_VL_B".to_string(), 0xF3D8);
-    equates.insert("DRAW_VL".to_string(), 0xF3DD);
-    equates.insert("PRINT_STR_D".to_string(), 0xF37A);
-    equates.insert("PRINT_STR".to_string(), 0xF495);
-    equates.insert("PRINT_LIST".to_string(), 0xF38A);
-    equates.insert("PRINT_SHIPS".to_string(), 0xF393);
-    equates.insert("DO_SOUND".to_string(), 0xF289);
-    equates.insert("INIT_MUSIC".to_string(), 0xF533);
-    equates.insert("INIT_OS".to_string(), 0xF18B);
-    equates.insert("INTENSITY_A".to_string(), 0xF2AB);
-    equates.insert("Intensity_a".to_string(), 0xF2AB);
-    equates.insert("READ_BTNS".to_string(), 0xF1BA);
 }
 
 /// Extrae etiqueta si la línea la define
@@ -733,6 +706,9 @@ fn parse_and_emit_instruction(emitter: &mut BinaryEmitter, line: &str, equates: 
 fn evaluate_expression(expr: &str, equates: &HashMap<String, u16>) -> Result<u16, String> {
     let expr = expr.trim();
     
+    // Strip > or < prefix if present (extended/direct mode markers)
+    let expr = expr.trim_start_matches('>').trim_start_matches('<');
+    
     // Detectar operadores + o -
     if let Some(pos) = expr.rfind('+') {
         let left = expr[..pos].trim();
@@ -783,6 +759,8 @@ fn evaluate_expression(expr: &str, equates: &HashMap<String, u16>) -> Result<u16
 
 /// Resuelve un símbolo a su valor numérico (con evaluación recursiva de expresiones)
 fn resolve_symbol_value(symbol: &str, equates: &HashMap<String, u16>) -> Result<u16, String> {
+    // Strip > or < prefix if present (extended/direct mode markers)
+    let symbol = symbol.trim_start_matches('>').trim_start_matches('<');
     let upper = symbol.to_uppercase();
     
     // Primero verificar si está en equates (puede ser una expresión o valor directo)
@@ -829,12 +807,16 @@ fn resolve_address(operand: &str, equates: &HashMap<String, u16>) -> Result<u16,
 
 /// Extrae (symbol, addend) de un error "SYMBOL:...".
 /// Soporta "SYMBOL:LABEL", "SYMBOL:LABEL+1", "SYMBOL:LABEL-2".
+/// Also strips > and < prefixes (extended/direct mode markers)
 fn parse_symbol_and_addend(sym_err: &str) -> Result<(String, i16), String> {
     if !sym_err.starts_with("SYMBOL:") {
         return Err(format!("Error interno: se esperaba SYMBOL:, got: {}", sym_err));
     }
 
     let rest = sym_err.trim_start_matches("SYMBOL:").trim();
+    
+    // Strip > or < prefix if present (extended/direct mode markers)
+    let rest = rest.trim_start_matches('>').trim_start_matches('<');
 
     if let Some(pos) = rest.rfind('+') {
         let sym = rest[..pos].trim();

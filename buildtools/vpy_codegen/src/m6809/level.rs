@@ -3,6 +3,8 @@
 
 use std::collections::HashSet;
 use vpy_parser::Expr;
+use super::builtins::is_multibank;
+use crate::AssetInfo;
 
 /// Emit LOAD_LEVEL(level_name) - Load level data from ROM
 /// 
@@ -17,7 +19,7 @@ use vpy_parser::Expr;
 /// Level Data Format (in ROM):
 /// - FDB width, height
 /// - FCB tile_data... (width * height bytes)
-pub fn emit_load_level(args: &[Expr], out: &mut String) {
+pub fn emit_load_level(args: &[Expr], out: &mut String, assets: &[AssetInfo]) {
     out.push_str("    ; ===== LOAD_LEVEL builtin =====\n");
     
     if args.len() != 1 {
@@ -31,20 +33,40 @@ pub fn emit_load_level(args: &[Expr], out: &mut String) {
     if let Expr::StringLit(level_name) = &args[0] {
         out.push_str(&format!("    ; Load level: '{}'\n", level_name));
         
-        // Load pointer to level data (asset must exist)
-        // Format must match levelres.rs: _{NAME}_LEVEL
-        let label = format!("_{}_LEVEL", level_name.to_uppercase().replace("-", "_").replace(" ", "_"));
-        out.push_str(&format!("    LDX #{}\n", label));
-        out.push_str("    STX LEVEL_PTR          ; Store level data pointer\n");
-        
-        // Load width and height from level header
-        out.push_str("    LDA ,X+                ; Load width (byte)\n");
-        out.push_str("    STA LEVEL_WIDTH\n");
-        out.push_str("    LDA ,X+                ; Load height (byte)\n");
-        out.push_str("    STA LEVEL_HEIGHT\n");
-        
-        out.push_str("    LDD #1                 ; Return success\n");
-        out.push_str("    STD RESULT\n");
+        if is_multibank() {
+            // Multibank mode: use LOAD_LEVEL_BANKED with index
+            // Find the level index among Level assets
+            let level_assets: Vec<_> = assets.iter()
+                .filter(|a| matches!(a.asset_type, crate::AssetType::Level))
+                .collect();
+            
+            let level_index = level_assets.iter()
+                .position(|a| a.name.eq_ignore_ascii_case(level_name));
+            
+            if let Some(idx) = level_index {
+                out.push_str(&format!("    ; Level asset index: {} (multibank)\n", idx));
+                out.push_str(&format!("    LDX #{}\n", idx));
+                out.push_str("    JSR LOAD_LEVEL_BANKED  ; Switch bank, load level, return\n");
+            } else {
+                out.push_str(&format!("    ; ERROR: Level '{}' not found in assets\n", level_name));
+                out.push_str("    LDD #0\n");
+                out.push_str("    STD RESULT\n");
+            }
+        } else {
+            // Single-bank mode: direct reference
+            let label = format!("_{}_LEVEL", level_name.to_uppercase().replace("-", "_").replace(" ", "_"));
+            out.push_str(&format!("    LDX #{}\n", label));
+            out.push_str("    STX LEVEL_PTR          ; Store level data pointer\n");
+            
+            // Load width and height from level header
+            out.push_str("    LDA ,X+                ; Load width (byte)\n");
+            out.push_str("    STA LEVEL_WIDTH\n");
+            out.push_str("    LDA ,X+                ; Load height (byte)\n");
+            out.push_str("    STA LEVEL_HEIGHT\n");
+            
+            out.push_str("    LDD #1                 ; Return success\n");
+            out.push_str("    STD RESULT\n");
+        }
     } else {
         out.push_str("    ; ERROR: LOAD_LEVEL requires string literal (level name)\n");
         out.push_str("    LDD #0\n");

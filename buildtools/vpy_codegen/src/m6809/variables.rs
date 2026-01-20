@@ -7,16 +7,16 @@ use super::ram_layout::RamLayout;
 pub fn generate_user_variables(module: &Module, ram: &mut RamLayout) -> Result<String, String> {
     let asm = String::new();
     let mut vars = HashSet::new();
-    let mut arrays = Vec::new();  // Track arrays for data generation
+    let mut mutable_arrays: Vec<(String, usize)> = Vec::new();  // (name, element_count) for arrays that need RAM
     
     // Collect all variable names from module (GlobalLet items)
     for item in &module.items {
         if let Item::GlobalLet { name, value, .. } = item {
             vars.insert(name.clone());
             
-            // Check if this is an array initialization
-            if matches!(value, Expr::List(_)) {
-                arrays.push((name.clone(), value.clone()));
+            // Check if this is an array initialization (mutable array, needs RAM)
+            if let Expr::List(elements) = value {
+                mutable_arrays.push((name.clone(), elements.len()));
             }
         }
     }
@@ -43,7 +43,20 @@ pub fn generate_user_variables(module: &Module, ram: &mut RamLayout) -> Result<S
         ram.allocate(&format!("VAR_{}", var.to_uppercase()), 2, &format!("User variable: {}", var));
     }
     
-    // NOTE: Array data moved to emit_array_data() function
+    // CRITICAL FIX (2026-01-19): Allocate RAM space for MUTABLE arrays
+    // Arrays defined with 'let' (GlobalLet) are mutable and need RAM space
+    // Arrays defined with 'const' stay in ROM (handled in emit_array_data)
+    // Each element is 2 bytes (16-bit)
+    for (name, element_count) in &mutable_arrays {
+        let size = element_count * 2;  // 2 bytes per element
+        ram.allocate(
+            &format!("VAR_{}_DATA", name.to_uppercase()),
+            size,
+            &format!("Mutable array '{}' data ({} elements x 2 bytes)", name, element_count)
+        );
+    }
+    
+    // NOTE: Array ROM literals moved to emit_array_data() function
     // Arrays are emitted BEFORE code (after EQU definitions) to ensure labels are defined before use
     
     // NOTE: VAR_ARG definitions are now in helpers.rs using ram.allocate_fixed()
@@ -137,6 +150,56 @@ pub fn emit_array_data(module: &Module) -> String {
                 asm.push_str("\n");
             }
         }
+    }
+    
+    asm
+}
+
+/// Generate EQU aliases for array access
+/// Mutable arrays (GlobalLet): point to RAM (VAR_{NAME}_DATA)
+/// Const arrays: point to ROM (ARRAY_{NAME}_DATA)
+pub fn emit_array_aliases(module: &Module) -> String {
+    let mut asm = String::new();
+    
+    // Collect info about which arrays are mutable vs const
+    let mut has_any_array = false;
+    
+    for item in &module.items {
+        match item {
+            Item::GlobalLet { name, value, .. } => {
+                if matches!(value, Expr::List(_)) {
+                    if !has_any_array {
+                        asm.push_str(";***************************************************************************\n");
+                        asm.push_str("; ARRAY ACCESS ALIASES\n");
+                        asm.push_str(";***************************************************************************\n");
+                        asm.push_str("; Mutable arrays -> RAM, Const arrays -> ROM\n\n");
+                        has_any_array = true;
+                    }
+                    // Mutable array: alias points to RAM
+                    asm.push_str(&format!("{}_ARRAYPTR EQU VAR_{}_DATA  ; Mutable array -> RAM\n", 
+                        name.to_uppercase(), name.to_uppercase()));
+                }
+            }
+            Item::Const { name, value, .. } => {
+                if matches!(value, Expr::List(_)) {
+                    if !has_any_array {
+                        asm.push_str(";***************************************************************************\n");
+                        asm.push_str("; ARRAY ACCESS ALIASES\n");
+                        asm.push_str(";***************************************************************************\n");
+                        asm.push_str("; Mutable arrays -> RAM, Const arrays -> ROM\n\n");
+                        has_any_array = true;
+                    }
+                    // Const array: alias points to ROM
+                    asm.push_str(&format!("{}_ARRAYPTR EQU ARRAY_{}_DATA  ; Const array -> ROM\n", 
+                        name.to_uppercase(), name.to_uppercase()));
+                }
+            }
+            _ => {}
+        }
+    }
+    
+    if has_any_array {
+        asm.push_str("\n");
     }
     
     asm

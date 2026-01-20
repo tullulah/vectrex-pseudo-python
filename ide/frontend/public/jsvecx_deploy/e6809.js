@@ -273,12 +273,14 @@ function dumpStackSnapshot(cpu) {
 }
 
 function dumpOpcodeTrace(errorMsg, extra) {
-    if (TRACE_DUMPED || TRACE_DUMP_IN_PROGRESS) return;
+    // Always print, even if already dumped (helps with debugging)
+    // if (TRACE_DUMPED || TRACE_DUMP_IN_PROGRESS) return;
     TRACE_DUMP_IN_PROGRESS = true;
     if (OPCODE_TRACE_BUFFER.length === 0) {
         TRACE_DUMPED = true;
         TRACE_DUMP_IN_PROGRESS = false;
-        return;
+        console.log("=== NO TRACE AVAILABLE (buffer empty) ===");
+        return "(no trace)";
     }
     
     var maxEntries = getOpcodeTraceMax();
@@ -2549,7 +2551,9 @@ function e6809()
                 
                 // Dump trace to file
                 const traceOutput = dumpOpcodeTrace(errorMsg, stackSnapshot);
-                console.log("\n" + traceOutput);
+                console.log("\n=== LAST INSTRUCTIONS BEFORE CRASH ===");
+                console.log(traceOutput);
+                console.log("=== END TRACE ===");
 
                 // Kick a final flush for full trace (best effort)
                 try {

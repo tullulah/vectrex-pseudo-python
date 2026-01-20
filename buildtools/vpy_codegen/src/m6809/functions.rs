@@ -1,10 +1,16 @@
 //! Function Code Generation
 //!
 //! Generates M6809 assembly for VPy functions
+//!
+//! Two modes:
+//! - Single-bank: All functions in one bank (generate_functions)
+//! - Multi-bank: Functions distributed across banks (generate_functions_by_bank)
 
 use vpy_parser::{Module, Function, Stmt, Expr};
 use super::expressions;
+use super::joystick;
 use crate::AssetInfo;
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// Generate a unique label with the given prefix (copied from core/src/backend/m6809/utils.rs)
@@ -79,15 +85,32 @@ pub fn generate_functions(module: &Module, assets: &[AssetInfo]) -> Result<Strin
     
     // Initialize global variables with their initial values
     asm.push_str("    ; Initialize global variables\n");
+    let mut array_copy_counter = 0;
     for item in &module.items {
         if let vpy_parser::Item::GlobalLet { name, value, .. } = item {
-            if let vpy_parser::Expr::List(_elements) = value {
-                // Array initialization: load ROM address into RAM variable
-                // The array data is in ROM with label ARRAY_{NAME}_DATA
-                // VAR_{NAME} is a 2-byte RAM pointer to the array
-                let array_label = format!("ARRAY_{}_DATA", name.to_uppercase());
-                asm.push_str(&format!("    LDX #{}    ; Array literal\n", array_label));
+            if let vpy_parser::Expr::List(elements) = value {
+                // CRITICAL FIX (2026-01-19): Mutable arrays need RAM space
+                // 1. Copy initial values from ROM (ARRAY_{NAME}_DATA) to RAM (VAR_{NAME}_DATA)
+                // 2. Set VAR_{NAME} pointer to RAM location (not ROM)
+                let rom_label = format!("ARRAY_{}_DATA", name.to_uppercase());
+                let ram_label = format!("VAR_{}_DATA", name.to_uppercase());
+                let array_len = elements.len();
+                
+                asm.push_str(&format!("    ; Copy array '{}' from ROM to RAM ({} elements)\n", name, array_len));
+                asm.push_str(&format!("    LDX #{}       ; Source: ROM array data\n", rom_label));
+                asm.push_str(&format!("    LDU #{}       ; Dest: RAM array space\n", ram_label));
+                asm.push_str(&format!("    LDD #{}        ; Number of elements\n", array_len));
+                asm.push_str(&format!(".COPY_LOOP_{}:\n", array_copy_counter));
+                asm.push_str("    LDY ,X++        ; Load word from ROM, increment source\n");
+                asm.push_str("    STY ,U++        ; Store word to RAM, increment dest\n");
+                asm.push_str("    SUBD #1         ; Decrement counter\n");
+                asm.push_str(&format!("    LBNE .COPY_LOOP_{} ; Loop until done (LBNE for long branch)\n", array_copy_counter));
+                
+                // Set VAR_{NAME} pointer to RAM array (not ROM)
+                asm.push_str(&format!("    LDX #{}    ; Array now in RAM\n", ram_label));
                 asm.push_str(&format!("    STX VAR_{}\n", name.to_uppercase()));
+                
+                array_copy_counter += 1;
             } else {
                 // Non-array initialization
                 if let vpy_parser::Expr::Number(n) = value {
@@ -98,6 +121,10 @@ pub fn generate_functions(module: &Module, assets: &[AssetInfo]) -> Result<Strin
         }
     }
     
+    // CRITICAL: Initialize joystick mux ONCE before any J1_X/J1_Y calls
+    // (copied from core/src/backend/m6809/mod.rs lines 834-849)
+    joystick::emit_joystick_init(&mut asm);
+    
     // Call main() if exists
     if let Some(main) = main_fn {
         asm.push_str("    ; Call main() for initialization\n");
@@ -107,7 +134,7 @@ pub fn generate_functions(module: &Module, assets: &[AssetInfo]) -> Result<Strin
     // Infinite loop calling loop()
     asm.push_str("\n.MAIN_LOOP:\n");
     asm.push_str("    JSR LOOP_BODY\n");
-    asm.push_str("    BRA .MAIN_LOOP\n\n");
+    asm.push_str("    LBRA .MAIN_LOOP   ; Use long branch for multibank support\n\n");
     
     // Generate LOOP_BODY
     if let Some(loop_fn) = loop_fn {
@@ -205,8 +232,15 @@ fn generate_statement(stmt: &Stmt, asm: &mut String, assets: &[AssetInfo]) -> Re
                     asm.push_str("    ROLA\n");
                     asm.push_str("    STD TMPPTR      ; Save offset temporarily\n");
                     
-                    // 2. Load array base address (name already uppercase from unifier)
-                    asm.push_str(&format!("    LDD #ARRAY_{}_DATA  ; Load array data address\n", array_name));
+                    // 2. Load array base address (RAM for mutable, ROM for const)
+                    // Use context to determine which label to use
+                    let name_upper = array_name.to_uppercase();
+                    let label = if super::context::is_mutable_array(array_name) {
+                        format!("VAR_{}_DATA", name_upper)  // RAM
+                    } else {
+                        format!("ARRAY_{}_DATA", name_upper)  // ROM
+                    };
+                    asm.push_str(&format!("    LDD #{}  ; Array data address\n", label));
                     
                     // 3. Add offset to base pointer
                     asm.push_str("    TFR D,X         ; X = array base pointer\n");
@@ -312,4 +346,143 @@ fn generate_statement(stmt: &Stmt, asm: &mut String, assets: &[AssetInfo]) -> Re
     }
     
     Ok(())
+}
+
+/// Generate functions distributed across banks (multibank support)
+///
+/// # Arguments
+/// * `module` - Parsed VPy module
+/// * `assets` - Asset info for DRAW_VECTOR etc
+/// * `bank_assignments` - Map of function_name -> bank_id (from BankAllocator)
+///
+/// # Returns
+/// HashMap<bank_id, asm_code_for_that_bank>
+pub fn generate_functions_by_bank(
+    module: &Module,
+    assets: &[AssetInfo],
+    bank_assignments: &HashMap<String, u8>,
+) -> Result<HashMap<u8, String>, String> {
+    let mut bank_asm: HashMap<u8, String> = HashMap::new();
+    
+    // Collect all functions
+    let mut main_fn = None;
+    let mut loop_fn = None;
+    let mut other_fns = Vec::new();
+    
+    for item in &module.items {
+        if let vpy_parser::Item::Function(func) = item {
+            match func.name.to_uppercase().as_str() {
+                "MAIN" => main_fn = Some(func),
+                "LOOP" => loop_fn = Some(func),
+                _ => other_fns.push(func),
+            }
+        }
+    }
+    
+    // Bank 0 always gets MAIN, LOOP_BODY, and entry point
+    let mut bank0_asm = String::new();
+    
+    bank0_asm.push_str(";***************************************************************************\n");
+    bank0_asm.push_str("; MAIN PROGRAM (Bank #0)\n");
+    bank0_asm.push_str(";***************************************************************************\n\n");
+    
+    bank0_asm.push_str("MAIN:\n");
+    
+    // Initialize global variables with their initial values
+    bank0_asm.push_str("    ; Initialize global variables\n");
+    let mut array_copy_counter = 0;
+    for item in &module.items {
+        if let vpy_parser::Item::GlobalLet { name, value, .. } = item {
+            if let vpy_parser::Expr::List(elements) = value {
+                let rom_label = format!("ARRAY_{}_DATA", name.to_uppercase());
+                let ram_label = format!("VAR_{}_DATA", name.to_uppercase());
+                let array_len = elements.len();
+                
+                bank0_asm.push_str(&format!("    ; Copy array '{}' from ROM to RAM ({} elements)\n", name, array_len));
+                bank0_asm.push_str(&format!("    LDX #{}       ; Source: ROM array data\n", rom_label));
+                bank0_asm.push_str(&format!("    LDU #{}       ; Dest: RAM array space\n", ram_label));
+                bank0_asm.push_str(&format!("    LDD #{}        ; Number of elements\n", array_len));
+                bank0_asm.push_str(&format!(".COPY_LOOP_{}:\n", array_copy_counter));
+                bank0_asm.push_str("    LDY ,X++        ; Load word from ROM, increment source\n");
+                bank0_asm.push_str("    STY ,U++        ; Store word to RAM, increment dest\n");
+                bank0_asm.push_str("    SUBD #1         ; Decrement counter\n");
+                bank0_asm.push_str(&format!("    LBNE .COPY_LOOP_{} ; Loop until done (LBNE for long branch)\n", array_copy_counter));
+                bank0_asm.push_str(&format!("    LDX #{}    ; Array now in RAM\n", ram_label));
+                bank0_asm.push_str(&format!("    STX VAR_{}\n", name.to_uppercase()));
+                array_copy_counter += 1;
+            } else if let vpy_parser::Expr::Number(n) = value {
+                bank0_asm.push_str(&format!("    LDD #{}\n", n));
+                bank0_asm.push_str(&format!("    STD VAR_{}\n", name.to_uppercase()));
+            }
+        }
+    }
+    
+    joystick::emit_joystick_init(&mut bank0_asm);
+    
+    if let Some(main) = main_fn {
+        bank0_asm.push_str("    ; Call main() for initialization\n");
+        generate_function_body(main, &mut bank0_asm, assets)?;
+    }
+    
+    bank0_asm.push_str("\n.MAIN_LOOP:\n");
+    bank0_asm.push_str("    JSR LOOP_BODY\n");
+    bank0_asm.push_str("    LBRA .MAIN_LOOP   ; Use long branch for multibank support\n\n");
+    
+    // Generate LOOP_BODY
+    if let Some(loop_fn) = loop_fn {
+        bank0_asm.push_str("LOOP_BODY:\n");
+        bank0_asm.push_str("    JSR Wait_Recal   ; Synchronize with screen refresh (mandatory)\n");
+        bank0_asm.push_str("    JSR Reset0Ref    ; Reset beam to center (0,0)\n");
+        bank0_asm.push_str("    JSR $F1AA  ; DP_to_D0: set direct page to $D0 for PSG access\n");
+        bank0_asm.push_str("    JSR $F1BA  ; Read_Btns: read PSG register 14, update $C80F (Vec_Btn_State)\n");
+        bank0_asm.push_str("    JSR $F1AF  ; DP_to_C8: restore direct page to $C8 for normal RAM access\n");
+        generate_function_body(loop_fn, &mut bank0_asm, assets)?;
+        
+        if has_audio_calls(module) {
+            bank0_asm.push_str("    JSR AUDIO_UPDATE  ; Auto-injected: update music + SFX (after all game logic)\n");
+        }
+        
+        bank0_asm.push_str("    RTS\n\n");
+    } else {
+        bank0_asm.push_str("LOOP_BODY:\n");
+        bank0_asm.push_str("    JSR Wait_Recal   ; Synchronize with screen refresh (mandatory)\n");
+        bank0_asm.push_str("    JSR Reset0Ref    ; Reset beam to center (0,0)\n");
+        bank0_asm.push_str("    JSR $F1AA  ; DP_to_D0: set direct page to $D0 for PSG access\n");
+        bank0_asm.push_str("    JSR $F1BA  ; Read_Btns: read PSG register 14, update $C80F (Vec_Btn_State)\n");
+        bank0_asm.push_str("    JSR $F1AF  ; DP_to_C8: restore direct page to $C8 for normal RAM access\n");
+        bank0_asm.push_str("    RTS\n\n");
+    }
+    
+    bank_asm.insert(0, bank0_asm);
+    
+    // Group other functions by assigned bank
+    for func in other_fns {
+        let name_upper = func.name.to_uppercase();
+        if name_upper == "MAIN" || name_upper == "LOOP" {
+            continue;
+        }
+        
+        // Get assigned bank (default to 0 if not assigned)
+        let bank_id = bank_assignments.get(&func.name)
+            .or_else(|| bank_assignments.get(&name_upper))
+            .copied()
+            .unwrap_or(0);
+        
+        // Get or create ASM buffer for this bank
+        let asm = bank_asm.entry(bank_id).or_insert_with(String::new);
+        
+        asm.push_str(&format!("; Function: {} (Bank #{})\n", func.name, bank_id));
+        asm.push_str(&format!("{}:\n", func.name));
+        generate_function_body(func, asm, assets)?;
+        
+        let has_explicit_return = func.body.last()
+            .map(|stmt| matches!(stmt, Stmt::Return(..)))
+            .unwrap_or(false);
+        if !has_explicit_return {
+            asm.push_str("    RTS\n");
+        }
+        asm.push_str("\n");
+    }
+    
+    Ok(bank_asm)
 }

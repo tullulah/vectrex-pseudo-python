@@ -16,6 +16,19 @@ START:
 ;***************************************************************************
 MAIN:
     ; Initialize global variables
+    ; === Initialize Joystick (one-time setup) ===
+    JSR $F1AF    ; DP_to_C8 (required for RAM access)
+    CLR $C823    ; CRITICAL: Clear analog mode flag (Joy_Analog does DEC on this)
+    LDA #$01     ; CRITICAL: Resolution threshold (power of 2: $40=fast, $01=accurate)
+    STA $C81A    ; Vec_Joy_Resltn (loop terminates when B=this value after LSRBs)
+    LDA #$01
+    STA $C81F    ; Vec_Joy_Mux_1_X (enable X axis reading)
+    LDA #$03
+    STA $C820    ; Vec_Joy_Mux_1_Y (enable Y axis reading)
+    LDA #$00
+    STA $C821    ; Vec_Joy_Mux_2_X (disable joystick 2 - CRITICAL!)
+    STA $C822    ; Vec_Joy_Mux_2_Y (disable joystick 2 - saves cycles)
+    ; Mux configured - J1_X()/J1_Y() can now be called
     ; Call main() for initialization
     ; SET_INTENSITY: Set drawing intensity
     LDD #127

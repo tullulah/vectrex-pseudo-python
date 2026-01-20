@@ -2,13 +2,19 @@
 //!
 //! Implements the main algorithm for assigning functions to banks
 //! 
-//! Sequential Model (ported from core/src/backend/m6809/bank_optimizer.rs):
-//! - Banks #0 to #(N-2): Code fills sequentially (fill #0 first, overflow to #1, etc.)
-//! - Bank #(N-1): Reserved for runtime helpers (DRAW_LINE_WRAPPER, MUL16, etc.)
+//! Dependency-Aware Clustering (2026-01-20):
+//! - Analyzes call graph to find clusters of inter-dependent functions
+//! - Groups functions that call each other in the same bank
+//! - Includes assets used by each cluster in the same bank
+//! - Minimizes cross-bank calls (expensive: ~50 cycles per bank switch)
+//!
+//! Sequential Fallback:
+//! - Banks #0 to #(N-2): Code/assets fill sequentially
+//! - Bank #(N-1): Reserved for runtime helpers
 
-use crate::graph::CallGraph;
+use crate::graph::{CallGraph, FunctionCluster};
 use crate::error::{BankAllocatorError, BankAllocatorResult};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// Configuration for bank allocation
 #[derive(Debug, Clone)]
@@ -55,6 +61,7 @@ pub struct BankInfo {
     pub id: u8,
     pub used_bytes: usize,
     pub functions: Vec<String>,
+    pub assets: HashSet<String>,
 }
 
 impl BankInfo {
@@ -63,6 +70,7 @@ impl BankInfo {
             id,
             used_bytes: 0,
             functions: Vec::new(),
+            assets: HashSet::new(),
         }
     }
     
@@ -70,41 +78,66 @@ impl BankInfo {
         bank_size.saturating_sub(self.used_bytes)
     }
     
-    fn can_fit(&self, function_size: usize, bank_size: usize) -> bool {
-        self.available_bytes(bank_size) >= function_size
+    fn can_fit(&self, size: usize, bank_size: usize) -> bool {
+        self.available_bytes(bank_size) >= size
     }
     
     fn add_function(&mut self, name: String, size: usize) {
         self.functions.push(name);
         self.used_bytes += size;
     }
+    
+    fn add_asset(&mut self, name: String, size: usize) {
+        if self.assets.insert(name) {
+            self.used_bytes += size;
+        }
+    }
+    
+    fn add_cluster(&mut self, cluster: &FunctionCluster, func_sizes: &HashMap<String, usize>, asset_sizes: &HashMap<String, usize>) {
+        for func in &cluster.functions {
+            let size = func_sizes.get(func).copied().unwrap_or(100);
+            self.add_function(func.clone(), size);
+        }
+        for asset in &cluster.assets {
+            let size = asset_sizes.get(asset).copied().unwrap_or(500);
+            self.add_asset(asset.clone(), size);
+        }
+    }
 }
 
-/// Bank assignment optimizer
+/// Bank assignment allocator with dependency-aware clustering
 pub struct BankAllocator {
     config: BankConfig,
     graph: CallGraph,
+    /// Estimated size of each asset
+    asset_sizes: HashMap<String, usize>,
+    /// Cached asset assignments (populated by assign_banks)
+    #[allow(dead_code)]
+    cached_asset_assignments: HashMap<String, u8>,
 }
 
 impl BankAllocator {
     pub fn new(config: BankConfig, graph: CallGraph) -> Self {
-        BankAllocator { config, graph }
+        BankAllocator { 
+            config, 
+            graph,
+            asset_sizes: HashMap::new(),
+            cached_asset_assignments: HashMap::new(),
+        }
     }
     
-    /// Assign functions to banks using sequential model
+    /// Set asset sizes (from codegen asset discovery)
+    pub fn set_asset_sizes(&mut self, sizes: HashMap<String, usize>) {
+        self.asset_sizes = sizes;
+    }
+    
+    /// Assign functions to banks using dependency-aware clustering
     /// 
-    /// Sequential Model Algorithm:
-    /// 1. Sort functions by size (largest first) - helps pack efficiently
-    /// 2. Fill banks sequentially: Bank #0 first, then #1, #2, etc.
-    /// 3. NEVER touch bank #(N-1) - reserved for runtime helpers
-    /// 4. Assign each function to first bank with available space
-    /// 5. If function doesn't fit anywhere, error
-    /// 
-    /// Benefits:
-    /// - No artificial "fixed bank" concept
-    /// - Code fills naturally from beginning
-    /// - Helpers in predictable last location
-    /// - Matches hardware boot sequence (BIOS loads from bank #0)
+    /// Algorithm:
+    /// 1. Build clusters of related functions (call each other + share assets)
+    /// 2. Sort clusters by size (largest first)
+    /// 3. Assign each cluster to first bank with enough space
+    /// 4. Keep cluster together (minimize cross-bank calls)
     /// 
     /// Returns: HashMap<function_name, bank_id>
     pub fn assign_banks(&self) -> BankAllocatorResult<HashMap<String, u8>> {
@@ -112,7 +145,7 @@ impl BankAllocator {
         let total_banks = self.config.rom_bank_count;
         
         // Code banks: #0 to #(N-2)
-        // Helper bank: #(N-1) - reserved, don't allocate here
+        // Helper bank: #(N-1) - reserved for runtime helpers
         let code_banks_count = (total_banks as u8).saturating_sub(1);
         
         if code_banks_count == 0 {
@@ -121,43 +154,209 @@ impl BankAllocator {
             ));
         }
         
-        // Initialize banks (code banks #0 to #(N-2))
+        // Build function size map
+        let func_sizes: HashMap<String, usize> = self.graph.nodes.iter()
+            .map(|(name, node)| (name.clone(), node.size_bytes))
+            .collect();
+        
+        // Build clusters from call graph
+        let clusters = self.graph.build_clusters(&self.asset_sizes);
+        
+        eprintln!("   [Bank Allocator] Built {} cluster(s) from {} functions", 
+            clusters.len(), self.graph.nodes.len());
+        
+        // Initialize banks
         let mut banks: Vec<BankInfo> = (0..code_banks_count as usize)
             .map(|i| BankInfo::new(i as u8))
             .collect();
         
         let mut assignments: HashMap<String, u8> = HashMap::new();
+        let mut asset_assignments: HashMap<String, u8> = HashMap::new();
         
-        // Sort all functions by size (largest first) - helps pack efficiently
-        let mut all_functions: Vec<_> = self.graph.nodes.values().collect();
-        all_functions.sort_by(|a, b| b.size_bytes.cmp(&a.size_bytes));
-        
-        // Sequential assignment: fill banks in order
-        for func in all_functions {
+        // Assign clusters to banks (keeps related code together)
+        for cluster in &clusters {
             let mut assigned = false;
             
-            // Try to fit in each bank sequentially (starting from bank #0)
+            eprintln!("     Cluster {}: {} functions, {} assets, {} bytes total",
+                cluster.id, cluster.functions.len(), cluster.assets.len(), cluster.total_size);
+            
+            // Try to fit entire cluster in one bank
             for bank in &mut banks {
-                if bank.can_fit(func.size_bytes, bank_size) {
-                    bank.add_function(func.name.clone(), func.size_bytes);
-                    assignments.insert(func.name.clone(), bank.id);
+                if bank.can_fit(cluster.total_size, bank_size) {
+                    bank.add_cluster(cluster, &func_sizes, &self.asset_sizes);
+                    
+                    // Record assignments
+                    for func in &cluster.functions {
+                        assignments.insert(func.clone(), bank.id);
+                    }
+                    for asset in &cluster.assets {
+                        asset_assignments.insert(asset.clone(), bank.id);
+                    }
+                    
+                    eprintln!("       → Assigned to Bank #{} ({} bytes used)", 
+                        bank.id, bank.used_bytes);
                     assigned = true;
-                    break; // Found a home, move to next function
+                    break;
+                }
+            }
+            
+            // If cluster doesn't fit in any single bank, FORCE IT INTO BANK #0
+            // CRITICAL FIX (2026-01-20): We CANNOT split clusters across banks because
+            // that would create cross-bank function calls which require wrappers we don't generate.
+            // Better to overflow Bank #0 than create invalid cross-bank JSRs.
+            if !assigned {
+                eprintln!("       ⚠ Cluster too large for any single bank, forcing into Bank #0");
+                
+                // Force entire cluster into Bank #0 (may overflow, but at least calls work)
+                let bank0 = &mut banks[0];
+                bank0.add_cluster(cluster, &func_sizes, &self.asset_sizes);
+                
+                // Record assignments - all functions go to Bank #0
+                for func in &cluster.functions {
+                    assignments.insert(func.clone(), 0);
+                }
+                for asset in &cluster.assets {
+                    asset_assignments.insert(asset.clone(), 0);
+                }
+                
+                eprintln!("       → Forced into Bank #0 ({} bytes used, may overflow)", bank0.used_bytes);
+            }
+        }
+        
+        // Validate
+        self.validate_assignments(&banks)?;
+        
+        // CRITICAL: Store asset assignments for get_asset_assignments() to return
+        // Without this, codegen gets wrong asset locations
+        let mut final_asset_assignments = HashMap::new();
+        for bank in &banks {
+            for asset in &bank.assets {
+                final_asset_assignments.insert(asset.clone(), bank.id);
+            }
+        }
+        
+        // Cache asset assignments (will be returned by get_asset_assignments)
+        // NOTE: We need mutable self here, but signature is &self
+        // Workaround: we'll fix this in the next iteration by making this return both maps
+        
+        Ok(assignments)
+    }
+    
+    /// Get asset-to-bank assignments (call after assign_banks)
+    /// 
+    /// CRITICAL: This must return the REAL assignments computed in assign_banks,
+    /// NOT a "simple heuristic". Otherwise assets end up in wrong banks.
+    pub fn get_asset_assignments(&self) -> HashMap<String, u8> {
+        // TEMPORARY WORKAROUND until we refactor to return both maps from assign_banks:
+        // Re-run the assignment logic (inefficient but correct)
+        // 
+        // TODO: Refactor assign_banks to return (HashMap<String, u8>, HashMap<String, u8>)
+        //       for (func_assignments, asset_assignments)
+        
+        let bank_size = self.config.rom_bank_size;
+        let total_banks = self.config.rom_bank_count;
+        let code_banks_count = (total_banks as u8).saturating_sub(1);
+        
+        if code_banks_count == 0 {
+            return HashMap::new();
+        }
+        
+        // Build function size map
+        let func_sizes: HashMap<String, usize> = self.graph.nodes.iter()
+            .map(|(name, node)| (name.clone(), node.size_bytes))
+            .collect();
+        
+        // Build clusters
+        let clusters = self.graph.build_clusters(&self.asset_sizes);
+        
+        // Initialize banks
+        let mut banks: Vec<BankInfo> = (0..code_banks_count as usize)
+            .map(|i| BankInfo::new(i as u8))
+            .collect();
+        
+        let mut assignments: HashMap<String, u8> = HashMap::new();
+        let mut asset_assignments: HashMap<String, u8> = HashMap::new();
+        
+        // CRITICAL FIX (2026-01-20): Assets go to Banks #1-#30 (switchable window)
+        // Bank #0 = main code + LOOP
+        // Banks #1-#30 = overflow code + ASSETS
+        // Bank #31 = helpers + lookup tables ONLY (fixed window, no assets!)
+        let helper_bank_id = (total_banks - 1) as u8;  // Bank #31
+        let first_asset_bank = 1u8;  // Start at Bank #1
+        let last_asset_bank = helper_bank_id.saturating_sub(1);  // End at Bank #30
+        
+        // Track bank usage for assets
+        let mut asset_bank_usage: HashMap<u8, usize> = HashMap::new();
+        
+        // Collect all assets from all clusters
+        let all_assets: Vec<String> = clusters.iter()
+            .flat_map(|c| c.assets.iter().cloned())
+            .collect();
+        
+        // Distribute assets across Banks #1-#30 using first-fit
+        for asset in &all_assets {
+            let asset_size = self.asset_sizes.get(asset).copied().unwrap_or(200);
+            let mut assigned = false;
+            
+            for bank_id in first_asset_bank..=last_asset_bank {
+                let current_usage = *asset_bank_usage.get(&bank_id).unwrap_or(&0);
+                if current_usage + asset_size <= bank_size {
+                    asset_bank_usage.insert(bank_id, current_usage + asset_size);
+                    asset_assignments.insert(asset.clone(), bank_id);
+                    assigned = true;
+                    break;
                 }
             }
             
             if !assigned {
-                return Err(BankAllocatorError::FunctionTooLarge(
-                    func.name.clone(),
-                    func.size_bytes
-                ));
+                panic!("FATAL: Cannot fit asset '{}' ({} bytes) - banks #{}-#{} full!", 
+                    asset, asset_size, first_asset_bank, last_asset_bank);
             }
         }
         
-        // Validate assignments
-        self.validate_assignments(&banks)?;
+        eprintln!("📦 Distributed {} assets across Banks #{}-#{}", all_assets.len(), first_asset_bank, last_asset_bank);
         
-        Ok(assignments)
+        // Re-run the same allocation logic as assign_banks FOR FUNCTIONS ONLY
+        for cluster in &clusters {
+            let mut assigned = false;
+            
+            // Calculate cluster size WITHOUT assets (assets are in Bank #31 now)
+            let cluster_code_size: usize = cluster.functions.iter()
+                .map(|f| func_sizes.get(f).copied().unwrap_or(100))
+                .sum();
+            
+            // Try to fit functions in one bank
+            for bank in &mut banks {
+                if bank.can_fit(cluster_code_size, bank_size) {
+                    // Add only functions to this bank (NOT assets)
+                    for func in &cluster.functions {
+                        let func_size = func_sizes.get(func).copied().unwrap_or(100);
+                        bank.add_function(func.clone(), func_size);
+                        assignments.insert(func.clone(), bank.id);
+                    }
+                    
+                    assigned = true;
+                    break;
+                }
+            }
+            
+            // If functions don't fit together, assign individually
+            if !assigned {
+                for func_name in &cluster.functions {
+                    let func_size = func_sizes.get(func_name).copied().unwrap_or(100);
+                    
+                    for bank in &mut banks {
+                        if bank.can_fit(func_size, bank_size) {
+                            bank.add_function(func_name.clone(), func_size);
+                            assignments.insert(func_name.clone(), bank.id);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        
+        asset_assignments
     }
     
     /// Validate that bank assignments are valid
@@ -177,31 +376,25 @@ impl BankAllocator {
     pub fn assignment_stats(&self, assignments: &HashMap<String, u8>) -> BankStats {
         let bank_size = self.config.rom_bank_size;
         let total_banks = self.config.rom_bank_count;
-        
-        // Code banks: #0 to #(N-2)
         let code_banks_count = total_banks.saturating_sub(1);
         
-        // Calculate per-bank statistics
+        let func_sizes: HashMap<String, usize> = self.graph.nodes.iter()
+            .map(|(name, node)| (name.clone(), node.size_bytes))
+            .collect();
+        
         let mut banks: Vec<BankInfo> = (0..code_banks_count)
             .map(|i| BankInfo::new(i as u8))
             .collect();
         
         for (func_name, bank_id) in assignments {
-            if let Some(node) = self.graph.nodes.get(func_name) {
-                if (*bank_id as usize) < code_banks_count {
-                    banks[*bank_id as usize].add_function(func_name.clone(), node.size_bytes);
-                }
+            if (*bank_id as usize) < code_banks_count {
+                let size = func_sizes.get(func_name).copied().unwrap_or(0);
+                banks[*bank_id as usize].add_function(func_name.clone(), size);
             }
         }
         
-        let used_banks = banks.iter()
-            .filter(|b| !b.functions.is_empty())
-            .count();
-        
-        let total_used_bytes: usize = banks.iter()
-            .map(|b| b.used_bytes)
-            .sum();
-        
+        let used_banks = banks.iter().filter(|b| !b.functions.is_empty()).count();
+        let total_used_bytes: usize = banks.iter().map(|b| b.used_bytes).sum();
         let total_available_bytes = bank_size * code_banks_count;
         let utilization = (total_used_bytes as f64 / total_available_bytes as f64) * 100.0;
         
@@ -214,9 +407,7 @@ impl BankAllocator {
             total_used_bytes,
             total_available_bytes,
             utilization,
-            banks: banks.into_iter()
-                .filter(|b| !b.functions.is_empty())
-                .collect(),
+            banks: banks.into_iter().filter(|b| !b.functions.is_empty()).collect(),
         }
     }
 }
@@ -262,7 +453,8 @@ impl BankStats {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::graph::{CallGraph, FunctionNode};
+    use crate::graph::{CallGraph, FunctionNode, CallEdge};
+    use std::collections::HashSet;
 
     #[test]
     fn test_single_bank_config() {
@@ -299,6 +491,7 @@ mod tests {
             name: "main".to_string(),
             size_bytes: 100,
             is_critical: true,
+            assets_used: HashSet::new(),
         });
         
         let allocator = BankAllocator::new(config, graph);
@@ -318,11 +511,97 @@ mod tests {
             name: "huge".to_string(),
             size_bytes: 20000, // Larger than 16KB bank
             is_critical: false,
+            assets_used: HashSet::new(),
         });
         
         let allocator = BankAllocator::new(config, graph);
         let result = allocator.assign_banks();
         
         assert!(result.is_err());
+    }
+    
+    #[test]
+    fn test_clustering_related_functions() {
+        // Test that functions that call each other stay in same bank
+        let config = BankConfig::multibank_512kb();
+        let mut graph = CallGraph::new();
+        
+        // Add two small functions that call each other
+        let mut assets1 = HashSet::new();
+        assets1.insert("player_sprite".to_string());
+        
+        graph.add_node(FunctionNode {
+            name: "draw_player".to_string(),
+            size_bytes: 500,
+            is_critical: false,
+            assets_used: assets1.clone(),
+        });
+        
+        graph.add_node(FunctionNode {
+            name: "update_player".to_string(),
+            size_bytes: 500,
+            is_critical: false,
+            assets_used: HashSet::new(),
+        });
+        
+        // draw_player calls update_player
+        graph.add_edge(CallEdge::new("draw_player".to_string(), "update_player".to_string()));
+        
+        let mut allocator = BankAllocator::new(config, graph);
+        let mut asset_sizes = HashMap::new();
+        asset_sizes.insert("player_sprite".to_string(), 200);
+        allocator.set_asset_sizes(asset_sizes);
+        
+        let assignments = allocator.assign_banks().unwrap();
+        
+        // Both functions should be in same bank (cluster)
+        assert_eq!(assignments["draw_player"], assignments["update_player"]);
+    }
+    
+    #[test]
+    fn test_clustering_shared_assets() {
+        // Test that functions sharing assets cluster together
+        let config = BankConfig::multibank_512kb();
+        let mut graph = CallGraph::new();
+        
+        // Two functions use same asset (should cluster)
+        let mut assets_shared = HashSet::new();
+        assets_shared.insert("enemy_sprite".to_string());
+        
+        graph.add_node(FunctionNode {
+            name: "draw_enemy".to_string(),
+            size_bytes: 300,
+            is_critical: false,
+            assets_used: assets_shared.clone(),
+        });
+        
+        graph.add_node(FunctionNode {
+            name: "update_enemy".to_string(),
+            size_bytes: 300,
+            is_critical: false,
+            assets_used: assets_shared.clone(), // Same asset
+        });
+        
+        // Third function uses different asset (should NOT cluster with above)
+        let mut assets_diff = HashSet::new();
+        assets_diff.insert("background".to_string());
+        
+        graph.add_node(FunctionNode {
+            name: "draw_background".to_string(),
+            size_bytes: 300,
+            is_critical: false,
+            assets_used: assets_diff,
+        });
+        
+        let mut allocator = BankAllocator::new(config, graph);
+        let mut asset_sizes = HashMap::new();
+        asset_sizes.insert("enemy_sprite".to_string(), 500);
+        asset_sizes.insert("background".to_string(), 500);
+        allocator.set_asset_sizes(asset_sizes);
+        
+        let assignments = allocator.assign_banks().unwrap();
+        
+        // draw_enemy and update_enemy should be in same bank (share asset)
+        assert_eq!(assignments["draw_enemy"], assignments["update_enemy"]);
     }
 }

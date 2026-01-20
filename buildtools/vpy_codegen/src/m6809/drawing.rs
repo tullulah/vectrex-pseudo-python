@@ -470,66 +470,115 @@ pub fn emit_draw_sprite(
 /// Only emits helpers that are actually used in the code (tree shaking)
 pub fn emit_runtime_helpers(out: &mut String, needed: &HashSet<String>) {
     // DRAW_CIRCLE_RUNTIME: Draw circle with runtime parameters
+    // Uses 8-segment octagon approximation (simple but effective)
     if needed.contains("DRAW_CIRCLE_RUNTIME") {
         out.push_str("DRAW_CIRCLE_RUNTIME:\n");
         out.push_str("    ; Input: DRAW_CIRCLE_XC, DRAW_CIRCLE_YC, DRAW_CIRCLE_DIAM, DRAW_CIRCLE_INTENSITY\n");
-        out.push_str("    ; Draw 16-sided polygon approximation\n");
+        out.push_str("    ; Draw 8-sided polygon (octagon) approximation\n");
         out.push_str("    \n");
-        out.push_str("    ; Read parameters BEFORE DP change\n");
-        out.push_str("    LDB DRAW_CIRCLE_INTENSITY\n");
-        out.push_str("    PSHS B              ; Save intensity\n");
-        out.push_str("    LDB DRAW_CIRCLE_DIAM\n");
-        out.push_str("    SEX                 ; Sign-extend to 16-bit\n");
-        out.push_str("    LSRA                ; Divide by 2 = radius\n");
-        out.push_str("    RORB\n");
-        out.push_str("    STD DRAW_CIRCLE_TEMP   ; Save radius\n");
-        out.push_str("    LDB DRAW_CIRCLE_XC\n");
-        out.push_str("    SEX\n");
-        out.push_str("    STD DRAW_CIRCLE_TEMP+2 ; Save xc\n");
-        out.push_str("    LDB DRAW_CIRCLE_YC\n");
-        out.push_str("    SEX\n");
-        out.push_str("    STD DRAW_CIRCLE_TEMP+4 ; Save yc\n");
-        out.push_str("    \n");
-        out.push_str("    ; Setup BIOS\n");
+        out.push_str("    ; Set DP to $D0 for BIOS calls\n");
         out.push_str("    LDA #$D0\n");
         out.push_str("    TFR A,DP\n");
         out.push_str("    JSR Reset0Ref\n");
         out.push_str("    \n");
         out.push_str("    ; Set intensity\n");
-        out.push_str("    PULS A\n");
-        out.push_str("    CMPA #$5F\n");
-        out.push_str("    BEQ .DCR_INT_5F\n");
+        out.push_str("    LDA >DRAW_CIRCLE_INTENSITY\n");
         out.push_str("    JSR Intensity_a\n");
-        out.push_str("    BRA .DCR_AFTER_INT\n");
-        out.push_str(".DCR_INT_5F:\n");
-        out.push_str("    JSR Intensity_5F\n");
-        out.push_str(".DCR_AFTER_INT:\n");
         out.push_str("    \n");
-        out.push_str("    ; TODO: Generate 16 vertices with trig (simplified version uses 8-gon)\n");
-        out.push_str("    ; For now, draw octagon approximation\n");
-        out.push_str("    ; Move to start position (xc + radius, yc)\n");
-        out.push_str("    LDD DRAW_CIRCLE_TEMP   ; radius\n");
-        out.push_str("    ADDD DRAW_CIRCLE_TEMP+2 ; xc + radius\n");
-        out.push_str("    TFR B,B\n");
-        out.push_str("    PSHS B              ; Save X\n");
-        out.push_str("    LDD DRAW_CIRCLE_TEMP+4 ; yc\n");
-        out.push_str("    TFR B,A             ; Y to A\n");
-        out.push_str("    PULS B              ; X to B\n");
-        out.push_str("    JSR Moveto_d\n");
+        out.push_str("    ; Calculate radius = diam / 2 (use B for 8-bit)\n");
+        out.push_str("    LDB >DRAW_CIRCLE_DIAM\n");
+        out.push_str("    LSRB                ; radius = diam / 2\n");
+        out.push_str("    STB >DRAW_CIRCLE_TEMP  ; Save radius\n");
         out.push_str("    \n");
-        out.push_str("    ; Simple octagon: 8 segments with fixed deltas\n");
-        out.push_str("    ; This is simplified - full implementation would use SIN_TABLE\n");
-        out.push_str("    LDD DRAW_CIRCLE_TEMP   ; radius\n");
-        out.push_str("    TFR B,A             ; Use low byte only\n");
+        out.push_str("    ; Move to start point: (xc + radius, yc)\n");
+        out.push_str("    ; For octagon, start at rightmost point\n");
+        out.push_str("    LDB >DRAW_CIRCLE_XC\n");
+        out.push_str("    ADDB >DRAW_CIRCLE_TEMP  ; B = xc + radius\n");
+        out.push_str("    LDA >DRAW_CIRCLE_YC     ; A = yc\n");
+        out.push_str("    JSR Moveto_d            ; Move to (yc, xc+r)\n");
         out.push_str("    \n");
-        out.push_str("    ; Segment 1: move (0, -r)\n");
+        out.push_str("    ; Draw 8 segments of octagon\n");
+        out.push_str("    ; Each segment: approximate circle direction with fixed ratios\n");
+        out.push_str("    ; For radius r, segment deltas are approximately:\n");
+        out.push_str("    ; Seg 0: dx=-r*0.41, dy=-r*0.41 (upper right to top)\n");
+        out.push_str("    ; Seg 1: dx=-r*0.41, dy=-r*0.41 (continue)\n");
+        out.push_str("    ; ... etc around the circle\n");
+        out.push_str("    \n");
+        out.push_str("    ; We use simplified ratios: 0.7*r and 0.7*r for diagonal moves\n");
+        out.push_str("    ; And r for straight moves\n");
+        out.push_str("    \n");
+        out.push_str("    LDB >DRAW_CIRCLE_TEMP  ; B = radius\n");
+        out.push_str("    \n");
+        out.push_str("    ; Segment 1: NE to N (dx=-0.4r, dy=-0.9r) approx (-r/2, -r)\n");
         out.push_str("    CLR Vec_Misc_Count\n");
-        out.push_str("    NEGA                ; -radius\n");
-        out.push_str("    LDB #0\n");
+        out.push_str("    PSHS B              ; Save radius\n");
+        out.push_str("    LSRB                ; B = r/2\n");
+        out.push_str("    NEGB                ; B = -r/2 (dx)\n");
+        out.push_str("    LDA ,S              ; A = radius\n");
+        out.push_str("    NEGA                ; A = -r (dy)\n");
         out.push_str("    JSR Draw_Line_d\n");
         out.push_str("    \n");
-        out.push_str("    ; ... (simplified - full version would iterate all 16 segments)\n");
-        out.push_str("    ; For now return (minimal octagon)\n");
+        out.push_str("    ; Segment 2: N to NW (dx=-0.9r, dy=-0.4r) approx (-r, -r/2)\n");
+        out.push_str("    CLR Vec_Misc_Count\n");
+        out.push_str("    LDA ,S              ; radius\n");
+        out.push_str("    LSRA                ; r/2\n");
+        out.push_str("    NEGA                ; -r/2 (dy)\n");
+        out.push_str("    LDB ,S              ; radius\n");
+        out.push_str("    NEGB                ; -r (dx)\n");
+        out.push_str("    JSR Draw_Line_d\n");
+        out.push_str("    \n");
+        out.push_str("    ; Segment 3: NW to W (dx=-0.4r, dy=+0.9r) approx (-r/2, +r)\n");
+        out.push_str("    CLR Vec_Misc_Count\n");
+        out.push_str("    LDA ,S              ; radius\n");
+        out.push_str("    LDB ,S\n");
+        out.push_str("    LSRB                ; r/2\n");
+        out.push_str("    NEGB                ; -r/2 (dx)\n");
+        out.push_str("    JSR Draw_Line_d\n");
+        out.push_str("    \n");
+        out.push_str("    ; Segment 4: W to SW (dx=+0.4r, dy=+0.9r) approx (+r/2, +r)\n");
+        out.push_str("    CLR Vec_Misc_Count\n");
+        out.push_str("    LDA ,S              ; radius (dy)\n");
+        out.push_str("    LDB ,S\n");
+        out.push_str("    LSRB                ; r/2 (dx)\n");
+        out.push_str("    JSR Draw_Line_d\n");
+        out.push_str("    \n");
+        out.push_str("    ; Segment 5: SW to S (dx=+0.9r, dy=+0.4r) approx (+r, +r/2)\n");
+        out.push_str("    CLR Vec_Misc_Count\n");
+        out.push_str("    LDA ,S\n");
+        out.push_str("    LSRA                ; r/2 (dy)\n");
+        out.push_str("    LDB ,S              ; r (dx)\n");
+        out.push_str("    JSR Draw_Line_d\n");
+        out.push_str("    \n");
+        out.push_str("    ; Segment 6: S to SE (dx=+0.9r, dy=-0.4r) approx (+r, -r/2)\n");
+        out.push_str("    CLR Vec_Misc_Count\n");
+        out.push_str("    LDA ,S\n");
+        out.push_str("    LSRA                ; r/2\n");
+        out.push_str("    NEGA                ; -r/2 (dy)\n");
+        out.push_str("    LDB ,S              ; r (dx)\n");
+        out.push_str("    JSR Draw_Line_d\n");
+        out.push_str("    \n");
+        out.push_str("    ; Segment 7: SE to E (dx=+0.4r, dy=-0.9r) approx (+r/2, -r)\n");
+        out.push_str("    CLR Vec_Misc_Count\n");
+        out.push_str("    LDA ,S              ; radius\n");
+        out.push_str("    NEGA                ; -r (dy)\n");
+        out.push_str("    LDB ,S\n");
+        out.push_str("    LSRB                ; r/2 (dx)\n");
+        out.push_str("    JSR Draw_Line_d\n");
+        out.push_str("    \n");
+        out.push_str("    ; Segment 8: E to NE (close the loop) (dx=-0.4r, dy=-0.9r) approx (-r/2, -r)\n");
+        out.push_str("    CLR Vec_Misc_Count\n");
+        out.push_str("    LDA ,S              ; radius\n");
+        out.push_str("    NEGA                ; -r (dy)\n");
+        out.push_str("    LDB ,S\n");
+        out.push_str("    LSRB                ; r/2\n");
+        out.push_str("    NEGB                ; -r/2 (dx)\n");
+        out.push_str("    JSR Draw_Line_d\n");
+        out.push_str("    \n");
+        out.push_str("    LEAS 1,S            ; Clean up stack (remove saved radius)\n");
+        out.push_str("    \n");
+        out.push_str("    ; Restore DP to $C8\n");
+        out.push_str("    LDA #$C8\n");
+        out.push_str("    TFR A,DP\n");
         out.push_str("    RTS\n\n");
     }
     
@@ -600,6 +649,7 @@ pub fn emit_runtime_helpers(out: &mut String, needed: &HashSet<String>) {
     // CRITICAL FIX (2026-01-18): Copy exact implementation from core
     // The previous version was missing DP setup ($D0 for BIOS) and VIA_cntl initialization
     // Without DP=$D0, Intensity_a and Moveto_d write to wrong memory locations
+    // FIX 2026-01-19: Use extended addressing (>) for ALL RAM accesses when DP=$D0
     if needed.contains("DRAW_LINE_WRAPPER") {
         out.push_str("; DRAW_LINE unified wrapper - handles 16-bit signed coordinates\n");
         out.push_str("; Args: DRAW_LINE_ARGS+0=x0, +2=y0, +4=x1, +6=y1, +8=intensity\n");
@@ -612,29 +662,29 @@ pub fn emit_runtime_helpers(out: &mut String, needed: &HashSet<String>) {
         out.push_str("    LDA #$D0\n");
         out.push_str("    TFR A,DP\n");
         
-        // Set intensity and move to start
+        // Set intensity and move to start - USE EXTENDED ADDRESSING (>)
         out.push_str("    ; ALWAYS set intensity (no optimization)\n");
-        out.push_str("    LDA DRAW_LINE_ARGS+8+1  ; intensity (low byte of 16-bit value)\n");
+        out.push_str("    LDA >DRAW_LINE_ARGS+8+1  ; intensity (low byte) - EXTENDED addressing\n");
         out.push_str("    JSR Intensity_a\n");
         out.push_str("    ; Move to start ONCE (y in A, x in B) - use low bytes (8-bit signed -127..+127)\n");
-        out.push_str("    LDA DRAW_LINE_ARGS+2+1  ; Y start (low byte of 16-bit value)\n");
-        out.push_str("    LDB DRAW_LINE_ARGS+0+1  ; X start (low byte of 16-bit value)\n");
+        out.push_str("    LDA >DRAW_LINE_ARGS+2+1  ; Y start (low byte) - EXTENDED addressing\n");
+        out.push_str("    LDB >DRAW_LINE_ARGS+0+1  ; X start (low byte) - EXTENDED addressing\n");
         out.push_str("    JSR Moveto_d\n");
         
-        // Compute deltas
+        // Compute deltas - USE EXTENDED ADDRESSING (>)
         out.push_str("    ; Compute deltas using 16-bit arithmetic\n");
         out.push_str("    ; dx = x1 - x0 (treating as signed 16-bit)\n");
-        out.push_str("    LDD DRAW_LINE_ARGS+4    ; x1 (16-bit)\n");
-        out.push_str("    SUBD DRAW_LINE_ARGS+0   ; subtract x0 (16-bit)\n");
-        out.push_str("    STD VLINE_DX_16 ; Store full 16-bit dx\n");
+        out.push_str("    LDD >DRAW_LINE_ARGS+4    ; x1 (16-bit) - EXTENDED\n");
+        out.push_str("    SUBD >DRAW_LINE_ARGS+0   ; subtract x0 (16-bit) - EXTENDED\n");
+        out.push_str("    STD >VLINE_DX_16 ; Store full 16-bit dx - EXTENDED\n");
         out.push_str("    ; dy = y1 - y0 (treating as signed 16-bit)\n");
-        out.push_str("    LDD DRAW_LINE_ARGS+6    ; y1 (16-bit)\n");
-        out.push_str("    SUBD DRAW_LINE_ARGS+2   ; subtract y0 (16-bit)\n");
-        out.push_str("    STD VLINE_DY_16 ; Store full 16-bit dy\n");
+        out.push_str("    LDD >DRAW_LINE_ARGS+6    ; y1 (16-bit) - EXTENDED\n");
+        out.push_str("    SUBD >DRAW_LINE_ARGS+2   ; subtract y0 (16-bit) - EXTENDED\n");
+        out.push_str("    STD >VLINE_DY_16 ; Store full 16-bit dy - EXTENDED\n");
         
-        // SEGMENT 1: Clamp and draw first segment
+        // SEGMENT 1: Clamp and draw first segment - USE EXTENDED ADDRESSING
         out.push_str("    ; SEGMENT 1: Clamp dy to ±127 and draw\n");
-        out.push_str("    LDD VLINE_DY_16 ; Load full dy\n");
+        out.push_str("    LDD >VLINE_DY_16 ; Load full dy - EXTENDED\n");
         out.push_str("    CMPD #127\n");
         out.push_str("    BLE DLW_SEG1_DY_LO\n");
         out.push_str("    LDA #127        ; dy > 127: use 127\n");
@@ -645,13 +695,13 @@ pub fn emit_runtime_helpers(out: &mut String, needed: &HashSet<String>) {
         out.push_str("    LDA #$80        ; dy < -128: use -128\n");
         out.push_str("    BRA DLW_SEG1_DY_READY\n");
         out.push_str("DLW_SEG1_DY_NO_CLAMP:\n");
-        out.push_str("    LDA VLINE_DY_16+1  ; Use original low byte (already in valid range)\n");
+        out.push_str("    LDA >VLINE_DY_16+1  ; Use original low byte - EXTENDED\n");
         out.push_str("DLW_SEG1_DY_READY:\n");
-        out.push_str("    STA VLINE_DY    ; Save clamped dy for segment 1\n");
+        out.push_str("    STA >VLINE_DY    ; Save clamped dy for segment 1 - EXTENDED\n");
         
-        // Clamp dx for segment 1
+        // Clamp dx for segment 1 - USE EXTENDED ADDRESSING
         out.push_str("    ; Clamp dx to ±127\n");
-        out.push_str("    LDD VLINE_DX_16\n");
+        out.push_str("    LDD >VLINE_DX_16  ; EXTENDED\n");
         out.push_str("    CMPD #127\n");
         out.push_str("    BLE DLW_SEG1_DX_LO\n");
         out.push_str("    LDB #127        ; dx > 127: use 127\n");
@@ -662,20 +712,20 @@ pub fn emit_runtime_helpers(out: &mut String, needed: &HashSet<String>) {
         out.push_str("    LDB #$80        ; dx < -128: use -128\n");
         out.push_str("    BRA DLW_SEG1_DX_READY\n");
         out.push_str("DLW_SEG1_DX_NO_CLAMP:\n");
-        out.push_str("    LDB VLINE_DX_16+1  ; Use original low byte (already in valid range)\n");
+        out.push_str("    LDB >VLINE_DX_16+1  ; Use original low byte - EXTENDED\n");
         out.push_str("DLW_SEG1_DX_READY:\n");
-        out.push_str("    STB VLINE_DX    ; Save clamped dx for segment 1\n");
+        out.push_str("    STB >VLINE_DX    ; Save clamped dx for segment 1 - EXTENDED\n");
         
-        // Draw segment 1
+        // Draw segment 1 - USE EXTENDED ADDRESSING
         out.push_str("    ; Draw segment 1\n");
         out.push_str("    CLR Vec_Misc_Count\n");
-        out.push_str("    LDA VLINE_DY\n");
-        out.push_str("    LDB VLINE_DX\n");
+        out.push_str("    LDA >VLINE_DY  ; EXTENDED\n");
+        out.push_str("    LDB >VLINE_DX  ; EXTENDED\n");
         out.push_str("    JSR Draw_Line_d ; Beam moves automatically\n");
         
         // Check if we need segment 2 - for BOTH dy > 127 AND dy < -128
         out.push_str("    ; Check if we need SEGMENT 2 (dy outside ±127 range)\n");
-        out.push_str("    LDD VLINE_DY_16 ; Reload original dy\n");
+        out.push_str("    LDD >VLINE_DY_16 ; Reload original dy - EXTENDED\n");
         out.push_str("    CMPD #127\n");
         out.push_str("    BGT DLW_NEED_SEG2  ; dy > 127: needs segment 2\n");
         out.push_str("    CMPD #-128\n");
@@ -683,10 +733,10 @@ pub fn emit_runtime_helpers(out: &mut String, needed: &HashSet<String>) {
         out.push_str("    BRA DLW_DONE       ; dy in range ±127: no segment 2\n");
         out.push_str("DLW_NEED_SEG2:\n");
         
-        // SEGMENT 2: Handle remaining dy AND dx
+        // SEGMENT 2: Handle remaining dy AND dx - USE EXTENDED ADDRESSING
         out.push_str("    ; SEGMENT 2: Draw remaining dy and dx\n");
         out.push_str("    ; Calculate remaining dy\n");
-        out.push_str("    LDD VLINE_DY_16 ; Load original full dy\n");
+        out.push_str("    LDD >VLINE_DY_16 ; Load original full dy - EXTENDED\n");
         out.push_str("    CMPD #127\n");
         out.push_str("    BGT DLW_SEG2_DY_POS  ; dy > 127\n");
         out.push_str("    ; dy < -128, so we drew -128 in segment 1\n");
@@ -698,11 +748,11 @@ pub fn emit_runtime_helpers(out: &mut String, needed: &HashSet<String>) {
         out.push_str("    ; remaining = dy - 127\n");
         out.push_str("    SUBD #127       ; Subtract 127 we already drew\n");
         out.push_str("DLW_SEG2_DY_DONE:\n");
-        out.push_str("    STD VLINE_DY_REMAINING  ; Store remaining dy (16-bit)\n");
+        out.push_str("    STD >VLINE_DY_REMAINING  ; Store remaining dy (16-bit) - EXTENDED\n");
         
-        // Also calculate remaining dx
+        // Also calculate remaining dx - USE EXTENDED ADDRESSING
         out.push_str("    ; Calculate remaining dx\n");
-        out.push_str("    LDD VLINE_DX_16 ; Load original full dx\n");
+        out.push_str("    LDD >VLINE_DX_16 ; Load original full dx - EXTENDED\n");
         out.push_str("    CMPD #127\n");
         out.push_str("    BLE DLW_SEG2_DX_CHECK_NEG\n");
         out.push_str("    ; dx > 127, so we drew 127 in segment 1\n");
@@ -719,12 +769,12 @@ pub fn emit_runtime_helpers(out: &mut String, needed: &HashSet<String>) {
         out.push_str("DLW_SEG2_DX_NO_REMAIN:\n");
         out.push_str("    LDD #0          ; No remaining dx\n");
         out.push_str("DLW_SEG2_DX_DONE:\n");
-        out.push_str("    STD VLINE_DX_REMAINING  ; Store remaining dx (16-bit)\n");
+        out.push_str("    STD >VLINE_DX_REMAINING  ; Store remaining dx (16-bit) - EXTENDED\n");
         
-        // Draw segment 2 with both remaining dx and dy
+        // Draw segment 2 with both remaining dx and dy - USE EXTENDED ADDRESSING
         out.push_str("    ; Setup for Draw_Line_d: A=dy, B=dx (CRITICAL: order matters!)\n");
-        out.push_str("    LDA VLINE_DY_REMAINING+1  ; Low byte of remaining dy\n");
-        out.push_str("    LDB VLINE_DX_REMAINING+1  ; Low byte of remaining dx\n");
+        out.push_str("    LDA >VLINE_DY_REMAINING+1  ; Low byte of remaining dy - EXTENDED\n");
+        out.push_str("    LDB >VLINE_DX_REMAINING+1  ; Low byte of remaining dx - EXTENDED\n");
         out.push_str("    CLR Vec_Misc_Count\n");
         out.push_str("    JSR Draw_Line_d ; Beam continues from segment 1 endpoint\n");
         

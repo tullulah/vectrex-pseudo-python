@@ -672,22 +672,6 @@ export const VPY_FUNCTIONS: VPyFunction[] = [
     ],
     category: "drawing",
     notes: "More segments = smoother circle but slower. Fewer segments = faster but more angular. Clamped to 3-64 segments. Variable arity function."
-  },
-  {
-    name: "WAIT_RECAL",
-    syntax: "WAIT_RECAL()",
-    description: "Waits for screen refresh and recalibrates the vector beam (50 FPS sync)",
-    parameters: [],
-    examples: [
-      "def loop():",
-      "    WAIT_RECAL()  # Sync with screen refresh (~20ms at 50 FPS)",
-      "    SET_INTENSITY(127)",
-      "    DRAW_VECTOR(\"player\", x, y)",
-      "    # AUDIO_UPDATE auto-injected here by compiler"
-    ],
-    category: "control",
-    vectrexAddress: "0xF192 (Wait_Recal)",
-    notes: "MANDATORY at start of loop(). Synchronizes execution with screen refresh (20ms). Auto-injected by compiler if missing. AUDIO_UPDATE auto-injected immediately after."
   }
 ];
 

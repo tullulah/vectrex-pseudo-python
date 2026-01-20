@@ -1,120 +1,11 @@
 use clap::{Parser, Subcommand};
 use colored::*;
 use std::path::{Path, PathBuf};
-use std::fs;
 use anyhow::{Result, Context};
 
-// COPY-PASTE FROM core/src/main.rs (lines 42-150) - Asset Discovery
+// Use centralized asset discovery from vpy_codegen (ensures consistent sorting)
 fn discover_assets(source_path: &Path) -> Vec<vpy_codegen::AssetInfo> {
-    let mut assets = Vec::new();
-    
-    // Determine project root - convert to absolute path first to avoid cwd confusion
-    let abs_source = source_path.canonicalize().unwrap_or_else(|_| source_path.to_path_buf());
-    
-    let project_root: PathBuf = if let Some(parent) = abs_source.parent() {
-        if parent.file_name().and_then(|n| n.to_str()) == Some("src") {
-            // Source is in src/ directory, project root is parent
-            parent.parent().unwrap_or(parent).to_path_buf()
-        } else {
-            // Source is not in src/, assume parent is project root
-            parent.to_path_buf()
-        }
-    } else {
-        // No parent (shouldn't happen with absolute path), use source itself
-        abs_source.clone()
-    };
-    
-    // Search for vector assets (assets/vectors/*.vec)
-    let vectors_dir = project_root.join("assets").join("vectors");
-    if vectors_dir.is_dir() {
-        if let Ok(entries) = fs::read_dir(&vectors_dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.extension().and_then(|e| e.to_str()) == Some("vec") {
-                    if let Some(name) = path.file_stem().and_then(|n| n.to_str()) {
-                        assets.push(vpy_codegen::AssetInfo {
-                            name: name.to_string(),
-                            path: path.display().to_string(),
-                            asset_type: vpy_codegen::AssetType::Vector,
-                        });
-                    }
-                }
-            }
-        }
-    }
-    
-    // Search for music assets (assets/music/*.vmus)
-    let music_dir = project_root.join("assets").join("music");
-    if music_dir.is_dir() {
-        if let Ok(entries) = fs::read_dir(&music_dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.extension().and_then(|e| e.to_str()) == Some("vmus") {
-                    if let Some(name) = path.file_stem().and_then(|n| n.to_str()) {
-                        assets.push(vpy_codegen::AssetInfo {
-                            name: name.to_string(),
-                            path: path.display().to_string(),
-                            asset_type: vpy_codegen::AssetType::Music,
-                        });
-                    }
-                }
-            }
-        }
-    }
-    
-    // Search for sound effects (assets/sfx/*.vsfx)
-    let sfx_dir = project_root.join("assets").join("sfx");
-    if sfx_dir.is_dir() {
-        if let Ok(entries) = fs::read_dir(&sfx_dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.extension().and_then(|e| e.to_str()) == Some("vsfx") {
-                    if let Some(name) = path.file_stem().and_then(|n| n.to_str()) {
-                        assets.push(vpy_codegen::AssetInfo {
-                            name: name.to_string(),
-                            path: path.display().to_string(),
-                            asset_type: vpy_codegen::AssetType::Sfx,
-                        });
-                    }
-                }
-            }
-        }
-    }
-    
-    // Search for level data (assets/playground/*.vplay)
-    let levels_dir = project_root.join("assets").join("playground");
-    if levels_dir.is_dir() {
-        if let Ok(entries) = fs::read_dir(&levels_dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.extension().and_then(|e| e.to_str()) == Some("vplay") {
-                    if let Some(name) = path.file_stem().and_then(|n| n.to_str()) {
-                        assets.push(vpy_codegen::AssetInfo {
-                            name: name.to_string(),
-                            path: path.display().to_string(),
-                            asset_type: vpy_codegen::AssetType::Level,
-                        });
-                    }
-                }
-            }
-        }
-    }
-    
-    // Log discovered assets
-    if !assets.is_empty() {
-        eprintln!("✓ Discovered {} asset(s):", assets.len());
-        for asset in &assets {
-            let type_str = match asset.asset_type {
-                vpy_codegen::AssetType::Vector => "Vector",
-                vpy_codegen::AssetType::Music => "Music",
-                vpy_codegen::AssetType::Sfx => "SFX",
-                vpy_codegen::AssetType::Level => "Level",
-            };
-            eprintln!("  - {} ({})", asset.name, type_str);
-        }
-    }
-    
-    assets
+    vpy_codegen::m6809::assets::discover_assets(source_path)
 }
 
 #[derive(Parser)]
@@ -936,10 +827,17 @@ fn cmd_build(input: &PathBuf, output: Option<PathBuf>, rom_size: usize, bank_siz
                     return Ok(());
                 }
                 Err(e) => {
-                    println!("  {} Warning: Multi-bank ROM generation failed: {}", 
-                        "⚠".yellow(), e);
-                    println!("     Falling back to unified assembler...");
-                    // Fall through to unified assembler
+                    // FATAL ERROR: Multibank build explicitly requested via META but failed
+                    // DO NOT fallback to single-bank - user expects multibank ROM
+                    eprintln!("\n{}", format!("❌ BUILD FAILED (multibank): {}", e).bright_red().bold());
+                    eprintln!("\n  Multibank ROM generation failed.");
+                    eprintln!("  Project has META ROM_TOTAL_SIZE={} - multibank is REQUIRED.", rom_size);
+                    eprintln!("  Cannot fallback to single-bank (code exceeds 32KB limit).");
+                    eprintln!("\n  Common causes:");
+                    eprintln!("    - Cross-bank symbol references not resolved (PASS 1 failure)");
+                    eprintln!("    - Asset distribution issues (symbols missing from banks)");
+                    eprintln!("    - Syntax errors in generated bank ASM");
+                    return Err(anyhow::anyhow!("Multibank build failed: {}", e));
                 }
             }
         }
@@ -1128,10 +1026,16 @@ fn cmd_build(input: &PathBuf, output: Option<PathBuf>, rom_size: usize, bank_siz
                 return Ok(());
             }
             Err(e) => {
-                println!("  {} Warning: Multi-bank ROM generation failed: {}", 
-                    "⚠".yellow(), e);
-                println!("     Falling back to unified assembler...");
-                // Fall through to unified assembler
+                // FATAL ERROR: Multibank build explicitly requested via META but failed
+                // DO NOT fallback to single-bank - user expects multibank ROM
+                eprintln!("\n{}", format!("❌ Link FAILED (multibank): {}", e).bright_red().bold());
+                eprintln!("\n  Multibank ROM generation failed during link command.");
+                eprintln!("  Cannot fallback to single-bank (multibank explicitly requested).");
+                eprintln!("\n  Common causes:");
+                eprintln!("    - Cross-bank symbol references not resolved");
+                eprintln!("    - Missing .vo object files");
+                eprintln!("    - Incompatible object file versions");
+                return Err(anyhow::anyhow!("Multibank link failed: {}", e));
             }
         }
     }
