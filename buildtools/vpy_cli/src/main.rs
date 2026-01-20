@@ -760,11 +760,47 @@ fn cmd_build(input: &PathBuf, output: Option<PathBuf>, rom_size: usize, bank_siz
         println!("  {} Generated {} bytes ASM", "✓".green(), generated.asm_source.len());
         
         // Determine output paths
-        let project_dir = input.parent().unwrap_or_else(|| std::path::Path::new("."));
+        // CRITICAL FIX (2026-01-20): Detect project root directory properly
+        // If input is src/main.vpy, we need to go up to find the .vpyproj or src/ parent
+        let project_dir = {
+            let input_parent = input.parent().unwrap_or_else(|| std::path::Path::new("."));
+            
+            // Check if parent is "src" directory - if so, go up one more level
+            if input_parent.file_name().and_then(|n| n.to_str()) == Some("src") {
+                input_parent.parent().unwrap_or(input_parent).to_path_buf()
+            } else {
+                // Otherwise, search for .vpyproj in current or parent directories
+                let mut current = input_parent;
+                loop {
+                    // Check if there's a .vpyproj file here
+                    if let Ok(entries) = std::fs::read_dir(current) {
+                        let has_vpyproj = entries
+                            .flatten()
+                            .any(|entry| entry.path().extension().and_then(|s| s.to_str()) == Some("vpyproj"));
+                        
+                        if has_vpyproj {
+                            break current.to_path_buf();
+                        }
+                    }
+                    
+                    // Go up one level
+                    match current.parent() {
+                        Some(parent) => current = parent,
+                        None => break input_parent.to_path_buf(), // Reached root, use original parent
+                    }
+                }
+            }
+        };
+        
         let build_dir = project_dir.join("build");
         std::fs::create_dir_all(&build_dir)?;
         
-        let project_name = input.file_stem().and_then(|s| s.to_str()).unwrap_or("output");
+        // CRITICAL FIX (2026-01-20): Use project directory name, not input file name
+        // This ensures test_incremental/src/main.vpy generates test_incremental.asm
+        let project_name = project_dir
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or_else(|| input.file_stem().and_then(|s| s.to_str()).unwrap_or("output"));
         
         // CRITICAL FIX (2026-01-18): When --output is specified, place ASM in same directory
         // This fixes IDE integration where it expects both .asm and .bin in the same location
@@ -791,6 +827,18 @@ fn cmd_build(input: &PathBuf, output: Option<PathBuf>, rom_size: usize, bank_siz
         
         println!("  {} ASM written: {}", "✓".green(), asm_path.display());
         
+        // Set up workspace paths for include directory (needed for VECTREX.I)
+        let cli_exe = std::env::current_exe()
+            .context("Failed to get CLI executable path")?;
+        let cli_dir = cli_exe.parent()
+            .context("Failed to get CLI directory")?;
+        // Go up from target/debug/ (or target/release/) to workspace root
+        let workspace_root = cli_dir.parent()  // target/
+            .and_then(|p| p.parent())          // buildtools/
+            .and_then(|p| p.parent())          // vectrex-pseudo-python/
+            .context("Failed to get workspace root")?;
+        let include_dir = workspace_root.join("ide/frontend/public/include");
+        
         // **CRITICAL: Detect multibank BEFORE assembling**
         // If multibank is detected, skip unified assembler and use multi_bank_linker directly
         let is_multibank = rom_size > 32768;
@@ -808,17 +856,82 @@ fn cmd_build(input: &PathBuf, output: Option<PathBuf>, rom_size: usize, bank_siz
             let linker = vpy_linker::MultiBankLinker::new(
                 bank_size as u32,
                 (rom_size / bank_size) as u8,
-                true // use native assembler
+                true, // use native assembler
+                Some(include_dir.clone()) // include dir for VECTREX.I
             );
             
             match linker.generate_multibank_rom(&asm_path, &output_path_mb) {
-                Ok(_) => {
+                Ok(symbol_table) => {
                     println!("  {} Phase 6.7 SUCCESS: Multi-bank binary written to {}", 
                         "✓".green(), output_path_mb.display());
                     println!("     Total size: {} KB ({} banks × {} KB)", 
                         rom_size / 1024,
                         rom_size / bank_size,
                         bank_size / 1024);
+                    
+                    // Phase 9: Generate PDB debug symbols for multibank
+                    {
+                        println!("\n{}", "Phase 9: Generating debug symbols (multibank)...".bright_cyan());
+                        
+                        // Load VECTREX.I for BIOS symbols
+                        let vectrex_i_path = include_dir.join("VECTREX.I");
+                        let vectrex_i_content = if vectrex_i_path.exists() {
+                            std::fs::read_to_string(&vectrex_i_path).ok()
+                        } else {
+                            None
+                        };
+                        
+                        let rom_config = vpy_debug_gen::RomConfig {
+                            total_size: rom_size as u32,
+                            bank_size: bank_size as u32,
+                            bank_count: (rom_size / bank_size) as u32,
+                            is_multibank: true,
+                        };
+                        
+                        // Generate PDB from ASM source
+                        match vpy_debug_gen::generate_pdb(
+                            &generated.asm_source,
+                            vectrex_i_content.as_deref(),
+                            rom_config,
+                        ) {
+                            Ok(mut pdb) => {
+                                // Convert u16 symbols to u32 for update function
+                                let symbol_table_u32: std::collections::HashMap<String, u32> = symbol_table
+                                    .iter()
+                                    .map(|(k, v)| (k.clone(), *v as u32))
+                                    .collect();
+                                vpy_debug_gen::update_pdb_addresses(&mut pdb, &symbol_table_u32);
+                                
+                                // Populate line maps (VPy and ASM line mappings)
+                                vpy_debug_gen::populate_line_maps(&mut pdb, &generated.asm_source);
+                                
+                                // Write PDB file
+                                let pdb_path = output_path_mb.with_extension("pdb");
+                                match pdb.to_json() {
+                                    Ok(json) => {
+                                        std::fs::write(&pdb_path, json)
+                                            .context("Failed to write PDB file")?;
+                                        println!("  {} PDB written: {}", "✓".green(), pdb_path.display());
+                                        if verbose {
+                                            println!("    Variables: {}", pdb.variables.len());
+                                            println!("    Labels: {}", pdb.labels.len());
+                                            println!("    Functions: {}", pdb.functions.len());
+                                            println!("    BIOS symbols: {}", pdb.bios_symbols.len());
+                                            println!("    VPy line mappings: {}", pdb.vpy_line_map.len());
+                                            println!("    ASM line mappings: {}", pdb.asm_line_map.len());
+                                            println!("    Total symbols: {}", symbol_table.len());
+                                        }
+                                    }
+                                    Err(e) => {
+                                        eprintln!("  {} PDB serialization failed: {}", "⚠".yellow(), e);
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                eprintln!("  {} PDB generation failed: {}", "⚠".yellow(), e);
+                            }
+                        }
+                    }
                     
                     println!("\n{}", format!("✓ BUILD SUCCESS (multibank): {} KB written to {}", 
                         rom_size / 1024,
@@ -862,18 +975,10 @@ fn cmd_build(input: &PathBuf, output: Option<PathBuf>, rom_size: usize, bank_siz
         // Set include directory for VECTREX.I (absolute path from CLI binary location)
         let cli_exe = std::env::current_exe()
             .context("Failed to get CLI executable path")?;
-        let cli_dir = cli_exe.parent()
-            .context("Failed to get CLI directory")?;
-        // Go up from target/release/ to workspace root (3 levels up)
-        let workspace_root = cli_dir.parent()  // target/
-            .and_then(|p| p.parent())          // buildtools/
-            .and_then(|p| p.parent())          // vectrex-pseudo-python/
-            .context("Failed to get workspace root")?;
-        let include_dir = workspace_root.join("ide/frontend/public/include");
         eprintln!("🔧 [DEBUG] CLI exe: {:?}", cli_exe);
         eprintln!("🔧 [DEBUG] Workspace root: {:?}", workspace_root);
         eprintln!("🔧 [DEBUG] Include dir: {:?}", include_dir);
-        vpy_assembler::set_include_dir(Some(include_dir));
+        vpy_assembler::set_include_dir(Some(include_dir.clone()));
         
         let binaries = vpy_assembler::assemble_banks(sections)
             .context("Failed to assemble banks")?;
@@ -979,10 +1084,55 @@ fn cmd_build(input: &PathBuf, output: Option<PathBuf>, rom_size: usize, bank_siz
     }
     
     // SAVE ASM FILE NOW (before assembling, so we can debug failures)
-    let asm_path = output.as_ref().unwrap_or(&source_path).with_extension("asm");
-    eprintln!("[DEBUG CLI] Saving ASM to: {}", asm_path.display());
+    // CRITICAL FIX (2026-01-20): Detect project root directory properly
+    let project_dir = {
+        let input_parent = source_path.parent().unwrap_or_else(|| std::path::Path::new("."));
+        
+        // Check if parent is "src" directory - if so, go up one more level
+        if input_parent.file_name().and_then(|n| n.to_str()) == Some("src") {
+            input_parent.parent().unwrap_or(input_parent).to_path_buf()
+        } else {
+            // Otherwise, search for .vpyproj in current or parent directories
+            let mut current = input_parent;
+            loop {
+                // Check if there's a .vpyproj file here
+                if let Ok(entries) = std::fs::read_dir(current) {
+                    let has_vpyproj = entries
+                        .flatten()
+                        .any(|entry| entry.path().extension().and_then(|s| s.to_str()) == Some("vpyproj"));
+                    
+                    if has_vpyproj {
+                        break current.to_path_buf();
+                    }
+                }
+                
+                // Go up one level
+                match current.parent() {
+                    Some(parent) => current = parent,
+                    None => break input_parent.to_path_buf(), // Reached root, use original parent
+                }
+            }
+        }
+    };
+    
+    let build_dir = project_dir.join("build");
+    std::fs::create_dir_all(&build_dir)?;
+    
+    // Use project directory name, not input file name
+    let project_name = project_dir
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or_else(|| source_path.file_stem().and_then(|s| s.to_str()).unwrap_or("output"));
+    
+    let asm_path = if let Some(ref output_bin) = output {
+        output_bin.with_extension("asm")
+    } else {
+        build_dir.join(format!("{}.asm", project_name))
+    };
+    
+    // Write ASM file
     std::fs::write(&asm_path, &generated.asm_source)
-        .context("Failed to write ASM file")?;
+        .with_context(|| format!("Failed to write ASM to {}", asm_path.display()))?;
     
     if verbose {
         println!("  ASM written: {}", asm_path.display());
@@ -1004,20 +1154,108 @@ fn cmd_build(input: &PathBuf, output: Option<PathBuf>, rom_size: usize, bank_siz
             source_path.with_extension("bin")
         });
         
+        // Set include directory for VECTREX.I (absolute path from CLI binary location)
+        let cli_exe = std::env::current_exe()
+            .context("Failed to get CLI executable path")?;
+        let cli_dir = cli_exe.parent()
+            .context("Failed to get CLI directory")?;
+        let workspace_root = cli_dir.parent()  // target/
+            .and_then(|p| p.parent())          // buildtools/
+            .and_then(|p| p.parent())          // vectrex-pseudo-python/
+            .context("Failed to get workspace root")?;
+        let include_dir = workspace_root.join("ide/frontend/public/include");
+        
         let linker = vpy_linker::MultiBankLinker::new(
             bank_size as u32,
             (rom_size / bank_size) as u8,
-            true // use native assembler
+            true, // use native assembler
+            Some(include_dir.clone()) // include dir for VECTREX.I
         );
         
         match linker.generate_multibank_rom(&asm_path, &output_path_mb) {
-            Ok(_) => {
+            Ok(symbol_table) => {
                 println!("  {} Phase 6.7 SUCCESS: Multi-bank binary written to {}", 
                     "✓".green(), output_path_mb.display());
                 println!("     Total size: {} KB ({} banks × {} KB)", 
                     rom_size / 1024,
                     rom_size / bank_size,
                     bank_size / 1024);
+                
+                // Phase 9: Generate PDB debug symbols for multibank (single-file path)
+                {
+                    println!("\n{}", "Phase 9: Generating debug symbols (multibank)...".bright_cyan());
+                    
+                    // Get workspace root for include dir
+                    let cli_exe = std::env::current_exe()
+                        .context("Failed to get CLI executable path")?;
+                    let cli_dir = cli_exe.parent()
+                        .context("Failed to get CLI directory")?;
+                    // Go up from target/debug/ (or target/release/) to workspace root
+                    // cli_dir = target/debug/, parent = target/, parent = vectrex-pseudo-python/
+                    let workspace_root = cli_dir.parent()  // target/
+                        .and_then(|p| p.parent())          // vectrex-pseudo-python/
+                        .context("Failed to get workspace root")?;
+                    let include_dir = workspace_root.join("ide/frontend/public/include");
+                    
+                    // Load VECTREX.I for BIOS symbols
+                    let vectrex_i_path = include_dir.join("VECTREX.I");
+                    let vectrex_i_content = if vectrex_i_path.exists() {
+                        std::fs::read_to_string(&vectrex_i_path).ok()
+                    } else {
+                        None
+                    };
+                    
+                    let rom_config = vpy_debug_gen::RomConfig {
+                        total_size: rom_size as u32,
+                        bank_size: bank_size as u32,
+                        bank_count: (rom_size / bank_size) as u32,
+                        is_multibank: true,
+                    };
+                    
+                    // Generate PDB from ASM source
+                    match vpy_debug_gen::generate_pdb(
+                        &generated.asm_source,
+                        vectrex_i_content.as_deref(),
+                        rom_config,
+                    ) {
+                        Ok(mut pdb) => {
+                            // Convert u16 symbols to u32 for update function
+                            let symbol_table_u32: std::collections::HashMap<String, u32> = symbol_table
+                                .iter()
+                                .map(|(k, v)| (k.clone(), *v as u32))
+                                .collect();
+                            vpy_debug_gen::update_pdb_addresses(&mut pdb, &symbol_table_u32);
+                            
+                            // Populate line maps (VPy and ASM line mappings)
+                            vpy_debug_gen::populate_line_maps(&mut pdb, &generated.asm_source);
+                            
+                            // Write PDB file
+                            let pdb_path = output_path_mb.with_extension("pdb");
+                            match pdb.to_json() {
+                                Ok(json) => {
+                                    std::fs::write(&pdb_path, json)
+                                        .context("Failed to write PDB file")?;
+                                    println!("  {} PDB written: {}", "✓".green(), pdb_path.display());
+                                    if verbose {
+                                        println!("    Variables: {}", pdb.variables.len());
+                                        println!("    Labels: {}", pdb.labels.len());
+                                        println!("    Functions: {}", pdb.functions.len());
+                                        println!("    BIOS symbols: {}", pdb.bios_symbols.len());
+                                        println!("    VPy line mappings: {}", pdb.vpy_line_map.len());
+                                        println!("    ASM line mappings: {}", pdb.asm_line_map.len());
+                                        println!("    Total symbols: {}", symbol_table.len());
+                                    }
+                                }
+                                Err(e) => {
+                                    eprintln!("  {} PDB serialization failed: {}", "⚠".yellow(), e);
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("  {} PDB generation failed: {}", "⚠".yellow(), e);
+                        }
+                    }
+                }
                 
                 println!("\n{}", format!("✓ Build SUCCESS (multibank): {} KB written to {}", 
                     rom_size / 1024,
@@ -1050,16 +1288,13 @@ fn cmd_build(input: &PathBuf, output: Option<PathBuf>, rom_size: usize, bank_siz
         .context("Failed to get CLI executable path")?;
     let cli_dir = cli_exe.parent()
         .context("Failed to get CLI directory")?;
-    // Go up from target/release/ to workspace root (3 levels up)
+    // Go up from target/debug/ (or target/release/) to workspace root
+    // cli_dir = target/debug/, parent = target/, parent = vectrex-pseudo-python/
     let workspace_root = cli_dir.parent()  // target/
-        .and_then(|p| p.parent())          // buildtools/
         .and_then(|p| p.parent())          // vectrex-pseudo-python/
         .context("Failed to get workspace root")?;
     let include_dir = workspace_root.join("ide/frontend/public/include");
-    eprintln!("🔧 [DEBUG SINGLEBANK] CLI exe: {:?}", cli_exe);
-    eprintln!("🔧 [DEBUG SINGLEBANK] Workspace root: {:?}", workspace_root);
-    eprintln!("🔧 [DEBUG SINGLEBANK] Include dir: {:?}", include_dir);
-    vpy_assembler::set_include_dir(Some(include_dir));
+    vpy_assembler::set_include_dir(Some(include_dir.clone()));
     
     let binaries = vpy_assembler::assemble_banks(sections)
         .context("Failed to assemble banks")?;
@@ -1098,6 +1333,68 @@ fn cmd_build(input: &PathBuf, output: Option<PathBuf>, rom_size: usize, bank_siz
     
     if verbose {
         println!("  BIN written: {}", output_path.display());
+    }
+    
+    // Phase 9: Generate PDB debug symbols (if requested or always for now)
+    {
+        println!("\n{}", "Phase 9: Generating debug symbols...".bright_cyan());
+        
+        // Load VECTREX.I for BIOS symbols
+        let vectrex_i_content = if include_dir.join("VECTREX.I").exists() {
+            std::fs::read_to_string(include_dir.join("VECTREX.I")).ok()
+        } else {
+            None
+        };
+        
+        let rom_config = vpy_debug_gen::RomConfig {
+            total_size: rom_size as u32,
+            bank_size: bank_size as u32,
+            bank_count: if rom_size > 32768 { (rom_size / bank_size) as u32 } else { 1 },
+            is_multibank: rom_size > 32768,
+        };
+        
+        // Generate PDB from ASM source
+        match vpy_debug_gen::generate_pdb(
+            &generated.asm_source,
+            vectrex_i_content.as_deref(),
+            rom_config,
+        ) {
+            Ok(mut pdb) => {
+                // Update addresses from linker symbol table
+                let symbol_table: std::collections::HashMap<String, u32> = rom.symbols
+                    .iter()
+                    .map(|(k, v)| (k.clone(), v.absolute_address))
+                    .collect();
+                vpy_debug_gen::update_pdb_addresses(&mut pdb, &symbol_table);
+                
+                // Populate line maps (VPy and ASM line mappings)
+                vpy_debug_gen::populate_line_maps(&mut pdb, &generated.asm_source);
+                
+                // Write PDB file
+                let pdb_path = output_path.with_extension("pdb");
+                match pdb.to_json() {
+                    Ok(json) => {
+                        std::fs::write(&pdb_path, json)
+                            .context("Failed to write PDB file")?;
+                        println!("  {} PDB written: {}", "✓".green(), pdb_path.display());
+                        if verbose {
+                            println!("    Variables: {}", pdb.variables.len());
+                            println!("    Labels: {}", pdb.labels.len());
+                            println!("    Functions: {}", pdb.functions.len());
+                            println!("    BIOS symbols: {}", pdb.bios_symbols.len());
+                            println!("    VPy line mappings: {}", pdb.vpy_line_map.len());
+                            println!("    ASM line mappings: {}", pdb.asm_line_map.len());
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("  {} PDB serialization failed: {}", "⚠".yellow(), e);
+                    }
+                }
+            }
+            Err(e) => {
+                eprintln!("  {} PDB generation failed: {}", "⚠".yellow(), e);
+            }
+        }
     }
     
     println!("\n{}", format!("✓ Build SUCCESS: {} bytes written to {}", 

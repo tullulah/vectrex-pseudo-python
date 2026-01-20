@@ -14,20 +14,37 @@ pub fn set_include_dir(dir: Option<PathBuf>) {
 }
 
 /// Load Vectrex BIOS symbols into equates table
+#[allow(static_mut_refs)]
 pub fn load_vectrex_symbols(equates: &mut HashMap<String, u16>) {
     // Try to load from VECTREX.I file first
     if let Some(ref include_dir) = unsafe { INCLUDE_DIR.as_ref() } {
+        eprintln!("🔍 [BIOS LOADER] INCLUDE_DIR is set: {:?}", include_dir);
         let vectrex_i = include_dir.join("VECTREX.I");
+        eprintln!("🔍 [BIOS LOADER] Looking for VECTREX.I at: {:?}", vectrex_i);
+        eprintln!("🔍 [BIOS LOADER] File exists: {}", vectrex_i.exists());
+        
         if vectrex_i.exists() {
-            if let Ok(content) = fs::read_to_string(&vectrex_i) {
-                parse_vectrex_symbols(&content, equates);
-                return;
+            match fs::read_to_string(&vectrex_i) {
+                Ok(content) => {
+                    eprintln!("✅ [BIOS LOADER] Successfully loaded VECTREX.I ({} bytes)", content.len());
+                    parse_vectrex_symbols(&content, equates);
+                    add_uppercase_aliases(equates);
+                    eprintln!("✅ [BIOS LOADER] Parsed {} BIOS symbols from VECTREX.I", equates.len());
+                    return;
+                }
+                Err(e) => {
+                    eprintln!("⚠️ [BIOS LOADER] Failed to read VECTREX.I: {}", e);
+                }
             }
         }
+    } else {
+        eprintln!("⚠️ [BIOS LOADER] INCLUDE_DIR is NOT set - using fallback");
     }
     
     // Fallback to embedded symbols
+    eprintln!("⚠️ [BIOS LOADER] Using fallback BIOS symbols");
     load_vectrex_symbols_fallback(equates);
+    add_uppercase_aliases(equates);
 }
 
 /// Parse VECTREX.I file and extract EQU definitions
@@ -60,6 +77,20 @@ fn parse_vectrex_symbols(content: &str, equates: &mut HashMap<String, u16>) {
     }
 }
 
+/// Ensure every symbol also has an uppercase alias to allow case-insensitive lookups
+fn add_uppercase_aliases(equates: &mut HashMap<String, u16>) {
+    let mut additions = Vec::new();
+    for (name, addr) in equates.iter() {
+        let upper = name.to_uppercase();
+        if upper != *name && !equates.contains_key(&upper) {
+            additions.push((upper, *addr));
+        }
+    }
+    for (upper, addr) in additions {
+        equates.insert(upper, addr);
+    }
+}
+
 /// Fallback BIOS symbols (essential addresses)
 fn load_vectrex_symbols_fallback(equates: &mut HashMap<String, u16>) {
     // VIA 6522 registers
@@ -76,6 +107,7 @@ fn load_vectrex_symbols_fallback(equates: &mut HashMap<String, u16>) {
     equates.insert("VIA_shift_reg".to_string(), 0xD00A);
     equates.insert("VIA_aux_cntl".to_string(), 0xD00B);
     equates.insert("VIA_per_cntl".to_string(), 0xD00C);
+    equates.insert("VIA_cntl".to_string(), 0xD00C);
     equates.insert("VIA_int_flags".to_string(), 0xD00D);
     equates.insert("VIA_int_enable".to_string(), 0xD00E);
     equates.insert("VIA_port_a_nohs".to_string(), 0xD00F);
@@ -90,6 +122,7 @@ fn load_vectrex_symbols_fallback(equates: &mut HashMap<String, u16>) {
     equates.insert("DP_to_D0".to_string(), 0xF1AA);
     equates.insert("DP_to_C8".to_string(), 0xF1AF);
     equates.insert("Read_Btns".to_string(), 0xF1BA);
+    equates.insert("Reset_Pen".to_string(), 0xF35B);
     
     // RAM locations
     equates.insert("Vec_Btn_State".to_string(), 0xC80F);
@@ -98,6 +131,7 @@ fn load_vectrex_symbols_fallback(equates: &mut HashMap<String, u16>) {
 }
 
 /// Resolve INCLUDE file path
+#[allow(static_mut_refs)]
 pub fn resolve_include_path(include_path: &str) -> Option<PathBuf> {
     // Try relative to include directory first
     if let Some(ref include_dir) = unsafe { INCLUDE_DIR.as_ref() } {

@@ -82,14 +82,16 @@ pub struct MultiBankLinker {
     pub rom_bank_size: u32,      // 16KB per bank
     pub rom_bank_count: u8,       // 32 banks total
     pub use_native_assembler: bool, // Use vecasm vs lwasm
+    pub include_dir: Option<std::path::PathBuf>, // For VECTREX.I loading
 }
 
 impl MultiBankLinker {
-    pub fn new(rom_bank_size: u32, rom_bank_count: u8, use_native_assembler: bool) -> Self {
+    pub fn new(rom_bank_size: u32, rom_bank_count: u8, use_native_assembler: bool, include_dir: Option<std::path::PathBuf>) -> Self {
         MultiBankLinker {
             rom_bank_size,
             rom_bank_count,
             use_native_assembler,
+            include_dir,
         }
     }
     
@@ -624,19 +626,6 @@ impl MultiBankLinker {
         // NOTE: Vectors are added in generate_multibank_rom after binary assembly, not here
         // This ensures they're placed at the correct ROM offset without ORG conflicts
 
-        // DEBUG: Show final section sizes
-        eprintln!("XXXXXXXXXXXXXXXXXXXXX DEBUG: About to iterate over {} sections", sections.len());
-        for (bank_id, section) in &sections {
-            let has_assets = section.asm_code.contains("_VECTORS:") || section.asm_code.contains("_MUSIC:");
-            eprintln!("[DEBUG FINAL SECTIONS] Bank #{}: asm_code.len()={}, has_assets={}", 
-                     bank_id, section.asm_code.len(), has_assets);
-            if *bank_id == 1 {
-                // Show first 500 chars of Bank #1
-                let preview = &section.asm_code[..std::cmp::min(500, section.asm_code.len())];
-                eprintln!("[DEBUG BANK #1 PREVIEW]: {:?}", preview);
-            }
-        }
-
         Ok(sections)
     }
     
@@ -658,16 +647,6 @@ impl MultiBankLinker {
         // Bank ASM already contains everything
         let mut full_asm = bank_section.asm_code.clone();
         
-        // DEBUG: Check if definitions are present
-        let has_equ = full_asm.contains(" EQU ");
-        let has_result = full_asm.contains("RESULT");
-        eprintln!("[DEBUG assemble_bank] Bank #{}: has_equ={}, has_result={}, asm_code.len()={}", 
-            bank_section.bank_id, has_equ, has_result, full_asm.len());
-        if bank_section.bank_id == 0 {
-            eprintln!("[DEBUG assemble_bank] Bank #0 asm_code preview (first 500 chars):\n{}", 
-                &full_asm[..500.min(full_asm.len())]);
-        }
-        
         // CRITICAL FIX (2026-01-14): Bank #31 must use ORG $4000, not $0000
         // The fixed bank window is at 0x4000-0x7FFF in the CPU address space
         // split_asm_by_bank extracts Bank #31 with ORG $0000 from the backend,
@@ -684,13 +663,13 @@ impl MultiBankLinker {
         // Prepend external symbol definitions from helper bank and shared data
         // This is needed for all banks to reference symbols from helpers and arrays/consts
         if !helper_symbols.is_empty() {
-            let mut external_symbols = String::from("; External symbols (helpers and shared data)\n");
+            let mut external_symbols = String::from("; External symbols (helpers, BIOS, and shared data)\n");
             for (symbol, address) in helper_symbols {
                 external_symbols.push_str(&format!("{} EQU ${:04X}\n", symbol, address));
             }
             external_symbols.push_str("\n");
             
-            // Insert after INCLUDE directive
+            // Insert after INCLUDE directive if present, otherwise prepend to ASM
             let lines: Vec<&str> = full_asm.lines().collect();
             let mut new_asm = String::new();
             let mut include_found = false;
@@ -703,6 +682,13 @@ impl MultiBankLinker {
                     new_asm.push_str(&external_symbols);
                     include_found = true;
                 }
+            }
+            
+            // If no INCLUDE directive found, prepend symbols before ORG
+            if !include_found {
+                let mut final_asm = external_symbols;
+                final_asm.push_str(&new_asm);
+                new_asm = final_asm;
             }
             
             full_asm = new_asm;
@@ -726,11 +712,6 @@ impl MultiBankLinker {
         // in banks beyond #0. The assembler cannot emit long branches based on final
         // offsets (they're not known yet), so we convert at codegen time.
         let full_asm_longbranch = convert_short_to_long_branches(full_asm);
-        
-        // DEBUG: Check if definitions survived to this point
-        let longbranch_has_equ = full_asm_longbranch.contains(" EQU ");
-        eprintln!("[DEBUG] Bank #{}: full_asm_longbranch has_equ={}, len={}", 
-            bank_section.bank_id, longbranch_has_equ, full_asm_longbranch.len());
         
         // DEBUG: Write ASM snapshots to temp files for inspection
         // - bank_XX_full.asm : full content (includes headers/external symbols)
@@ -857,21 +838,6 @@ impl MultiBankLinker {
         
         // DEBUG: Check for multiple ORG directives (should only be ONE)
         let org_count = full_asm_longbranch.matches("ORG $").count();
-        eprintln!("     [DEBUG] Bank #{}: ASM contains {} ORG directives", bank_section.bank_id, org_count);
-        eprintln!("     [DEBUG] Bank #{}: ASM size = {} bytes, {} lines", 
-            bank_section.bank_id, 
-            full_asm_longbranch.len(),
-            full_asm_longbranch.lines().count());
-        
-        // DEBUG: Save ASM to file for inspection
-        if bank_section.bank_id == 0 {
-            let debug_path = temp_dir.join(format!("bank_{}_debug_before_asm.asm", bank_section.bank_id));
-            if let Err(e) = fs::write(&debug_path, &full_asm_longbranch) {
-                eprintln!("     [WARN] Failed to write debug ASM: {}", e);
-            } else {
-                eprintln!("     [DEBUG] Wrote debug ASM to {}", debug_path.display());
-            }
-        }
         
         if org_count > 1 {
             eprintln!("     [WARNING] Multiple ORG directives detected! This causes symbol scope conflicts.");
@@ -888,24 +854,13 @@ impl MultiBankLinker {
             }
         }
         
-        let (binary, _line_map, symbol_table, _unresolved) = vpy_assembler::m6809::asm_to_binary::assemble_m6809(
+        let (binary, _line_map, _symbol_table, _unresolved) = vpy_assembler::m6809::asm_to_binary::assemble_m6809(
             &full_asm_longbranch,
             bank_org,  // Use correct ORG based on bank type
             false,   // Not object mode
             false    // Don't auto-convert (we already did it above)
         ).map_err(|e| format!("Failed to assemble bank {}: {}", bank_section.bank_id, e))?;
-        
-        // DEBUG: Capture START symbol offset from symbol table (no magic numbers!)
-        if bank_section.bank_id == 0 {
-            if let Some(&start_offset) = symbol_table.get("START") {
-                eprintln!("     [DEBUG] Bank #0: START symbol at offset 0x{:04X} ({} bytes)", start_offset, start_offset);
-                if start_offset > 256 {
-                    eprintln!("       ⚠ WARNING: START is at offset {} - header may be oversized or ORG directives misaligned", start_offset);
-                }
-            } else {
-                eprintln!("     [DEBUG] Bank #0: START symbol NOT FOUND in symbol table");
-            }
-        }
+
         
         // Get binary data (already Vec<u8>, no .0 field)
         let mut binary_data = binary;
@@ -933,16 +888,19 @@ impl MultiBankLinker {
     /// 5. Write to output ROM file
     ///
     /// Output: 512KB ROM file with 32 banks
+    /// Returns: Symbol table (name → address) on success for PDB generation
     pub fn generate_multibank_rom(
         &self,
         asm_path: &Path,
         output_rom_path: &Path,
-    ) -> Result<(), String> {
+    ) -> Result<HashMap<String, u16>, String> {
         eprintln!("   [Multi-Bank Linker] Generating 512KB ROM...");
+        eprintln!("   [DEBUG] ASM path: {:?}", asm_path);
+        eprintln!("   [DEBUG] ASM exists: {}", asm_path.exists());
         
         // Read ASM
         let asm_content = fs::read_to_string(asm_path)
-            .map_err(|e| format!("Failed to read ASM: {}", e))?;
+            .map_err(|e| format!("Failed to read ASM from {:?}: {}", asm_path, e))?;
         
         // Split by bank
         let sections = self.split_asm_by_bank(&asm_content)?;
@@ -960,14 +918,29 @@ impl MultiBankLinker {
         
         // Load BIOS symbols from shared function (same as single-bank)
         // This ensures multibank and single-bank use identical BIOS addresses
-        use vpy_assembler::m6809::asm_to_binary::load_vectrex_symbols;
+        use vpy_assembler::m6809::asm_to_binary::{load_vectrex_symbols, set_include_dir};
+        
+        // Set include_dir BEFORE loading symbols to ensure VECTREX.I is found
+        if let Some(ref dir) = self.include_dir {
+            eprintln!("     - Setting INCLUDE_DIR for multibank: {:?}", dir);
+            set_include_dir(Some(dir.clone()));
+        }
+        
         let mut bios_equates = std::collections::HashMap::new();
         load_vectrex_symbols(&mut bios_equates);
+        
+        eprintln!("     - Loaded {} BIOS symbols from shared table", bios_equates.len());
+        eprintln!("       [DEBUG] Print_Str_d in bios_equates: {}", bios_equates.contains_key("Print_Str_d"));
+        if let Some(&addr) = bios_equates.get("Print_Str_d") {
+            eprintln!("       [DEBUG] Print_Str_d address in bios_equates: 0x{:04X}", addr);
+        }
         
         // Insert BIOS symbols into all_symbols
         for (name, addr) in bios_equates.iter() {
             all_symbols.insert(name.clone(), *addr);
         }
+        
+        eprintln!("       [DEBUG] After insert: Print_Str_d in all_symbols: {}", all_symbols.contains_key("Print_Str_d"));
         
         eprintln!("     - Loaded {} BIOS symbols from shared table", bios_equates.len());
         
@@ -1008,6 +981,15 @@ impl MultiBankLinker {
                             external_symbols.push_str(&format!("{} EQU ${:04X}\n", symbol, address));
                         }
                         external_symbols.push_str("\n");
+                        
+                        // DEBUG: Check Print_Str_d for Bank #31
+                        if bank_id as u8 == helper_bank_id {
+                            eprintln!("       [DEBUG PASS 1] Bank #31: Injecting {} symbols", all_symbols.len());
+                            eprintln!("       [DEBUG PASS 1] Print_Str_d in all_symbols: {}", all_symbols.contains_key("Print_Str_d"));
+                            if let Some(&addr) = all_symbols.get("Print_Str_d") {
+                                eprintln!("       [DEBUG PASS 1] Print_Str_d address: 0x{:04X}", addr);
+                            }
+                        }
                         
                         // Insert after INCLUDE directive or at start if no INCLUDE
                         let lines: Vec<&str> = bank_asm.lines().collect();
@@ -1408,6 +1390,15 @@ impl MultiBankLinker {
                     .map(|(k, v)| (k.clone(), *v))
                     .collect();
                 
+                // DEBUG: Check if Print_Str_d is in all_symbols and external_symbols
+                if bank_id == 31 {
+                    eprintln!("       [DEBUG] Print_Str_d in all_symbols: {}", all_symbols.contains_key("Print_Str_d"));
+                    eprintln!("       [DEBUG] Print_Str_d in external_symbols: {}", external_symbols.contains_key("Print_Str_d"));
+                    if let Some(&addr) = all_symbols.get("Print_Str_d") {
+                        eprintln!("       [DEBUG] Print_Str_d address in all_symbols: 0x{:04X}", addr);
+                    }
+                }
+                
                 eprintln!("       Filtered {} external symbols for Bank #{} (from {} total)", 
                     external_symbols.len(), bank_id, all_symbols.len());
                 
@@ -1471,7 +1462,8 @@ impl MultiBankLinker {
         // let _ = fs::remove_dir_all(&temp_dir);
         eprintln!("     [DEBUG] Temp ASM files kept in: {:?}", temp_dir);
         
-        Ok(())
+        // Return symbol table for PDB generation
+        Ok(all_symbols)
     }
 }
 
