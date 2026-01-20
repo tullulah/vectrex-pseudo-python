@@ -3,7 +3,144 @@
 
 use std::path::{Path, PathBuf};
 use std::fs;
+use std::collections::HashSet;
 use crate::{AssetInfo, AssetType};
+use vpy_parser::{Module, Item, Stmt, Expr};
+
+/// Filter assets to only those actually used in the code
+pub fn filter_used_assets(assets: &[AssetInfo], module: &Module) -> Vec<AssetInfo> {
+    let mut used_names = HashSet::new();
+    
+    // Scan all statements for asset references
+    collect_asset_names(&module.items, &mut used_names);
+    
+    // Filter assets to only those referenced in code
+    let filtered: Vec<AssetInfo> = assets.iter()
+        .filter(|asset| used_names.contains(&asset.name))
+        .cloned()
+        .collect();
+    
+    eprintln!("[DEBUG ASSETS] Total discovered: {}, Used in code: {}", assets.len(), filtered.len());
+    for asset in &filtered {
+        eprintln!("[DEBUG ASSETS] Used asset: {} ({:?})", asset.name, asset.asset_type);
+    }
+    
+    filtered
+}
+
+/// Recursively collect asset names from statements
+fn collect_asset_names(items: &[Item], used_names: &mut HashSet<String>) {
+    for item in items {
+        match item {
+            Item::Function(func) => {
+                for stmt in &func.body {
+                    collect_asset_names_from_stmt(stmt, used_names);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Collect asset names from a single statement
+fn collect_asset_names_from_stmt(stmt: &Stmt, used_names: &mut HashSet<String>) {
+    match stmt {
+        Stmt::Expr(e, _) => collect_asset_names_from_expr(e, used_names),
+        Stmt::If { cond, body, elifs, else_body, .. } => {
+            collect_asset_names_from_expr(cond, used_names);
+            for s in body {
+                collect_asset_names_from_stmt(s, used_names);
+            }
+            for (elif_cond, elif_body) in elifs {
+                collect_asset_names_from_expr(elif_cond, used_names);
+                for s in elif_body {
+                    collect_asset_names_from_stmt(s, used_names);
+                }
+            }
+            if let Some(else_stmts) = else_body {
+                for s in else_stmts {
+                    collect_asset_names_from_stmt(s, used_names);
+                }
+            }
+        }
+        Stmt::While { cond, body, .. } => {
+            collect_asset_names_from_expr(cond, used_names);
+            for s in body {
+                collect_asset_names_from_stmt(s, used_names);
+            }
+        }
+        Stmt::For { start, end, step, body, .. } => {
+            collect_asset_names_from_expr(start, used_names);
+            collect_asset_names_from_expr(end, used_names);
+            if let Some(step_expr) = step {
+                collect_asset_names_from_expr(step_expr, used_names);
+            }
+            for s in body {
+                collect_asset_names_from_stmt(s, used_names);
+            }
+        }
+        Stmt::ForIn { iterable, body, .. } => {
+            collect_asset_names_from_expr(iterable, used_names);
+            for s in body {
+                collect_asset_names_from_stmt(s, used_names);
+            }
+        }
+        Stmt::Assign { value, .. } | Stmt::Let { value, .. } => {
+            collect_asset_names_from_expr(value, used_names);
+        }
+        _ => {}
+    }
+}
+
+/// Collect asset names from expressions (DRAW_VECTOR("name"), PLAY_MUSIC("name"), etc.)
+fn collect_asset_names_from_expr(expr: &Expr, used_names: &mut HashSet<String>) {
+    match expr {
+        Expr::Call(vpy_parser::CallInfo { name, args, .. }) => {
+            // Check if it's an asset-loading builtin
+            let up = name.to_uppercase();
+            if up == "DRAW_VECTOR" || up == "DRAW_VECTOR_EX" || 
+               up == "PLAY_MUSIC" || up == "PLAY_SFX" || up == "LOAD_LEVEL" {
+                // First argument should be asset name (string literal)
+                if let Some(Expr::StringLit(asset_name)) = args.first() {
+                    used_names.insert(asset_name.clone());
+                    eprintln!("[DEBUG ASSETS] Found {}(\"{}\") call", up, asset_name);
+                }
+            }
+            // Recursively check arguments
+            for arg in args {
+                collect_asset_names_from_expr(arg, used_names);
+            }
+        }
+        Expr::Binary { left, right, .. } | 
+        Expr::Compare { left, right, .. } |
+        Expr::Logic { left, right, .. } => {
+            collect_asset_names_from_expr(left, used_names);
+            collect_asset_names_from_expr(right, used_names);
+        }
+        Expr::Not(operand) | Expr::BitNot(operand) => {
+            collect_asset_names_from_expr(operand, used_names);
+        }
+        Expr::Index { target, index } => {
+            collect_asset_names_from_expr(target, used_names);
+            collect_asset_names_from_expr(index, used_names);
+        }
+        Expr::List(elements) => {
+            for e in elements {
+                collect_asset_names_from_expr(e, used_names);
+            }
+        }
+        Expr::FieldAccess { target, .. } => {
+            collect_asset_names_from_expr(target, used_names);
+        }
+        Expr::MethodCall(vpy_parser::MethodCallInfo { target, args, .. }) => {
+            collect_asset_names_from_expr(target, used_names);
+            for arg in args {
+                collect_asset_names_from_expr(arg, used_names);
+            }
+        }
+        _ => {}
+    }
+}
 
 /// Discover all assets in a project
 /// 
@@ -114,6 +251,16 @@ pub fn discover_assets(source_path: &Path) -> Vec<AssetInfo> {
     }
     
     eprintln!("[DEBUG ASSETS] Total assets found: {}", assets.len());
+    eprintln!("[DEBUG ASSETS] BEFORE sort:");
+    for (idx, a) in assets.iter().enumerate() {
+        eprintln!("  [{}] {} ({})", idx, a.name, match a.asset_type { AssetType::Vector => "Vector", AssetType::Music => "Music", AssetType::Sfx => "SFX", AssetType::Level => "Level" });
+    }
+    // Ordenar assets alfabéticamente por nombre para consistencia
+    assets.sort_by(|a, b| a.name.cmp(&b.name));
+    eprintln!("[DEBUG ASSETS] AFTER sort:");
+    for (idx, a) in assets.iter().enumerate() {
+        eprintln!("  [{}] {} ({})", idx, a.name, match a.asset_type { AssetType::Vector => "Vector", AssetType::Music => "Music", AssetType::Sfx => "SFX", AssetType::Level => "Level" });
+    }
     assets
 }
 
@@ -246,13 +393,17 @@ fn estimate_asm_size(asm: &str) -> usize {
 
 /// Distribute assets across banks using First-Fit Decreasing bin-packing
 /// 
+/// CRITICAL (2026-01-20): ALL assets MUST go to Bank #31 (fixed bank)
+/// This ensures they're accessible from any bank without cross-bank references
+/// Bank #31 is always visible at $4000-$7FFF (fixed window)
+/// 
 /// Parameters:
 /// - assets: List of assets to distribute
 /// - bank_size: Maximum bytes per bank (default 16384 = 16KB)
-/// - start_bank: First bank ID to use for assets (default 1, Bank 0 has code)
-/// - max_banks: Maximum number of banks to use for assets (helpers bank excluded)
+/// - start_bank: IGNORED - all assets go to Bank #31
+/// - max_banks: IGNORED - all assets go to Bank #31
 /// 
-/// Returns AssetDistribution with bank assignments
+/// Returns AssetDistribution with all assets in Bank #31
 pub fn distribute_assets(
     assets: &[AssetInfo],
     bank_size: usize,
@@ -263,51 +414,61 @@ pub fn distribute_assets(
     
     let sized_assets = prepare_assets_with_sizes(assets);
     let mut bank_assignments: HashMap<u8, Vec<SizedAsset>> = HashMap::new();
-    let mut bank_used: HashMap<u8, usize> = HashMap::new();
+    let mut bank_sizes: HashMap<u8, usize> = HashMap::new();
     
-    // Reserve space in each bank for overhead (labels, alignment, etc.)
-    let overhead_per_bank = 256; // 256 bytes reserved for bank header/overhead
-    let effective_bank_size = bank_size.saturating_sub(overhead_per_bank);
+    // CRITICAL FIX (2026-01-20): Assets go to Banks #1-#30 (switchable window)
+    // Bank #0 = main code + LOOP
+    // Banks #1-#30 = overflow code + ASSETS (16KB each, switchable at $0000-$3FFF)
+    // Bank #31 = helpers + lookup tables ONLY (fixed at $4000-$7FFF, no assets!)
+    //
+    // Why NOT Bank #31:
+    //   - Bank #31 only has 16KB but must fit all helpers (~3-5KB)
+    //   - Assets can be 50KB+ total (need multiple banks)
+    //   - Bank switching allows access to any asset from any code
+    
+    let helper_bank_id = max_banks.saturating_sub(1).max(31);
+    let first_asset_bank = start_bank.max(1); // Start at Bank #1 minimum
+    let last_asset_bank = helper_bank_id.saturating_sub(1); // End at Bank #30 (before helpers)
     
     let total_assets = sized_assets.len();
     let total_bytes: usize = sized_assets.iter().map(|a| a.binary_size).sum();
     
-    eprintln!("[ASSET DISTRIBUTION] {} assets, {} bytes total, {} bytes/bank effective", 
-        total_assets, total_bytes, effective_bank_size);
+    eprintln!("[ASSET DISTRIBUTION] {} assets, {} bytes total -> Banks #{}-#{} (switchable)", 
+        total_assets, total_bytes, first_asset_bank, last_asset_bank);
     
-    // First-Fit Decreasing: try to fit each asset in first bank with space
-    for asset in sized_assets {
+    // First-Fit Decreasing bin packing: larger assets first
+    let mut sorted_assets = sized_assets;
+    sorted_assets.sort_by(|a, b| b.binary_size.cmp(&a.binary_size));
+    
+    for asset in sorted_assets {
+        // Find a bank with enough space
         let mut assigned = false;
         
-        // Try existing banks first
-        for bank_id in start_bank..start_bank.saturating_add(max_banks) {
-            let used = *bank_used.get(&bank_id).unwrap_or(&0);
-            if used + asset.binary_size <= effective_bank_size {
-                // Fits in this bank
+        for bank_id in first_asset_bank..=last_asset_bank {
+            let current_size = *bank_sizes.get(&bank_id).unwrap_or(&0);
+            if current_size + asset.binary_size <= bank_size {
+                eprintln!("[ASSET DISTRIBUTION] '{}' ({} bytes) -> Bank #{}", 
+                    asset.info.name, asset.binary_size, bank_id);
                 bank_assignments.entry(bank_id).or_insert_with(Vec::new).push(asset.clone());
-                *bank_used.entry(bank_id).or_insert(0) += asset.binary_size;
-                eprintln!("[ASSET DISTRIBUTION] '{}' ({} bytes) -> Bank #{} (used: {}/{})", 
-                    asset.info.name, asset.binary_size, bank_id, 
-                    bank_used.get(&bank_id).unwrap_or(&0), effective_bank_size);
+                bank_sizes.insert(bank_id, current_size + asset.binary_size);
                 assigned = true;
                 break;
             }
         }
         
         if !assigned {
-            // No existing bank has space - use Bank 0 as overflow (may cause overflow error later)
-            eprintln!("[ASSET DISTRIBUTION] WARNING: '{}' ({} bytes) -> Bank #0 (OVERFLOW)", 
-                asset.info.name, asset.binary_size);
-            bank_assignments.entry(0).or_insert_with(Vec::new).push(asset.clone());
-            *bank_used.entry(0).or_insert(0) += asset.binary_size;
+            // All banks full - this is a FATAL error
+            panic!("FATAL: Cannot fit asset '{}' ({} bytes) - all banks #{}-#{} are full!", 
+                asset.info.name, asset.binary_size, first_asset_bank, last_asset_bank);
         }
     }
     
-    // Report distribution
-    for bank_id in start_bank..start_bank.saturating_add(max_banks) {
+    // Report final distribution
+    for bank_id in first_asset_bank..=last_asset_bank {
         if let Some(assets) = bank_assignments.get(&bank_id) {
-            let used = bank_used.get(&bank_id).unwrap_or(&0);
-            eprintln!("[ASSET DISTRIBUTION] Bank #{}: {} assets, {} bytes", bank_id, assets.len(), used);
+            let bank_bytes: usize = assets.iter().map(|a| a.binary_size).sum();
+            eprintln!("[ASSET DISTRIBUTION] Bank #{}: {} assets, {} bytes", 
+                bank_id, assets.len(), bank_bytes);
         }
     }
     
@@ -429,36 +590,158 @@ pub fn generate_distributed_assets_asm(
         bank_asm.insert(*bank_id, asm);
     }
     
+    // Separate entries by type for type-specific lookup tables
+    let vector_entries: Vec<_> = asset_entries.iter()
+        .filter(|(_, _, _, t)| matches!(t, AssetType::Vector))
+        .cloned()
+        .collect();
+    let music_entries: Vec<_> = asset_entries.iter()
+        .filter(|(_, _, _, t)| matches!(t, AssetType::Music))
+        .cloned()
+        .collect();
+    let sfx_entries: Vec<_> = asset_entries.iter()
+        .filter(|(_, _, _, t)| matches!(t, AssetType::Sfx))
+        .cloned()
+        .collect();
+    let level_entries: Vec<_> = asset_entries.iter()
+        .filter(|(_, _, _, t)| matches!(t, AssetType::Level))
+        .cloned()
+        .collect();
+
+    // Ordenar cada lista alfabéticamente por nombre para consistencia de índices
+    let mut vector_entries = vector_entries;
+    let mut music_entries = music_entries;
+    let mut sfx_entries = sfx_entries;
+    let mut level_entries = level_entries;
+    vector_entries.sort_by(|a, b| a.0.cmp(&b.0));
+    music_entries.sort_by(|a, b| a.0.cmp(&b.0));
+    sfx_entries.sort_by(|a, b| a.0.cmp(&b.0));
+    level_entries.sort_by(|a, b| a.0.cmp(&b.0));
+    
     // Generate lookup tables for helpers bank
     let mut lookup_asm = String::new();
     lookup_asm.push_str(";***************************************************************************\n");
     lookup_asm.push_str("; ASSET LOOKUP TABLES (for banked asset access)\n");
-    lookup_asm.push_str(&format!("; Total assets: {}\n", asset_entries.len()));
+    lookup_asm.push_str(&format!("; Total: {} vectors, {} music, {} sfx, {} levels\n", 
+        vector_entries.len(), music_entries.len(), sfx_entries.len(), level_entries.len()));
     lookup_asm.push_str(";***************************************************************************\n\n");
     
-    // Generate name-to-index mapping as comments (for documentation)
-    lookup_asm.push_str("; Asset Index Mapping:\n");
-    for (idx, (name, bank_id, _label, asset_type)) in asset_entries.iter().enumerate() {
-        lookup_asm.push_str(&format!(";   {} = {} (Bank #{}, {:?})\n", idx, name, bank_id, asset_type));
+    // ===== VECTOR TABLES =====
+    if !vector_entries.is_empty() {
+        lookup_asm.push_str("; Vector Asset Index Mapping:\n");
+        for (idx, (name, bank_id, _label, _)) in vector_entries.iter().enumerate() {
+            lookup_asm.push_str(&format!(";   {} = {} (Bank #{})\n", idx, name, bank_id));
+        }
+        lookup_asm.push_str("\n");
+        
+        lookup_asm.push_str("VECTOR_BANK_TABLE:\n");
+        for (_, bank_id, _, _) in &vector_entries {
+            lookup_asm.push_str(&format!("    FCB {}              ; Bank ID\n", bank_id));
+        }
+        lookup_asm.push_str("\n");
+        
+        lookup_asm.push_str("VECTOR_ADDR_TABLE:\n");
+        for (name, _, label, _) in &vector_entries {
+            // Use direct label reference - assembler will resolve when symbol is available
+            lookup_asm.push_str(&format!("    FDB {}    ; {}\n", label, name));
+        }
+        lookup_asm.push_str("\n");
     }
-    lookup_asm.push_str("\n");
     
-    // ASSET_BANK_TABLE: FCB bank_id for each asset
+    // ===== MUSIC TABLES =====
+    if !music_entries.is_empty() {
+        lookup_asm.push_str("; Music Asset Index Mapping:\n");
+        for (idx, (name, bank_id, _label, _)) in music_entries.iter().enumerate() {
+            lookup_asm.push_str(&format!(";   {} = {} (Bank #{})\n", idx, name, bank_id));
+        }
+        lookup_asm.push_str("\n");
+        
+        lookup_asm.push_str("MUSIC_BANK_TABLE:\n");
+        for (_, bank_id, _, _) in &music_entries {
+            lookup_asm.push_str(&format!("    FCB {}              ; Bank ID\n", bank_id));
+        }
+        lookup_asm.push_str("\n");
+        
+        lookup_asm.push_str("MUSIC_ADDR_TABLE:\n");
+        for (name, _, label, _) in &music_entries {
+            // Use direct label reference - assembler will resolve when symbol is available
+            lookup_asm.push_str(&format!("    FDB {}    ; {}\n", label, name));
+        }
+        lookup_asm.push_str("\n");
+    }
+    
+    // ===== SFX TABLES =====
+    if !sfx_entries.is_empty() {
+        lookup_asm.push_str("; SFX Asset Index Mapping:\n");
+        for (idx, (name, bank_id, _label, _)) in sfx_entries.iter().enumerate() {
+            lookup_asm.push_str(&format!(";   {} = {} (Bank #{})\n", idx, name, bank_id));
+        }
+        lookup_asm.push_str("\n");
+        
+        lookup_asm.push_str("SFX_BANK_TABLE:\n");
+        for (_, bank_id, _, _) in &sfx_entries {
+            lookup_asm.push_str(&format!("    FCB {}              ; Bank ID\n", bank_id));
+        }
+        lookup_asm.push_str("\n");
+        
+        lookup_asm.push_str("SFX_ADDR_TABLE:\n");
+        for (name, _, label, _) in &sfx_entries {
+            // Use direct label reference - assembler will resolve when symbol is available
+            lookup_asm.push_str(&format!("    FDB {}    ; {}\n", label, name));
+        }
+        lookup_asm.push_str("\n");
+    }
+    
+    // ===== LEVEL TABLES =====
+    if !level_entries.is_empty() {
+        lookup_asm.push_str("; Level Asset Index Mapping:\n");
+        for (idx, (name, bank_id, _label, _)) in level_entries.iter().enumerate() {
+            lookup_asm.push_str(&format!(";   {} = {} (Bank #{})\n", idx, name, bank_id));
+        }
+        lookup_asm.push_str("\n");
+        
+        lookup_asm.push_str("LEVEL_BANK_TABLE:\n");
+        for (_, bank_id, _, _) in &level_entries {
+            lookup_asm.push_str(&format!("    FCB {}              ; Bank ID\n", bank_id));
+        }
+        lookup_asm.push_str("\n");
+        
+        lookup_asm.push_str("LEVEL_ADDR_TABLE:\n");
+        for (name, _, label, _) in &level_entries {
+            // Use direct label reference - assembler will resolve when symbol is available
+            lookup_asm.push_str(&format!("    FDB {}    ; {}\n", label, name));
+        }
+        lookup_asm.push_str("\n");
+    }
+    
+    // Legacy unified tables (deprecated, keep for compatibility)
+    lookup_asm.push_str("; Legacy unified tables (all assets)\n");
     lookup_asm.push_str("ASSET_BANK_TABLE:\n");
     for (_, bank_id, _, _) in &asset_entries {
         lookup_asm.push_str(&format!("    FCB {}              ; Bank ID\n", bank_id));
     }
     lookup_asm.push_str("\n");
     
-    // ASSET_ADDR_TABLE: FDB address for each asset (within its bank)
     lookup_asm.push_str("ASSET_ADDR_TABLE:\n");
     for (name, _, label, _) in &asset_entries {
-        lookup_asm.push_str(&format!("    FDB {}       ; {}\n", label, name));
+        // Use direct label reference - assembler will resolve when symbol is available
+        lookup_asm.push_str(&format!("    FDB {}    ; {}\n", label, name));
     }
     lookup_asm.push_str("\n");
     
-    // Generate DRAW_VECTOR_BANKED wrapper
-    lookup_asm.push_str(&generate_draw_vector_banked_wrapper());
+    // Generate banked wrappers (only if corresponding assets exist)
+    if !vector_entries.is_empty() {
+        lookup_asm.push_str(&generate_draw_vector_banked_wrapper());
+    }
+    if !music_entries.is_empty() {
+        lookup_asm.push_str(&generate_play_music_banked_wrapper());
+    }
+    if !sfx_entries.is_empty() {
+        lookup_asm.push_str(&generate_play_sfx_banked_wrapper());
+    }
+    if !level_entries.is_empty() {
+        lookup_asm.push_str(&generate_load_level_banked_wrapper());
+    }
     
     Ok((bank_asm, lookup_asm))
 }
@@ -470,31 +753,28 @@ fn generate_draw_vector_banked_wrapper() -> String {
     asm.push_str(";***************************************************************************\n");
     asm.push_str("; DRAW_VECTOR_BANKED - Draw vector asset with automatic bank switching\n");
     asm.push_str("; Input: X = asset index (0-based), DRAW_VEC_X/Y set for position\n");
-    asm.push_str("; Uses: A, B, X, Y, TMPPTR\n");
+    asm.push_str("; Uses: A, B, X, Y\n");
     asm.push_str("; Preserves: CURRENT_ROM_BANK (restored after drawing)\n");
     asm.push_str(";***************************************************************************\n");
     asm.push_str("DRAW_VECTOR_BANKED:\n");
-    asm.push_str("    PSHS A,B,X,Y,U       ; Save all registers\n");
-    asm.push_str("\n");
-    asm.push_str("    ; Save current bank\n");
+    asm.push_str("    ; Save index to U register (avoid stack order issues)\n");
+    asm.push_str("    TFR X,U              ; U = vector index\n");
+    asm.push_str("    ; Save context: original bank on stack\n");
     asm.push_str("    LDA CURRENT_ROM_BANK\n");
-    asm.push_str("    PSHS A               ; Save on stack\n");
+    asm.push_str("    PSHS A               ; Stack: [A]\n");
     asm.push_str("\n");
     asm.push_str("    ; Get asset's bank from lookup table\n");
-    asm.push_str("    TFR X,D              ; X = asset index -> D\n");
-    asm.push_str("    LDX #ASSET_BANK_TABLE\n");
+    asm.push_str("    TFR X,D              ; D = asset index\n");
+    asm.push_str("    LDX #VECTOR_BANK_TABLE\n");
     asm.push_str("    LDA D,X              ; A = bank ID for this asset\n");
     asm.push_str("    STA CURRENT_ROM_BANK ; Update RAM tracker\n");
     asm.push_str("    STA $DF00            ; Switch bank hardware register\n");
     asm.push_str("\n");
-    asm.push_str("    ; Get asset's address from lookup table\n");
-    asm.push_str("    PULS X               ; Restore asset index (was saved as A, but reuse)\n");
-    asm.push_str("    ; Need to recalculate X offset for address table (2 bytes per entry)\n");
-    asm.push_str("    PSHS A               ; Re-save bank (need it for later)\n");
-    asm.push_str("    TFR X,D              ; asset index in D\n");
+    asm.push_str("    ; Get asset's address from lookup table (2 bytes per entry)\n");
+    asm.push_str("    LDD 1,S              ; Reload asset index from stack (offset 1, skip saved bank)\n");
     asm.push_str("    ASLB                 ; *2 for FDB entries\n");
     asm.push_str("    ROLA\n");
-    asm.push_str("    LDX #ASSET_ADDR_TABLE\n");
+    asm.push_str("    LDX #VECTOR_ADDR_TABLE\n");
     asm.push_str("    LEAX D,X             ; X points to address entry\n");
     asm.push_str("    LDX ,X               ; X = actual vector address in banked ROM\n");
     asm.push_str("\n");
@@ -509,12 +789,154 @@ fn generate_draw_vector_banked_wrapper() -> String {
     asm.push_str("\n");
     asm.push_str("    JSR $F1AF            ; DP_to_C8\n");
     asm.push_str("\n");
-    asm.push_str("    ; Restore original bank\n");
-    asm.push_str("    PULS A               ; Get saved bank\n");
+    asm.push_str("    ; Restore original bank from stack\n");
+    asm.push_str("    PULS X,A             ; A = original bank, X = level index (discarded but preserves balance)\n");
     asm.push_str("    STA CURRENT_ROM_BANK\n");
     asm.push_str("    STA $DF00            ; Restore bank\n");
     asm.push_str("\n");
-    asm.push_str("    PULS A,B,X,Y,U       ; Restore all registers\n");
+    asm.push_str("    RTS\n");
+    asm.push_str("\n");
+    
+    asm
+}
+
+/// Generate the PLAY_MUSIC_BANKED runtime wrapper for helpers bank
+fn generate_play_music_banked_wrapper() -> String {
+    let mut asm = String::new();
+    
+    asm.push_str(";***************************************************************************\n");
+    asm.push_str("; PLAY_MUSIC_BANKED - Play music asset with automatic bank switching\n");
+    asm.push_str("; Input: X = music asset index (0-based)\n");
+    asm.push_str("; Uses: A, B, X\n");
+    asm.push_str("; Note: Music data is COPIED to RAM, so bank switch is temporary\n");
+    asm.push_str(";***************************************************************************\n");
+    asm.push_str("PLAY_MUSIC_BANKED:\n");
+    asm.push_str("    ; Save index to U register (avoid stack order issues)\n");
+    asm.push_str("    TFR X,U              ; U = music index\n");
+    asm.push_str("    ; Save context: original bank on stack\n");
+    asm.push_str("    LDA CURRENT_ROM_BANK\n");
+    asm.push_str("    PSHS A               ; Stack: [A]\n");
+    asm.push_str("\n");
+    asm.push_str("    ; Get music's bank from lookup table\n");
+    asm.push_str("    TFR U,D              ; D = music index (from U)\n");
+    asm.push_str("    LDX #MUSIC_BANK_TABLE\n");
+    asm.push_str("    LDA D,X              ; A = bank ID for this music\n");
+    asm.push_str("    STA CURRENT_ROM_BANK ; Update RAM tracker\n");
+    asm.push_str("    STA $DF00            ; Switch bank hardware register\n");
+    asm.push_str("\n");
+    asm.push_str("    ; Get music's address from lookup table (2 bytes per entry)\n");
+    asm.push_str("    TFR U,D              ; Reload music index from U\n");
+    asm.push_str("    ASLB                 ; *2 for FDB entries\n");
+    asm.push_str("    ROLA\n");
+    asm.push_str("    LDX #MUSIC_ADDR_TABLE\n");
+    asm.push_str("    LEAX D,X             ; X points to address entry\n");
+    asm.push_str("    LDX ,X               ; X = actual music address in banked ROM\n");
+    asm.push_str("\n");
+    asm.push_str("    ; Call PLAY_MUSIC_RUNTIME with X pointing to music data\n");
+    asm.push_str("    JSR PLAY_MUSIC_RUNTIME\n");
+    asm.push_str("\n");
+    asm.push_str("    ; Restore original bank from stack\n");
+    asm.push_str("    PULS A               ; A = original bank\n");
+    asm.push_str("    STA CURRENT_ROM_BANK\n");
+    asm.push_str("    STA $DF00            ; Restore bank\n");
+    asm.push_str("\n");
+    asm.push_str("    RTS\n");
+    asm.push_str("\n");
+    
+    asm
+}
+
+/// Generate the PLAY_SFX_BANKED runtime wrapper for helpers bank
+fn generate_play_sfx_banked_wrapper() -> String {
+    let mut asm = String::new();
+    
+    asm.push_str(";***************************************************************************\n");
+    asm.push_str("; PLAY_SFX_BANKED - Play SFX asset with automatic bank switching\n");
+    asm.push_str("; Input: X = SFX asset index (0-based)\n");
+    asm.push_str("; Uses: A, B, X\n");
+    asm.push_str(";***************************************************************************\n");
+    asm.push_str("PLAY_SFX_BANKED:\n");
+    asm.push_str("    ; Save index to U register (avoid stack order issues)\n");
+    asm.push_str("    TFR X,U              ; U = SFX index\n");
+    asm.push_str("    ; Save context: original bank on stack\n");
+    asm.push_str("    LDA CURRENT_ROM_BANK\n");
+    asm.push_str("    PSHS A               ; Stack: [A]\n");
+    asm.push_str("\n");
+    asm.push_str("    ; Get SFX's bank from lookup table\n");
+    asm.push_str("    TFR U,D              ; D = SFX index (from U)\n");
+    asm.push_str("    LDX #SFX_BANK_TABLE\n");
+    asm.push_str("    LDA D,X              ; A = bank ID for this SFX\n");
+    asm.push_str("    STA CURRENT_ROM_BANK ; Update RAM tracker\n");
+    asm.push_str("    STA $DF00            ; Switch bank hardware register\n");
+    asm.push_str("\n");
+    asm.push_str("    ; Get SFX's address from lookup table (2 bytes per entry)\n");
+    asm.push_str("    TFR U,D              ; Reload SFX index from U\n");
+    asm.push_str("    ASLB                 ; *2 for FDB entries\n");
+    asm.push_str("    ROLA\n");
+    asm.push_str("    LDX #SFX_ADDR_TABLE\n");
+    asm.push_str("    LEAX D,X             ; X points to address entry\n");
+    asm.push_str("    LDX ,X               ; X = actual SFX address in banked ROM\n");
+    asm.push_str("\n");
+    asm.push_str("    ; Call PLAY_SFX_RUNTIME with X pointing to SFX data\n");
+    asm.push_str("    JSR PLAY_SFX_RUNTIME\n");
+    asm.push_str("\n");
+    asm.push_str("    ; Restore original bank from stack\n");
+    asm.push_str("    PULS A               ; A = original bank\n");
+    asm.push_str("    STA CURRENT_ROM_BANK\n");
+    asm.push_str("    STA $DF00            ; Restore bank\n");
+    asm.push_str("\n");
+    asm.push_str("    RTS\n");
+    asm.push_str("\n");
+    
+    asm
+}
+
+/// Generate the LOAD_LEVEL_BANKED runtime wrapper for helpers bank
+fn generate_load_level_banked_wrapper() -> String {
+    let mut asm = String::new();
+    
+    asm.push_str(";***************************************************************************\n");
+    asm.push_str("; LOAD_LEVEL_BANKED - Load level asset with automatic bank switching\n");
+    asm.push_str("; Input: X = Level asset index (0-based)\n");
+    asm.push_str("; Output: LEVEL_PTR, LEVEL_WIDTH, LEVEL_HEIGHT set\n");
+    asm.push_str("; Uses: A, B, X, Y\n");
+    asm.push_str(";***************************************************************************\n");
+    asm.push_str("LOAD_LEVEL_BANKED:\n");
+    asm.push_str("    ; Save level index to U register, save context to stack\n");
+    asm.push_str("    TFR X,U              ; U = level index\n");
+    asm.push_str("    LDA CURRENT_ROM_BANK\n");
+    asm.push_str("    PSHS A               ; Stack: [A] - Only save original bank\n");
+    asm.push_str("\n");
+    asm.push_str("    ; Get level's bank from lookup table\n");
+    asm.push_str("    TFR U,D              ; D = level index (from U)\n");
+    asm.push_str("    LDX #LEVEL_BANK_TABLE\n");
+    asm.push_str("    LDA D,X              ; A = bank ID for this level\n");
+    asm.push_str("    STA CURRENT_ROM_BANK ; Update RAM tracker\n");
+    asm.push_str("    STA $DF00            ; Switch bank hardware register\n");
+    asm.push_str("\n");
+    asm.push_str("    ; Get level's address from lookup table (2 bytes per entry)\n");
+    asm.push_str("    TFR U,D              ; Reload level index from U\n");
+    asm.push_str("    ASLB                 ; *2 for FDB entries\n");
+    asm.push_str("    ROLA\n");
+    asm.push_str("    LDX #LEVEL_ADDR_TABLE\n");
+    asm.push_str("    LEAX D,X             ; X points to address entry\n");
+    asm.push_str("    LDX ,X               ; X = actual level address in banked ROM\n");
+    asm.push_str("\n");
+    asm.push_str("    ; Load level data into RAM variables\n");
+    asm.push_str("    STX LEVEL_PTR        ; Store level data pointer\n");
+    asm.push_str("    LDA ,X+              ; Load width (byte)\n");
+    asm.push_str("    STA LEVEL_WIDTH\n");
+    asm.push_str("    LDA ,X+              ; Load height (byte)\n");
+    asm.push_str("    STA LEVEL_HEIGHT\n");
+    asm.push_str("\n");
+    asm.push_str("    ; Restore original bank from stack\n");
+    asm.push_str("    PULS A               ; A = original bank\n");
+    asm.push_str("    STA CURRENT_ROM_BANK\n");
+    asm.push_str("    STA $DF00            ; Restore bank\n");
+    asm.push_str("\n");
+    asm.push_str("    LDD #1               ; Return success\n");
+    asm.push_str("    STD RESULT\n");
+    asm.push_str("\n");
     asm.push_str("    RTS\n");
     asm.push_str("\n");
     

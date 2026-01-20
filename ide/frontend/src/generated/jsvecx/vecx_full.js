@@ -3213,25 +3213,21 @@ const EADIRECT = () => (((this.reg_dp<<8)|this.vecx.read8(this.reg_pc++)));
                 console.log("    DP: 0x" + (this.reg_dp & 0xFF).toString(16).toUpperCase().padStart(2, '0'));
                 console.log("    CC: 0x" + this.reg_cc.toString(16).toUpperCase().padStart(2, '0'));
                 
-                // Stop emulator to avoid infinite error loops
-                try {
-                    // Force stop by setting running flag to false globally
-                    if (typeof window !== 'undefined' && window.vecxInstance) {
-                        window.vecxInstance.running = false;
-                        if (typeof window.vecxInstance.debugStop === 'function') {
-                            window.vecxInstance.debugStop();
-                        }
-                    }
-                    if (this.vecx) {
-                        this.vecx.running = false;
-                        if (typeof this.vecx.debugStop === 'function') this.vecx.debugStop();
-                        else if (typeof this.vecx.stop === 'function') this.vecx.stop();
-                    }
-                } catch (e) {
-                    console.error("Failed to stop emulator:", e);
+                // CRITICAL: Set global halt flag to stop emulator immediately
+                this.halted = true;
+                if (this.vecx) {
+                    this.vecx.running = false;
+                    this.vecx.halted = true;
                 }
                 
-                utils.showError("Unknown page-0 opcode: 0x" + op.toString(16).toUpperCase().padStart(2, '0') + " at PC=0x" + this.reg_pc.toString(16).toUpperCase().padStart(4, '0'));
+                // Show error to user
+                var errorMsg = "Illegal opcode 0x" + op.toString(16).toUpperCase().padStart(2, '0') + 
+                    " at PC=0x" + this.reg_pc.toString(16).toUpperCase().padStart(4, '0') + 
+                    " - Emulator stopped";
+                console.error(errorMsg);
+                
+                // Throw exception to break out of emulation loop immediately
+                throw new Error(errorMsg);
                 break;
         }
 
@@ -4795,12 +4791,14 @@ function VecX()
         }
         else if( address < 0x8000 )
         {
-            /* cartridge - bank switching register */
-            // Write to 0xD000 switches the current bank (0x0000-0x3FFF window)
-            if (address == 0xD000) {
-                this.current_bank = data & 0xff; // Bank number (0-255)
-                // console.log('[JSVecx] Bank switch to:', this.current_bank);
-            }
+            /* cartridge ROM area - read only, ignore writes */
+        }
+        
+        // Bank switching register at $DF00 (in unmapped I/O space)
+        // Write to $DF00 switches the current bank (0x0000-0x3FFF window)
+        if (address == 0xDF00) {
+            this.current_bank = data & 0xff; // Bank number (0-255)
+            // console.log('[JSVecx] Bank switch to:', this.current_bank);
         }
     }
 
@@ -4916,14 +4914,22 @@ function VecX()
             this.cart[b] = 0x01; // parabellum
         }
 
-        if( Globals.cartdata != null )
+        if( Globals.cartdata != null && Globals.cartdata.length > 0 )
         {
             /* load the rom into memory */
             len = Globals.cartdata.length;
+            console.log('[JSVecx] Loading cartridge: ' + len + ' bytes into cart[]');
             for( var i = 0; i < len; i++ )
             {
                 this.cart[i] = Globals.cartdata.charCodeAt(i);
             }
+            // Verify first few bytes loaded correctly
+            console.log('[JSVecx] Cart verification - first 16 bytes: ' + 
+                this.cart.slice(0, 16).map(function(b) { return b.toString(16).padStart(2, '0'); }).join(' '));
+        }
+        else
+        {
+            console.warn('[JSVecx] WARNING: No cartdata loaded! Cart will be filled with 0x01 (illegal opcode)');
         }
 
         this.fcycles = Globals.FCYCLES_INIT;
@@ -5776,7 +5782,20 @@ function VecX()
 
             vecx.snd_regs[14] = vecx.shadow_snd_regs14;
 
-            vecx.vecx_emu.call( vecx, cycles, 0 );            
+            try {
+                vecx.vecx_emu.call( vecx, cycles, 0 );
+            } catch (e) {
+                // Illegal opcode or other fatal error - stop emulator gracefully
+                console.error("[JSVecx] Emulator halted:", e.message);
+                vecx.running = false;
+                vecx.halted = true;
+                if (vecx.fpsTimer) {
+                    clearInterval(vecx.fpsTimer);
+                    vecx.fpsTimer = null;
+                }
+                vecx.e8910.stop();
+                return; // Don't schedule next frame
+            }
             vecx.count++;
 
             var now = new Date().getTime();

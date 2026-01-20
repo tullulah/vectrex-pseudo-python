@@ -590,22 +590,14 @@ export const EmulatorPanel: React.FC = () => {
 
 
         // Write analog joystick values to JSVecX hardware emulation
-        // BIOS Joy_Analog writes SIGNED values to $C81B/$C81C
-        // Range: -128 to +127 with 0=center (signed byte interpretation)
-        const analogX = Math.round(x * 127); // -127 to +127 (0=center)
-        const analogY = Math.round(y * 127); // -127 to +127 (0=center)
+        // JSVecx uses UNSIGNED range: 0=left/down, 128=center, 255=right/up
+        // Input x,y are in range -1.0 to +1.0 (0.0 = center)
+        const analogX = Math.round((x + 1) * 127.5); // 0 to 255 (128=center)
+        const analogY = Math.round((y + 1) * 127.5); // 0 to 255 (128=center)
         
-        // Write directly to RAM locations that J1_X()/J1_Y() builtins read from
-        // Convert to unsigned byte for write8 (JavaScript doesn't have signed bytes)
-        const unsignedX = analogX < 0 ? 256 + analogX : analogX;
-        const unsignedY = analogY < 0 ? 256 + analogY : analogY;
-        
-        vecx.write8(0xC81B, unsignedX); // Vec_Joy_1_X (signed byte as unsigned write)
-        vecx.write8(0xC81C, unsignedY); // Vec_Joy_1_Y (signed byte as unsigned write)
-        
-        // Also update analog channels for compatibility (some BIOS functions might use these)
-        vecx.alg_jch0 = unsignedX; // Channel 0 = X axis
-        vecx.alg_jch1 = unsignedY; // Channel 1 = Y axis
+        // Update JSVecx analog channels (this is what Joy_Analog BIOS reads via alg_compare)
+        vecx.alg_jch0 = analogX; // Channel 0 = X axis (0=left, 128=center, 255=right)
+        vecx.alg_jch1 = analogY; // Channel 1 = Y axis (0=down, 128=center, 255=up)
         
         // Read button states and build button state byte
         // In Vec_Btn_State ($C80F): 1 = pressed, 0 = released
@@ -630,11 +622,11 @@ export const EmulatorPanel: React.FC = () => {
         // Update persistent state for next frame
         lastButtonState = buttonState;
         
-        // CRITICAL FIX (2026-01-03): Write Vec_Prev_Btns FIRST, before PSG write
-        // Problem: Emulator might execute Read_Btns between PSG write and $C80E write
-        // This creates inconsistent state: PSG has new value but $C80E has old value → false edge
-        // Solution: Write $C80E FIRST to ensure Read_Btns sees consistent state
-        vecx.write8(0xC80E, buttonState);
+        // NOTE (2026-01-19): DO NOT write to $C80E (Vec_Prev_Btns) here!
+        // Read_Btns in the BIOS manages Vec_Prev_Btns internally.
+        // If we write buttonState to $C80E, then when Read_Btns calculates
+        // transitions (new XOR prev), it sees new==prev and always returns 0.
+        // Let Read_Btns handle the prev/current state tracking autonomously.
         
         // DEBUG: Log button state if any button is pressed
         if (transitions !== 0) {

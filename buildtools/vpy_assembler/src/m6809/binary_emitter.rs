@@ -119,7 +119,9 @@ impl BinaryEmitter {
             eprintln!("🏷️  Defining label '{}' at label_address=0x{:04X} (offset=0x{:04X}, current_address=0x{:04X})", 
                 label, label_address, self.code.len(), self.current_address);
         }
+        // Store both original and uppercase variants for case-insensitive lookup
         self.symbols.insert(label.to_string(), label_address);
+        self.symbols.insert(label.to_uppercase(), label_address);
     }
 
     /// Registra referencia a símbolo para resolver en segunda pasada

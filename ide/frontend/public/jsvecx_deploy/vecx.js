@@ -312,13 +312,26 @@ function VecX()
                 if (address < 0x4000) {
                     const bankSize = 0x4000; // 16KB per bank
                     const romOffset = (this.currentBank * bankSize) + address;
+                    // DEBUG: Log suspicious reads from bank 0 area when currentBank != 0
+                    if (this.currentBank !== 0) {
+                        console.warn('[JSVecx] Reading from $' + address.toString(16).padStart(4, '0') + 
+                            ' with currentBank=' + this.currentBank + ' (romOffset=0x' + romOffset.toString(16) + ')');
+                    }
                     return this.multibankRom[romOffset] & 0xff;
                 }
                 // Fixed window: 0x4000-0x7FFF (16KB) → always bank #31
                 else {
                     const bankSize = 0x4000;
                     const romOffset = (31 * bankSize) + (address - 0x4000);
-                    return this.multibankRom[romOffset] & 0xff;
+                    const value = this.multibankRom[romOffset] & 0xff;
+                    // DEBUG: Log reads from first 64 bytes of Bank #31 (VECTOR_BANK_TABLE area)
+                    if (address < 0x4040) {
+                        const pcStr = '0x' + (this.e6809.reg_pc & 0xffff).toString(16).toUpperCase().padStart(4, '0');
+                        console.log('[JSVecx DEBUG] Read $' + address.toString(16).toUpperCase().padStart(4, '0') + 
+                            ' from Bank#31 (offset=0x' + romOffset.toString(16) + ') = 0x' + value.toString(16).toUpperCase() +
+                            ' PC=' + pcStr);
+                    }
+                    return value;
                 }
             }
             // Single-bank cartridge
@@ -337,10 +350,32 @@ function VecX()
             const numBanks = Math.floor(this.multibankRom.length / bankSize);
             const maxBankId = numBanks - 1;
             const oldBank = this.currentBank;
+            const rawData = data;
             this.currentBank = data & maxBankId; // Mask to valid bank range
             const pcStr = '0x' + (this.e6809.reg_pc & 0xffff).toString(16).toUpperCase().padStart(4, '0');
-            console.log('[JSVecx Multi-bank] Bank switched at PC=' + pcStr + ': ' + oldBank + ' -> ' + this.currentBank + '/' + maxBankId);
-            return;
+            
+            // DEBUG: Show where the bank value came from
+            const regA = this.e6809.reg_a & 0xff;
+            const regB = this.e6809.reg_b & 0xff;
+            const regX = this.e6809.reg_x & 0xffff;
+            const regD = ((regA << 8) | regB) & 0xffff;
+            
+            // DEBUG: Read what's ACTUALLY at $4000 in Bank #31
+            const tableOffset = (31 * bankSize) + 0; // VECTOR_BANK_TABLE should be at $4000
+            const actualByte0 = this.multibankRom[tableOffset] & 0xff;
+            const actualByte1 = this.multibankRom[tableOffset + 1] & 0xff;
+            const actualByte2 = this.multibankRom[tableOffset + 2] & 0xff;
+            
+            console.log('[JSVecx Multi-bank] Bank switched at PC=' + pcStr + 
+                ': ' + oldBank + ' -> ' + this.currentBank + '/' + maxBankId +
+                ' (raw_data=0x' + rawData.toString(16).toUpperCase() + 
+                ', A=0x' + regA.toString(16).toUpperCase() +
+                ', B=0x' + regB.toString(16).toUpperCase() +
+                ', X=0x' + regX.toString(16).toUpperCase() +
+                ', D=0x' + regD.toString(16).toUpperCase() +
+                ', ROM[$4000-2]=0x' + actualByte0.toString(16) + ' 0x' + actualByte1.toString(16) + ' 0x' + actualByte2.toString(16) + ')');
+            // DON'T return - let the write complete normally so CPU cycle continues
+            // The bank switch is just a side effect, doesn't interrupt execution flow
         }
         
         if( (address & 0xe000) == 0xe000 )
@@ -598,8 +633,16 @@ function VecX()
                 this.currentBank = 0;
                 this.multibankRom = new Uint8Array(len);
                 for (var i = 0; i < len; i++) {
-                    this.multibankRom[i] = Globals.cartdata.charCodeAt(i);
+                    this.multibankRom[i] = Globals.cartdata.charCodeAt(i) & 0xFF;
                 }
+                // Verification: dump first 80 bytes to check load
+                var hexDump = '[JSVecx Multi-bank] First 80 bytes: ';
+                for (var j = 0; j < 80 && j < len; j++) {
+                    hexDump += this.multibankRom[j].toString(16).padStart(2, '0') + ' ';
+                }
+                console.log(hexDump);
+                // Check byte at 0x0048 specifically
+                console.log('[JSVecx Multi-bank] Byte at 0x0048: 0x' + this.multibankRom[0x0048].toString(16).padStart(2, '0') + ' (expected: 0x86 for LDA #)');
             } else {
                 // Standard cartridge (up to 32KB)
                 console.log('[JSVecx Multi-bank] Regular Cart detected: ' + len + ' bytes (' + (len/1024) + 'KB)');

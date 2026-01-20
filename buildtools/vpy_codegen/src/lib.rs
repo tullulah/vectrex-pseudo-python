@@ -184,8 +184,9 @@ pub fn generate_unified_asm(
     asm.push_str(&format!("; Helpers Bank: {} (DYNAMIC - not hardcoded)\n\n",
         bank_config.helpers_bank));
     
-    // Define RAM variables (EQU directives must come before code)
-    asm.push_str("; === RAM Variables ===\n");
+    // Define RAM variables (EQU directives - must be in each bank's ASM)
+    // These will be duplicated in each bank file after split by linker
+    asm.push_str("; === RAM Variables (Global - accessible from all banks) ===\n");
     asm.push_str("CURRENT_ROM_BANK EQU $C880\n");
     asm.push_str("RESULT EQU $CF00\n");
     asm.push_str("TMPPTR EQU $CF02\n");

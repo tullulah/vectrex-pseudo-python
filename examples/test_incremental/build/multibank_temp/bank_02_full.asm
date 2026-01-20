@@ -25,12 +25,13 @@ PSG_IS_PLAYING       EQU $C880+$36   ; PSG playing flag (1 bytes)
 PSG_DELAY_FRAMES     EQU $C880+$37   ; PSG frame delay counter (1 bytes)
 SFX_PTR              EQU $C880+$38   ; SFX data pointer (2 bytes)
 SFX_ACTIVE           EQU $C880+$3A   ; SFX active flag (1 bytes)
-VAR_PLAYING          EQU $C880+$3B   ; User variable: PLAYING (2 bytes)
+VAR_TITLE_INTENSITY  EQU $C880+$3B   ; User variable: TITLE_INTENSITY (2 bytes)
 VAR_ARG0             EQU $CFE0   ; Function argument 0 (16-bit) (2 bytes)
 VAR_ARG1             EQU $CFE2   ; Function argument 1 (16-bit) (2 bytes)
 VAR_ARG2             EQU $CFE4   ; Function argument 2 (16-bit) (2 bytes)
 VAR_ARG3             EQU $CFE6   ; Function argument 3 (16-bit) (2 bytes)
 VAR_ARG4             EQU $CFE8   ; Function argument 4 (16-bit) (2 bytes)
+CURRENT_ROM_BANK     EQU $CFEA   ; Current ROM bank ID (multibank tracking) (1 bytes)
 
 
 ; ================================================

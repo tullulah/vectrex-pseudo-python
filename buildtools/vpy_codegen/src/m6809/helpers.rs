@@ -53,7 +53,8 @@ pub fn generate_ram_and_arrays(module: &Module) -> Result<String, String> {
     }
     
     // Drawing helper variables
-    if needed.contains("DRAW_CIRCLE") {
+    // NOTE: Check both DRAW_CIRCLE and DRAW_CIRCLE_RUNTIME because the analysis may add either
+    if needed.contains("DRAW_CIRCLE") || needed.contains("DRAW_CIRCLE_RUNTIME") {
         ram.allocate("DRAW_CIRCLE_XC", 1, "Circle center X");
         ram.allocate("DRAW_CIRCLE_YC", 1, "Circle center Y");
         ram.allocate("DRAW_CIRCLE_DIAM", 1, "Circle diameter");
@@ -61,7 +62,8 @@ pub fn generate_ram_and_arrays(module: &Module) -> Result<String, String> {
         ram.allocate("DRAW_CIRCLE_TEMP", 6, "Circle temporary buffer");
     }
     
-    if needed.contains("DRAW_RECT") {
+    // NOTE: Check both DRAW_RECT and DRAW_RECT_RUNTIME
+    if needed.contains("DRAW_RECT") || needed.contains("DRAW_RECT_RUNTIME") {
         ram.allocate("DRAW_RECT_X", 1, "Rectangle X");
         ram.allocate("DRAW_RECT_Y", 1, "Rectangle Y");
         ram.allocate("DRAW_RECT_WIDTH", 1, "Rectangle width");
@@ -129,6 +131,11 @@ pub fn generate_ram_and_arrays(module: &Module) -> Result<String, String> {
     ram.allocate_fixed("VAR_ARG3", 0xCFE6, 2, "Function argument 3 (16-bit)");
     ram.allocate_fixed("VAR_ARG4", 0xCFE8, 2, "Function argument 4 (16-bit)");
     
+    // CRITICAL (2026-01-20): Multibank bank tracking variable
+    // Required for cross-bank function calls and bank switching wrappers
+    // Must be at fixed address for all banks to access
+    ram.allocate_fixed("CURRENT_ROM_BANK", 0xCFEA, 1, "Current ROM bank ID (multibank tracking)");
+    
     // =========================================================================
     // USER VARIABLES (continue allocation after system vars)
     // =========================================================================
@@ -152,6 +159,10 @@ pub fn generate_ram_and_arrays(module: &Module) -> Result<String, String> {
     // CRITICAL FIX (2026-01-18): Emit array data BEFORE code
     // Arrays must be defined before first use to avoid forward references in single-pass assembler
     asm.push_str(&crate::m6809::variables::emit_array_data(module));
+    
+    // NOTE (2026-01-19): emit_array_aliases() is no longer needed
+    // We now use context::is_mutable_array() to determine the correct label at emit time
+    // This avoids EQU forward reference issues with the assembler
     
     // Emit user variable internal definitions (builtin aliases)
     asm.push_str(&user_vars_result);
