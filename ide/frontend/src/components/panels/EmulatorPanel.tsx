@@ -3,12 +3,39 @@ import { useEmulatorStore } from '../../state/emulatorStore';
 import { useEditorStore } from '../../state/editorStore';
 import { useEmulatorSettings } from '../../state/emulatorSettings';
 import { useDebugStore } from '../../state/debugStore';
+import type { PdbData } from '../../state/debugStore';
 import { useJoystickStore } from '../../state/joystickStore';
 import { useProjectStore } from '../../state/projectStore';
 import { JoystickConfigDialog } from '../dialogs/JoystickConfigDialog';
 import { psgAudio } from '../../psgAudio';
 import { inputManager } from '../../inputManager';
 import { asmAddressToVpyLine, formatAddress } from '../../utils/debugHelpers';
+
+// Helper: Get line->address map for both single-bank and multibank formats
+function getLineAddressMap(pdb: PdbData | null): Record<number, number> {
+  const result: Record<number, number> = {};
+  if (!pdb) return result;
+  
+  if (pdb.vpyLineMap) {
+    // Multibank: hex address string → {file, line, column}
+    // NOTE: Keys are stored as decimal strings (e.g., "155" not "0x9B")
+    for (const [addr, info] of Object.entries(pdb.vpyLineMap)) {
+      // Try parsing as decimal first (current format bug)
+      // If it starts with "0x", parse as hex
+      const address = addr.startsWith('0x') 
+        ? parseInt(addr, 16)
+        : parseInt(addr, 10);
+      result[info.line] = address;
+    }
+  } else if (pdb.lineMap) {
+    // Single-bank: line → address hex string
+    for (const [line, addrHex] of Object.entries(pdb.lineMap)) {
+      result[parseInt(line, 10)] = parseInt(addrHex, 16);
+    }
+  }
+  
+  return result;
+}
 
 // Tipos para JSVecX
 interface VecxMetrics {
@@ -107,14 +134,24 @@ const MiniChart: React.FC<{
 
 // Helper: Get current VPy line number for a given PC address
 const getCurrentVpyLineForPC = (pc: number, pdbData: any): number | null => {
-  if (!pdbData?.lineMap) return null;
+  if (!pdbData) return null;
   
   const pcStr = formatAddress(pc);
   
-  // Find VPy line that maps to this PC
-  for (const [lineStr, addr] of Object.entries(pdbData.lineMap)) {
-    if ((addr as string).toLowerCase() === pcStr.toLowerCase()) {
-      return parseInt(lineStr, 10);
+  // Try vpyLineMap first (multibank)
+  if (pdbData.vpyLineMap) {
+    const pcDec = parseInt(pcStr, 16);
+    if (pdbData.vpyLineMap[pcDec]) {
+      return pdbData.vpyLineMap[pcDec].line;
+    }
+  }
+  
+  // Try lineMap (single-bank)
+  if (pdbData.lineMap) {
+    for (const [lineStr, addr] of Object.entries(pdbData.lineMap)) {
+      if ((addr as string).toLowerCase() === pcStr.toLowerCase()) {
+        return parseInt(lineStr, 10);
+      }
     }
   }
   
@@ -752,7 +789,12 @@ export const EmulatorPanel: React.FC = () => {
   // We just need to detect when it has paused
   const checkBreakpointHit = useCallback(() => {
     // Solo verificar si estamos en modo debug
-    if (debugState !== 'running') return;
+    if (debugState !== 'running') {
+      console.log('[EmulatorPanel] 🔍 checkBreakpointHit called but debugState is:', debugState);
+      return;
+    }
+    
+    console.log('[EmulatorPanel] 🔍 checkBreakpointHit checking for breakpoint...');
     
     try {
       const vecx = (window as any).vecx;
@@ -826,13 +868,24 @@ export const EmulatorPanel: React.FC = () => {
   // Phase 3: Listen for debug commands from debugStore
   useEffect(() => {
     const handleDebugMessage = (event: MessageEvent) => {
-      if (event.source !== window) return;
+      console.log('[EmulatorPanel] 🔔 handleDebugMessage received event:', event.data);
+      
+      if (event.source !== window) {
+        console.log('[EmulatorPanel] ⚠️ Event source is not window, ignoring');
+        return;
+      }
       
       const vecx = (window as any).vecx;
-      if (!vecx) return;
+      if (!vecx) {
+        console.log('[EmulatorPanel] ⚠️ vecx not initialized');
+        return;
+      }
       
-      const { type, address, line } = event.data;
+      const { type, address, line, currentVpyLine } = event.data;
+      console.log('[EmulatorPanel] 📨 Message type:', type, 'address:', address, 'line:', line, 'currentVpyLine:', currentVpyLine);
       
+
+
       switch (type) {
         case 'debug-add-breakpoint':
           console.log(`[EmulatorPanel] ➕ Adding breakpoint: line ${line} → address ${address}`);
@@ -955,13 +1008,15 @@ export const EmulatorPanel: React.FC = () => {
             const currentPC = vecx.e6809?.reg_pc;
             const stepOverPdbData = useDebugStore.getState().pdbData;
             if (currentPC && stepOverPdbData) {
+              // Get line address map for both single-bank and multibank formats
+              const lineAddressMap = getLineAddressMap(stepOverPdbData);
+              
               // Find current line by exact match or closest previous address
               let currentLine: number | null = null;
-              const currentPCHex = '0x' + currentPC.toString(16).padStart(4, '0').toUpperCase();
               
               // First try exact match
-              for (const [line, addr] of Object.entries(stepOverPdbData.lineMap)) {
-                if (addr.toUpperCase() === currentPCHex) {
+              for (const [line, addr] of Object.entries(lineAddressMap)) {
+                if (addr === currentPC) {
                   currentLine = parseInt(line, 10);
                   break;
                 }
@@ -971,10 +1026,9 @@ export const EmulatorPanel: React.FC = () => {
               if (currentLine === null) {
                 let closestLine: number | null = null;
                 let closestAddr = 0;
-                for (const [line, addr] of Object.entries(stepOverPdbData.lineMap)) {
-                  const lineAddr = parseInt(addr, 16);
-                  if (lineAddr <= currentPC && lineAddr > closestAddr) {
-                    closestAddr = lineAddr;
+                for (const [line, addr] of Object.entries(lineAddressMap)) {
+                  if (addr <= currentPC && addr > closestAddr) {
+                    closestAddr = addr;
                     closestLine = parseInt(line, 10);
                   }
                 }
@@ -986,10 +1040,10 @@ export const EmulatorPanel: React.FC = () => {
               
               if (currentLine !== null) {
                 // Find next line with address
-                const sortedLines = Object.keys(stepOverPdbData.lineMap).map(l => parseInt(l, 10)).sort((a, b) => a - b);
+                const sortedLines = Object.keys(lineAddressMap).map(l => parseInt(l, 10)).sort((a, b) => a - b);
                 const nextLine = sortedLines.find(l => l > currentLine!);
-                if (nextLine && stepOverPdbData.lineMap[nextLine]) {
-                  const targetAddr = parseInt(stepOverPdbData.lineMap[nextLine], 16);
+                if (nextLine && lineAddressMap[nextLine]) {
+                  const targetAddr = lineAddressMap[nextLine];
                   console.log(`[EmulatorPanel] Step Over: line ${currentLine} → ${nextLine} (0x${targetAddr.toString(16)})`);
                   vecx.debugStepOver(targetAddr);
                 } else {
@@ -1108,8 +1162,13 @@ export const EmulatorPanel: React.FC = () => {
               // Check if PC is back in VPy code range - if so, exit ASM mode and switch to VPy file
               let backInVpy = false;
               let vpyLine = null;
-              for (const [line, addr] of Object.entries(currentPdbData.lineMap)) {
-                if (addr.toLowerCase() === `0x${pcHex}`) {
+              
+              // Get line address map for both single-bank and multibank formats
+              const lineAddressMap = getLineAddressMap(currentPdbData);
+              const pcNum = parseInt(pcHex, 16);  // Convert "009b" to 155 (decimal)
+              for (const [line, addr] of Object.entries(lineAddressMap)) {
+                const addrNum = typeof addr === 'string' ? parseInt(addr, 10) : addr;
+                if (addrNum === pcNum) {
                   vpyLine = parseInt(line, 10);
                   console.log(`[EmulatorPanel] 🔄 PC back in VPy code at line ${vpyLine} - exiting ASM debugging mode`);
                   (window as any).asmDebuggingMode = false;
@@ -1126,7 +1185,15 @@ export const EmulatorPanel: React.FC = () => {
                     // From: /path/to/project/build/test_bp_min.bin
                     // To:   /path/to/project/src/main.vpy
                     const projectRoot = lastCompiledBinary.substring(0, lastCompiledBinary.lastIndexOf('/build/'));
-                    vpyUri = `file://${projectRoot}/src/${currentPdbData.source}`;
+                    // Try to get source file from vpyLineMap, fallback to main.vpy
+                    let sourceFile = 'main.vpy';
+                    if (currentPdbData.vpyLineMap && Object.keys(currentPdbData.vpyLineMap).length > 0) {
+                      const firstEntry = Object.values(currentPdbData.vpyLineMap)[0] as any;
+                      if (firstEntry && firstEntry.file) {
+                        sourceFile = firstEntry.file;
+                      }
+                    }
+                    vpyUri = `file://${projectRoot}/src/${sourceFile}`;
                     
                     console.log(`[EmulatorPanel] 🔄 Auto-switching to VPy file: ${vpyUri}`);
                     editorStore.gotoLocation(vpyUri, vpyLine, 1);
@@ -1137,82 +1204,156 @@ export const EmulatorPanel: React.FC = () => {
                 }
               }
               
-              // If still in ASM, try to find the exact ASM line using asmAddressMap
+              // If still in ASM, try to find the exact ASM line using asmLineMap
               if (!backInVpy) {
                 console.log(`[EmulatorPanel] 🔧 Still in ASM debugging mode - looking for ASM line at PC: ${event.data.pc}`);
                 console.log(`[EmulatorPanel] 🔍 Debug mode: ${event.data.mode}, expecting step navigation`);
                 
-                // Use asmAddressMap to find the ASM line corresponding to this address
-                if (currentPdbData.asmAddressMap) {
+                // Use asmLineMap (address → line) to find the ASM line
+                if (currentPdbData.asmLineMap) {
                   let foundAsmLine = null;
-                  const currentPC = parseInt(event.data.pc, 16);
+                  const pcKey = event.data.pc; // e.g., "0x009E"
                   
-                  // Try exact match first
-                  for (const [lineNum, addr] of Object.entries(currentPdbData.asmAddressMap)) {
-                    if (addr.toLowerCase() === `0x${pcHex}`) {
-                      foundAsmLine = parseInt(lineNum, 10);
-                      console.log(`[EmulatorPanel] 📍 Found exact ASM line ${foundAsmLine} for address ${event.data.pc}`);
-                      break;
-                    }
+                  console.log(`[EmulatorPanel] 🔍 Looking for ${pcKey} in asmLineMap`);
+                  
+                  // Direct lookup in asmLineMap (address → line mapping)
+                  if (currentPdbData.asmLineMap[pcKey]) {
+                    foundAsmLine = currentPdbData.asmLineMap[pcKey].line;
+                    console.log(`[EmulatorPanel] 📍 Found exact ASM line ${foundAsmLine} for address ${pcKey}`);
+                  } else {
+                    console.log(`[EmulatorPanel] ⚠️ No exact match for ${pcKey} in asmLineMap - keeping current line`);
+                    // DEBUG: Show what keys are available near this address
+                    const currentPC = parseInt(pcKey, 16);
+                    const nearbyKeys = Object.keys(currentPdbData.asmLineMap || {})
+                      .map(key => ({ key, addr: parseInt(key, 16) }))
+                      .filter(entry => Math.abs(entry.addr - currentPC) <= 10)
+                      .sort((a, b) => a.addr - b.addr)
+                      .map(entry => `${entry.key}→${currentPdbData.asmLineMap![entry.key].line}`);
+                    console.log(`[EmulatorPanel] 🔍 Nearby asmLineMap entries: ${nearbyKeys.join(', ')}`);
                   }
                   
-                  // If no exact match, DON'T navigate (keep current line)
-                  // This prevents jumping to far away lines when stepping through unmapped instructions
-                  if (!foundAsmLine) {
-                    console.log(`[EmulatorPanel] ⚠️ No exact match for ${event.data.pc} - keeping current line to avoid jumping`);
-                    // Don't set foundAsmLine - this will skip navigation below
-                  }
-                  
-                  // If we found the ASM line, navigate to it and highlight
+                  // If we found the ASM line, check if it's executable or just a comment
                   if (foundAsmLine && (window as any).asmDebuggingFile) {
                     const editorStore = useEditorStore.getState();
                     const debugStore = useDebugStore.getState();
-                    editorStore.gotoLocation((window as any).asmDebuggingFile, foundAsmLine, 1);
-                    debugStore.setCurrentVpyLine(foundAsmLine); // Highlight ASM line
-                    console.log(`[EmulatorPanel] ✅ Navigated to ASM line ${foundAsmLine} in ${(window as any).asmDebuggingFile}`);
-                  } else {
-                    console.log(`[EmulatorPanel] ⚠ Could not find ASM line for address ${event.data.pc} - no mapping available`);
                     
-                    // DEBUG: Show nearby addresses to help diagnose the issue
-                    const currentPC = parseInt(event.data.pc, 16);
-                    const nearbyAddresses = Object.entries(currentPdbData.asmAddressMap)
-                      .map(([line, addr]) => ({ line: parseInt(line, 10), addr: parseInt(addr, 16) }))
-                      .filter(entry => Math.abs(entry.addr - currentPC) <= 5)
-                      .sort((a, b) => a.addr - b.addr);
+                    // Get the line content from the editor to check if it's executable
+                    const asmDoc = editorStore.documents.find(d => d.uri === (window as any).asmDebuggingFile);
                     
-                    if (nearbyAddresses.length > 0) {
-                      console.log(`[EmulatorPanel] 🔍 Nearby addresses:`, nearbyAddresses.map(e => 
-                        `Line ${e.line}: 0x${e.addr.toString(16).padStart(4, '0').toUpperCase()}`).join(', '));
+                    if (asmDoc) {
+                      // Get the line content (foundAsmLine is 1-based, array is 0-based)
+                      const lines = asmDoc.content.split('\n');
+                      let targetLine = foundAsmLine;
+                      let lineContent = lines[foundAsmLine - 1] || '';
+                      const trimmedContent = lineContent.trim();
+                      
+                      // If this line is ONLY a comment (starts with ';' or is empty), find next executable line
+                      if (trimmedContent.startsWith(';') || trimmedContent === '') {
+                        console.log(`[EmulatorPanel] ⚠️ Line ${foundAsmLine} is comment/empty: "${trimmedContent}"`);
+                        console.log(`[EmulatorPanel] 🔍 Searching for next executable line...`);
+                        
+                        // Search forward for the next non-comment, non-empty line
+                        for (let i = foundAsmLine; i < Math.min(foundAsmLine + 10, lines.length); i++) {
+                          const nextContent = lines[i].trim();
+                          if (nextContent && !nextContent.startsWith(';')) {
+                            targetLine = i + 1; // Convert back to 1-based
+                            console.log(`[EmulatorPanel] ✅ Found executable line ${targetLine}: "${nextContent}"`);
+                            break;
+                          }
+                        }
+                      }
+                      
+                      // Navigate to the target line (executable, not comment)
+                      // gotoLocation adds +1 internally, so we pass targetLine - 1
+                      editorStore.gotoLocation((window as any).asmDebuggingFile, targetLine - 1, 0);
+                      debugStore.setCurrentVpyLine(targetLine); // Highlight ASM line
+                      console.log(`[EmulatorPanel] ✅ Navigated to ASM line ${targetLine} in ${(window as any).asmDebuggingFile}`);
+                    } else {
+                      console.log(`[EmulatorPanel] ⚠ ASM document not loaded in editor store - falling back to PDB line`);
+                      // Fallback: navigate to PDB line even if we can't verify it
+                      editorStore.gotoLocation((window as any).asmDebuggingFile, foundAsmLine - 1, 0);
+                      debugStore.setCurrentVpyLine(foundAsmLine);
+                      console.log(`[EmulatorPanel] ✅ Navigated to ASM line ${foundAsmLine} (fallback) in ${(window as any).asmDebuggingFile}`);
                     }
+                  } else if (!foundAsmLine) {
+                    console.log(`[EmulatorPanel] ⚠ Could not find ASM line for address ${pcKey} - no mapping available`);
                   }
+                } else {
+                  console.log(`[EmulatorPanel] ❌ No asmLineMap in PDB data`);
                 }
                 return;
               }
             }
             
-            // Check if PC is in VPy code range (lineMap)
+            // Check if PC is in VPy code range (lineMap or vpyLineMap)
             let foundInVpy = false;
-            for (const [line, addr] of Object.entries(currentPdbData.lineMap)) {
-              if (addr.toLowerCase() === `0x${pcHex}`) {
+            const lineAddressMap2 = getLineAddressMap(currentPdbData);
+            console.log(`[EmulatorPanel] 🔍 DEBUG lineAddressMap2:`, lineAddressMap2);
+            console.log(`[EmulatorPanel] 🔍 DEBUG pcHex from event:`, event.data.pc, 'parsed:', pcHex);
+            const pcNum = parseInt(pcHex, 16);  // Convert "009b" to 155 (decimal)
+            console.log(`[EmulatorPanel] 🔍 DEBUG pcNum (converted):`, pcNum);
+            for (const [line, addr] of Object.entries(lineAddressMap2)) {
+              const addrNum = typeof addr === 'string' ? parseInt(addr, 10) : addr;
+              console.log(`[EmulatorPanel] 🔍 DEBUG comparing: line=${line}, addr=${addr}, addrNum=${addrNum} vs pcNum=${pcNum}`);
+              if (addrNum === pcNum) {
                 const lineNumber = parseInt(line, 10);
-                console.log(`[EmulatorPanel] 📍 Highlighting VPy line ${lineNumber} (PC: ${event.data.pc})`);
-                debugStore.setCurrentVpyLine(lineNumber);
+                // Get VPy filename from vpyLineMap or default to 'main.vpy'
+                let vpyFileName = 'main.vpy';
+                if (currentPdbData.vpyLineMap && Object.keys(currentPdbData.vpyLineMap).length > 0) {
+                  const firstEntry = Object.values(currentPdbData.vpyLineMap)[0] as any;
+                  if (firstEntry && firstEntry.file) {
+                    vpyFileName = firstEntry.file;
+                  }
+                }
+                console.log(`[EmulatorPanel] 📍 Highlighting VPy line ${lineNumber} in ${vpyFileName} (PC: ${event.data.pc})`);
+                debugStore.setCurrentVpyLineWithFile(lineNumber, vpyFileName); // CRITICAL: Pass both line and file
                 
-                // CRITICAL: Auto-switch to VPy file if we're not already in it (for F5 continue, etc.)
+                // CRITICAL: Auto-switch to VPy file if we're not already in it
                 const editorStore = useEditorStore.getState();
-                const activeDoc = editorStore.documents.find(d => d.uri === editorStore.active);
+                const activeUri = editorStore.active;
                 
-                if (activeDoc && currentPdbData.source) {
-                  const activeFileName = activeDoc.uri.split('/').pop() || '';
-                  const vpyFileName = currentPdbData.source;
-                  
-                  // If we're not in the VPy file, switch to it
-                  if (activeFileName !== vpyFileName) {
-                    const dirPath = activeDoc.uri.substring(0, activeDoc.uri.lastIndexOf('/'));
-                    const vpyPath = `file:///${dirPath}/${vpyFileName}`.replace(/\/+/g, '/');
+                // Search for the VPy file in open documents
+                const vpyDoc = editorStore.documents.find(d => {
+                  const docFileName = d.uri.split('/').pop() || '';
+                  return docFileName === vpyFileName;
+                });
+                
+                if (vpyDoc) {
+                  // File is already open - switch to it
+                  if (activeUri !== vpyDoc.uri) {
+                    console.log(`[EmulatorPanel] 🔄 Switching to open tab: ${vpyFileName}`);
+                    editorStore.setActive(vpyDoc.uri);
+                  }
+                } else {
+                  // File is not open - use gotoLocation to open it (auto-creates if not exists)
+                  const activeDoc = editorStore.documents.find(d => d.uri === activeUri);
+                  if (activeDoc) {
+                    // Extract directory path from URI (remove file:// prefix first, then get directory)
+                    let uriPath = activeDoc.uri.startsWith('file://') 
+                      ? activeDoc.uri.substring(7) 
+                      : activeDoc.uri;
+                    let dirPath = uriPath.substring(0, uriPath.lastIndexOf('/'));
                     
-                    console.log(`[EmulatorPanel] 🔄 Auto-switching to VPy file: ${vpyPath} (was in ${activeFileName})`);
+                    // CRITICAL: If we're in /build directory, go up to project root and enter /src
+                    if (dirPath.endsWith('/build')) {
+                      const projectRoot = dirPath.substring(0, dirPath.lastIndexOf('/build'));
+                      dirPath = `${projectRoot}/src`;
+                      console.log(`[EmulatorPanel] 🔄 Adjusted path from /build to /src: ${dirPath}`);
+                    }
+                    
+                    const vpyPath = `file://${dirPath}/${vpyFileName}`;
+                    
+                    console.log(`[EmulatorPanel] 📂 Opening VPy file:`);
+                    console.log(`   activeDoc.uri: ${activeDoc.uri}`);
+                    console.log(`   uriPath (after removing file://): ${uriPath}`);
+                    console.log(`   dirPath (adjusted): ${dirPath}`);
+                    console.log(`   vpyFileName: ${vpyFileName}`);
+                    console.log(`   vpyPath (final): ${vpyPath}`);
+                    console.log(`   lineNumber: ${lineNumber}`);
+                    console.log(`[EmulatorPanel] Calling gotoLocation with vpyPath=${vpyPath}, lineNumber=${lineNumber}`);
                     editorStore.gotoLocation(vpyPath, lineNumber, 1);
+                  } else {
+                    console.log(`[EmulatorPanel] ⚠️ Could not find activeDoc with uri: ${activeUri}`);
                   }
                 }
                 
@@ -1278,19 +1419,38 @@ export const EmulatorPanel: React.FC = () => {
                   return;
                 }
                 
-                const asmFileName = asmEntry.file; // e.g., "bank_31.asm"
                 const asmLineNumber = asmEntry.line || 1;
+                const isMultibank = currentPdbData.romConfig?.isMultibank || false;
                 
-                // Get directory from the binary path (which is in build/)
+                // Construct ASM filename
+                // Multibank: bank_0.asm, bank_1.asm, etc.
+                // Single-bank: main.asm (or {project_name}.asm)
+                const asmFileName = isMultibank ? `bank_${asmEntry.bankId}.asm` : `main.asm`;
+                
+                // Get directory from the binary path (which is in src/)
                 const editorStore = useEditorStore.getState();
+                
+                // Get the project root by going up from src directory
+                // examples/test_incremental/src -> examples/test_incremental
+                const binPath = lastCompiledBinary!;
+                const srcDir = binPath.substring(0, binPath.lastIndexOf('/'));
+                const projectRoot = srcDir.substring(0, srcDir.lastIndexOf('/'));
                 
                 let asmPath: string;
                 if (lastCompiledBinary) {
-                  // Get build directory from binary path
-                  const binPath = lastCompiledBinary;
-                  const buildDir = binPath.substring(0, binPath.lastIndexOf('/'));
-                  asmPath = `${buildDir}/${currentPdbData.asm}/${asmFileName}`;
-                  console.log(`[EmulatorPanel] 📂 Opening ASM file from build dir: ${asmPath}`);
+                  // For ASM file resolution:
+                  // Binary is at: examples/test_incremental/src/main.bin
+                  // ASM files are at: examples/test_incremental/build/  (single-bank) or 
+                  //                  examples/test_incremental/build/asm/ (multibank)
+                  
+                  // Construct path based on single-bank or multibank
+                  if (isMultibank) {
+                    asmPath = `${projectRoot}/build/asm/${asmFileName}`;
+                    console.log(`[EmulatorPanel] 📂 Opening multibank ASM: ${asmPath}`);
+                  } else {
+                    asmPath = `${projectRoot}/build/${asmFileName}`;
+                    console.log(`[EmulatorPanel] 📂 Opening single-bank ASM: ${asmPath}`);
+                  }
                 } else {
                   console.error(`[EmulatorPanel] ❌ No lastCompiledBinary available`);
                   return;
@@ -1301,9 +1461,30 @@ export const EmulatorPanel: React.FC = () => {
                   console.warn(`[EmulatorPanel] ⚠️ Electron file API not available - cannot open ASM file`);
                   return;
                 }
+                
+                // Try to read the ASM file, with fallback for single-bank naming
+                const tryReadAsmFile = (path: string): Promise<{content?: string; error?: string}> => {
+                  return new Promise((resolve) => {
+                    (window as any).files.readFile(path).then((result: {content?: string; error?: string}) => {
+                      if (!result.error) {
+                        resolve(result);
+                      } else {
+                        // Fallback for single-bank: try {project_name}.asm if main.asm not found
+                        if (!isMultibank && asmFileName === 'main.asm') {
+                          const projectName = projectRoot.substring(projectRoot.lastIndexOf('/') + 1);
+                          const fallbackPath = `${projectRoot}/build/${projectName}.asm`;
+                          console.log(`[EmulatorPanel] 📂 main.asm not found, trying fallback: ${fallbackPath}`);
+                          (window as any).files.readFile(fallbackPath).then(resolve);
+                        } else {
+                          resolve(result);
+                        }
+                      }
+                    });
+                  });
+                };
                   
-                  // Read ASM file
-                  (window as any).files.readFile(asmPath).then((result: {content?: string; error?: string}) => {
+                  // Read ASM file with fallback
+                  tryReadAsmFile(asmPath).then((result: {content?: string; error?: string}) => {
                     if (result.error) {
                       console.error(`[EmulatorPanel] ❌ Error reading ASM file: ${result.error}`);
                       return;
@@ -1331,7 +1512,8 @@ export const EmulatorPanel: React.FC = () => {
                     // Set as active and navigate to line
                     editorStore.setActive(asmUri);
                     console.log(`[EmulatorPanel] 🔍 Navigating to line ${targetLine} in ${asmUri}`);
-                    editorStore.gotoLocation(asmUri, targetLine, 1);
+                    // gotoLocation adds +1 internally (converts to 1-based), so we pass targetLine - 1
+                    editorStore.gotoLocation(asmUri, targetLine - 1, 0);
                     
                     // Set flag to skip automatic navigation on next debugger-paused event
                     // (prevents re-navigation to closest PC address after Step Into)
@@ -1372,8 +1554,12 @@ export const EmulatorPanel: React.FC = () => {
       }
     };
     
+    console.log('[EmulatorPanel] ✅ Registering message listener for debug events');
     window.addEventListener('message', handleDebugMessage);
-    return () => window.removeEventListener('message', handleDebugMessage);
+    return () => {
+      console.log('[EmulatorPanel] ❌ Unregistering message listener');
+      window.removeEventListener('message', handleDebugMessage);
+    };
   }, [addBreakpoint, removeBreakpoint, pdbData]);
 
   // Listen for F5 hotkey from Electron (continue debugging)
@@ -2065,6 +2251,9 @@ export const EmulatorPanel: React.FC = () => {
       if (payload.pdbData) {
         console.log('[EmulatorPanel] ✓ Debug symbols (.pdb) received');
         useDebugStore.getState().loadPdbData(payload.pdbData);
+      } else {
+        console.log('[EmulatorPanel] ⚠️ No .pdb file provided - clearing old PDB data');
+        useDebugStore.getState().clearPdbData();
       }
       
       // Verificar si estamos cargando para debug session (no auto-start)
