@@ -126,6 +126,7 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
   const clearAllBreakpoints = useEditorStore(s => s.clearAllBreakpoints);
   const pdbData = useDebugStore(s => s.pdbData);
   const currentVpyLine = useDebugStore(s => s.currentVpyLine); // Phase 6.1: Track current line
+  const currentVpyFile = useDebugStore(s => s.currentVpyFile); // CRITICAL: Track which VPy file the breakpoint is in
   const debugState = useDebugStore(s => s.state); // Phase 6.1: Track debug state
 
   const targetUri = uri || active;
@@ -750,11 +751,53 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
           }
         }
       } else {
-        // VPy file: convert VPy lines to ASM addresses using lineMap
-        console.log('[Monaco] 🔧 VPy file - using lineMap for address lookup');
+        // VPy file: convert VPy lines to ASM addresses using lineMap or vpyLineMap
+        console.log('[Monaco] 🔧 VPy file - using lineMap/vpyLineMap for address lookup');
+        
+        // Support both single-bank (lineMap) and multibank (vpyLineMap) formats
+        const hasVpyLineMap = pdbData.vpyLineMap !== undefined;
+        console.log(`[Monaco] 📊 PDB format: ${hasVpyLineMap ? 'multibank (vpyLineMap)' : 'single-bank (lineMap)'}`);
+        
         for (const line of bps) {
-          const address = pdbData.lineMap?.[line.toString()];
-          console.log(`[Monaco] 🔍 VPy line ${line} → lineMap result: ${address}`);
+          let address: string | undefined;
+          
+          if (hasVpyLineMap && pdbData.vpyLineMap) {
+            // Multibank format: vpyLineMap is address → {file, line, column}
+            // Find the address where the VPy line maps to
+            address = Object.entries(pdbData.vpyLineMap)
+              .find(([_, info]) => info.line === line)?.[0];
+            
+              // If exact line not found, try to find nearest mapped line (prefer previous, fallback to next)
+            if (!address) {
+              const mappedLines = Object.entries(pdbData.vpyLineMap)
+                .map(([addr, info]) => ({ addr, line: info.line }))
+                .sort((a, b) => a.line - b.line);
+              
+                // First try: find the closest line BEFORE (better UX - execute first, then break)
+                const previousMappedLine = mappedLines
+                  .filter(m => m.line < line)
+                  .sort((a, b) => b.line - a.line)[0]; // Get the closest one
+              
+                // Fallback: if no previous, use the next line
+                const nextMappedLine = mappedLines.find(m => m.line > line);
+              
+                const selectedLine = previousMappedLine || nextMappedLine;
+                if (selectedLine) {
+                  address = selectedLine.addr;
+                  const direction = previousMappedLine ? 'previous' : 'next';
+                  console.log(`[Monaco] 🔍 VPy line ${line} has no direct mapping - using ${direction} mapped line ${selectedLine.line} at 0x${address}`);
+              } else {
+                  console.warn(`[Monaco] ⚠️ No ASM mapping for VPy line ${line} (no nearby lines with mapping)`);
+              }
+            } else {
+              console.log(`[Monaco] 🔍 VPy line ${line} → vpyLineMap result: 0x${address}`);
+            }
+          } else {
+            // Single-bank format: lineMap is line → address
+            address = pdbData.lineMap?.[line.toString()];
+            console.log(`[Monaco] 🔍 VPy line ${line} → lineMap result: ${address}`);
+          }
+          
           if (address) {
             const addr = parseInt(address, 16);
             if (!isNaN(addr)) {
@@ -762,7 +805,7 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
               console.log(`[Monaco] ✓ Added breakpoint target at 0x${addr.toString(16).toUpperCase()}`);
             }
           } else {
-            console.warn(`[Monaco] ⚠️ No ASM mapping for VPy line ${line} in lineMap`);
+            console.warn(`[Monaco] ⚠️ No ASM mapping for VPy line ${line}`);
           }
         }
       }
@@ -980,18 +1023,34 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
   // Lazy load content if this is a restored placeholder (empty content, has diskPath)
   useEffect(() => {
     if (doc && doc.diskPath && doc.content === '' && doc.lastSavedContent === '') {
+      console.log(`[MonacoEditorWrapper] 📂 Lazy loading from diskPath: ${doc.diskPath}`);
       const api: any = (window as any).files;
-      if (!api || !api.readFile) return;
+      if (!api || !api.readFile) {
+        console.log(`[MonacoEditorWrapper] ⚠️ No files API available`);
+        return;
+      }
       api.readFile(doc.diskPath).then((res: any) => {
-        if (!res || res.error) return;
+        console.log(`[MonacoEditorWrapper] 📄 Read file result:`, res);
+        if (!res || res.error) {
+          console.log(`[MonacoEditorWrapper] ❌ Error reading file:`, res?.error);
+          return;
+        }
         const text = res.content || '';
+        console.log(`[MonacoEditorWrapper] ✅ Loaded ${text.length} bytes from ${doc.diskPath}`);
         // Update content in store without marking dirty
         try {
           const st = (useEditorStore as any).getState();
           st.updateContent(doc.uri, text);
           st.markSaved(doc.uri, res.mtime);
-        } catch {}
+          console.log(`[MonacoEditorWrapper] ✅ Content updated in store`);
+        } catch (err) {
+          console.log(`[MonacoEditorWrapper] ⚠️ Error updating store:`, err);
+        }
+      }).catch((err: any) => {
+        console.log(`[MonacoEditorWrapper] ❌ Error in readFile promise:`, err);
       });
+    } else if (doc) {
+      console.log(`[MonacoEditorWrapper] 🔍 Lazy load check: diskPath=${doc.diskPath}, content.length=${doc.content.length}, lastSavedContent.length=${(doc.lastSavedContent || '').length}`);
     }
   }, [doc?.diskPath]);
 
@@ -999,13 +1058,37 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
   useEffect(() => {
     if (!editorRef.current || !monacoRef.current || !doc) return;
     
-    // CRITICAL: Only show highlight if this is the active document
-    // (prevents highlighting the same line in multiple open files)
+    // CRITICAL: Only show highlight if:
+    // 1. This is the active document
+    // 2. It matches the current file (either .vpy or .asm)
+    // 3. We're paused in the debugger
     const activeDoc = useEditorStore.getState().active;
     const isActiveDoc = doc.uri === activeDoc;
+    const isVpyFile = doc.uri.endsWith('.vpy');
+    const isAsmFile = doc.uri.endsWith('.asm');
     
-    // Only show highlight when paused, we have a valid line number, AND this is the active doc
-    if (debugState === 'paused' && currentVpyLine !== null && isActiveDoc) {
+    // Extract just the filename from the URI (e.g., "main.vpy" from "file:///path/to/main.vpy")
+    const currentFileName = doc.uri.split('/').pop() || '';
+    
+    // Check if this is the correct VPy file
+    const isCorrectVpyFile = currentVpyFile && currentFileName === currentVpyFile;
+    
+    // Check if we're in ASM debugging mode and this is the ASM file
+    const isAsmDebuggingMode = (window as any).asmDebuggingMode === true;
+    const asmDebuggingFile = (window as any).asmDebuggingFile;
+    const isCorrectAsmFile = isAsmDebuggingMode && doc.uri === asmDebuggingFile;
+    
+    console.log(`[Monaco] 🔍 Highlight check: debugState=${debugState}, currentVpyLine=${currentVpyLine}, currentVpyFile=${currentVpyFile}, currentFileName=${currentFileName}, isCorrectVpyFile=${isCorrectVpyFile}, isCorrectAsmFile=${isCorrectAsmFile}, isActiveDoc=${isActiveDoc}, isVpyFile=${isVpyFile}, isAsmFile=${isAsmFile}`);
+    
+    // Apply highlight if:
+    // - We're paused AND have a valid line number AND
+    // - (this is the correct VPy file in VPy debugging mode) OR (this is the correct ASM file in ASM debugging mode)
+    const shouldHighlight = debugState === 'paused' && currentVpyLine !== null && isActiveDoc && 
+                           (isCorrectVpyFile || isCorrectAsmFile);
+    
+    if (shouldHighlight) {
+      const targetFile = isCorrectAsmFile ? 'ASM' : 'VPy';
+      console.log(`[Monaco] ✅ Applying highlight to line ${currentVpyLine} in ${targetFile} file (${currentFileName})`);
       const decorations = [{
         range: new monacoRef.current!.Range(currentVpyLine, 1, currentVpyLine, 1),
         options: {
@@ -1021,7 +1104,13 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
       );
       
       // Scroll to the current line (reveal in center of viewport)
-      editorRef.current.revealLineInCenter(currentVpyLine);
+      // Use setTimeout to ensure editor is ready (especially for ASM files just opened)
+      setTimeout(() => {
+        if (editorRef.current) {
+          editorRef.current.revealLineInCenter(currentVpyLine);
+          console.log(`[Monaco] 📍 Scrolled to line ${currentVpyLine}`);
+        }
+      }, 100);
       
       logger.debug('Debug', `Highlighted current line: ${currentVpyLine}`);
     } else {
@@ -1031,7 +1120,7 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
         []
       );
     }
-  }, [debugState, currentVpyLine, doc, active]);
+  }, [debugState, currentVpyLine, currentVpyFile, doc, active]);
 
   return (
     <Editor
