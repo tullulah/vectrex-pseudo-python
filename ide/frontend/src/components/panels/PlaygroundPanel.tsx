@@ -172,9 +172,9 @@ export function PlaygroundPanel() {
       
       try {
         const projectRoot = vpyProject.rootDir;
-        const playgroundPath = `${projectRoot}/assets/playground`;
+        const levelsPath = `${projectRoot}/assets/levels`;
         
-        const result = await (window as any).files.readDirectory(playgroundPath);
+        const result = await (window as any).files.readDirectory(levelsPath);
         const scenes = result.files
           .filter((f: any) => f.name.endsWith('.vplay'))
           .map((f: any) => f.name.replace('.vplay', ''));
@@ -440,7 +440,7 @@ export function PlaygroundPanel() {
         return;
       }
 
-      const filePath = `${projectRoot}/assets/playground/${sceneName}.vplay`;
+      const filePath = `${projectRoot}/assets/levels/${sceneName}.vplay`;
       await (window as any).files.saveFile({
         path: filePath,
         content: JSON.stringify(sceneData, null, 2),
@@ -468,7 +468,7 @@ export function PlaygroundPanel() {
       const projectRoot = vpyProject?.rootDir;
       if (!projectRoot) return;
 
-      const filePath = `${projectRoot}/assets/playground/${name}.vplay`;
+      const filePath = `${projectRoot}/assets/levels/${name}.vplay`;
       const result = await (window as any).files.readFile(filePath);
       let sceneData = JSON.parse(result.content);
       
@@ -516,7 +516,7 @@ export function PlaygroundPanel() {
       const projectRoot = vpyProject?.rootDir;
       if (!projectRoot) return;
 
-      const filePath = `${projectRoot}/assets/playground/${name}.vplay`;
+      const filePath = `${projectRoot}/assets/levels/${name}.vplay`;
       await (window as any).files.deleteFile(filePath);
       
       console.log('[Playground] Deleted scene:', name);

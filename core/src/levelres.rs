@@ -168,8 +168,17 @@ impl VPlayLevel {
 
     /// Compile level data to M6809 assembly
     pub fn compile_to_asm(&self) -> String {
+        self.compile_to_asm_with_name(None)
+    }
+
+    pub fn compile_to_asm_with_name(&self, override_name: Option<&str>) -> String {
         let mut out = String::new();
-        let name = self.metadata.name.to_uppercase().replace('-', "_").replace(' ', "_");
+        // Use override name (asset filename) if provided, else fall back to metadata.name
+        let name = override_name
+            .unwrap_or(&self.metadata.name)
+            .to_uppercase()
+            .replace('-', "_")
+            .replace(' ', "_");
 
         out.push_str(&format!("; ==== Level: {} ====\n", name));
         out.push_str(&format!("; Author: {}\n", self.metadata.author));

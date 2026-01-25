@@ -1,0 +1,42 @@
+{
+  "version": "2.0",
+  "type": "level",
+  "metadata": {
+    "name": "08_paris",
+    "displayName": "PARIS (FR)",
+    "author": "Pang Team",
+    "difficulty": "medium",
+    "levelNumber": 8,
+    "mapPosition": {
+      "x": -85,
+      "y": -40
+    }
+  },
+  "worldBounds": {
+    "xMin": -96,
+    "xMax": 95,
+    "yMin": -128,
+    "yMax": 127
+  },
+  "gameConfig": {
+    "enemyCount": 3,
+    "enemySpeed": 3,
+    "timeLimit": 0
+  },
+  "layers": {
+    "background": [
+      {
+        "id": "paris_bg_bg",
+        "type": "background",
+        "vectorName": "paris_bg",
+        "x": 0,
+        "y": 0,
+        "rotation": 0,
+        "scale": 1,
+        "physicsEnabled": false,
+        "layer": "background"
+      }
+    ],
+    "gameplay": []
+  }
+}

@@ -1237,7 +1237,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                         match VPlayLevel::load(std::path::Path::new(&asset.path)) {
                             Ok(level) => {
                                 out.push_str(&format!("; Level Asset: {} (from {})\n", asset.name, asset.path));
-                                let asm = level.compile_to_asm();
+                                let asm = level.compile_to_asm_with_name(Some(&asset.name));
                                 out.push_str(&asm);
                                 out.push_str("\n");
                             },

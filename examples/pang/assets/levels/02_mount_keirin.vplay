@@ -1,0 +1,42 @@
+{
+  "version": "2.0",
+  "type": "level",
+  "metadata": {
+    "name": "02_mount_keirin",
+    "displayName": "MOUNT KEIRIN (CN)",
+    "author": "Pang Team",
+    "difficulty": "easy",
+    "levelNumber": 2,
+    "mapPosition": {
+      "x": 40,
+      "y": 79
+    }
+  },
+  "worldBounds": {
+    "xMin": -96,
+    "xMax": 95,
+    "yMin": -128,
+    "yMax": 127
+  },
+  "gameConfig": {
+    "enemyCount": 1,
+    "enemySpeed": 1,
+    "timeLimit": 0
+  },
+  "layers": {
+    "background": [
+      {
+        "id": "keirin_bg_bg",
+        "type": "background",
+        "vectorName": "keirin_bg",
+        "x": 0,
+        "y": 0,
+        "rotation": 0,
+        "scale": 1,
+        "physicsEnabled": false,
+        "layer": "background"
+      }
+    ],
+    "gameplay": []
+  }
+}

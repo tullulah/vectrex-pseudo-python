@@ -12,6 +12,11 @@ export interface PdbData {
   entry_point: string;
   symbols: Record<string, string>;
   lineMap: Record<string, string>;
+  vpyLineMap?: Record<string, {
+    file: string;
+    address: string;
+    line: number;
+  }>;  // Multibank format from buildtools
   functions?: Record<string, {
     startLine: number;
     endLine: number;

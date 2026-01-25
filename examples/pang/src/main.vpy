@@ -19,11 +19,11 @@ const location_x_coords = [40, 40, -40, -10, 20, 50, 80, -85, -50, -15, 15, 50, 
 const location_y_coords = [110, 79, -20, 10, 40, 70, 100, -40, -10, 30, 60, 90, 20, 50, 0, -60, -30]
 const location_names = ["MOUNT FUJI (JP)","MOUNT KEIRIN (CN)","EMERALD BUDDHA TEMPLE (TH)", "ANGKOR WAT (KH)","AYERS ROCK (AU)", "TAJ MAHAL (IN)","LENINGRAD (RU)","PARIS (FR)","LONDON (UK)","BARCELONA (ES)","ATHENS (GR)", "PYRAMIDS (EG)", "MOUNT KILIMANJARO (TZ)", "NEW YORK (US)","MAYAN RUINS (MX)","ANTARCTICA (AQ)","EASTER ISLAND (CL)"];
 
-# Level configuration - backgrounds and difficulty
-const level_backgrounds = ["fuji_bg", "keirin_bg", "buddha_bg", "angkor_bg", "ayers_bg", "taj_bg", "leningrad_bg", "paris_bg", "london_bg", "barcelona_bg", "athens_bg", "pyramids_bg", "kilimanjaro_bg", "newyork_bg", "mayan_bg", "antarctica_bg", "easter_bg"]
+# Level names for LOAD_LEVEL() calls
+const level_files = ["01_mount_fuji", "02_mount_keirin", "03_emerald_buddha", "04_angkor_wat", "05_ayers_rock", "06_taj_mahal", "07_leningrad", "08_paris", "09_london", "10_barcelona", "11_athens", "12_pyramids", "13_kilimanjaro", "14_new_york", "15_mayan_ruins", "16_antarctica", "17_easter_island"]
 
-const level_enemy_count = [1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 7]
-const level_enemy_speed = [1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5]
+# Current loaded level data
+current_level_ptr = 0    # Pointer to loaded level data
 
 joystick1_state = [0,0,0,0,0,0] # X, Y, BTN1, BTN2, BTN3, BTN4
 
@@ -129,7 +129,6 @@ def loop():
             current_location = current_location + 1
             if current_location >= num_locations:
                 current_location = 0
-                LOAD_LEVEL("fuji_level1_v2")
         elif joy_x < -40 and prev_joy_x >= -40:  # Left threshold
             current_location = current_location - 1
             if current_location < 0:
@@ -149,6 +148,43 @@ def loop():
         if joystick1_state[2] == 1 or joystick1_state[3] == 1 or joystick1_state[4] == 1 or joystick1_state[5] == 1:
             # Start level - transition to game state
             PLAY_SFX("laser")
+            
+            # Load the selected level (using if chain for string literal optimization)
+            if current_location == 0:
+                current_level_ptr = LOAD_LEVEL("01_mount_fuji")
+            elif current_location == 1:
+                current_level_ptr = LOAD_LEVEL("02_mount_keirin")
+            elif current_location == 2:
+                current_level_ptr = LOAD_LEVEL("03_emerald_buddha")
+            elif current_location == 3:
+                current_level_ptr = LOAD_LEVEL("04_angkor_wat")
+            elif current_location == 4:
+                current_level_ptr = LOAD_LEVEL("05_ayers_rock")
+            elif current_location == 5:
+                current_level_ptr = LOAD_LEVEL("06_taj_mahal")
+            elif current_location == 6:
+                current_level_ptr = LOAD_LEVEL("07_leningrad")
+            elif current_location == 7:
+                current_level_ptr = LOAD_LEVEL("08_paris")
+            elif current_location == 8:
+                current_level_ptr = LOAD_LEVEL("09_london")
+            elif current_location == 9:
+                current_level_ptr = LOAD_LEVEL("10_barcelona")
+            elif current_location == 10:
+                current_level_ptr = LOAD_LEVEL("11_athens")
+            elif current_location == 11:
+                current_level_ptr = LOAD_LEVEL("12_pyramids")
+            elif current_location == 12:
+                current_level_ptr = LOAD_LEVEL("13_kilimanjaro")
+            elif current_location == 13:
+                current_level_ptr = LOAD_LEVEL("14_new_york")
+            elif current_location == 14:
+                current_level_ptr = LOAD_LEVEL("15_mayan_ruins")
+            elif current_location == 15:
+                current_level_ptr = LOAD_LEVEL("16_antarctica")
+            else:  # 16
+                current_level_ptr = LOAD_LEVEL("17_easter_island")
+            
             screen = STATE_GAME
             countdown_active = 1
             countdown_timer = 180  # 3 seconds at 60fps
@@ -165,8 +201,8 @@ def loop():
             PRINT_TEXT(-50, 0, "GET READY")
             
             # Show selected location name
-            SET_INTENSITY(100)
-            PRINT_TEXT(-85, -20, location_names[current_location])
+            SET_INTENSITY(127)
+            PRINT_TEXT(-85, 120, location_names[current_location])
             
             # Decrement countdown timer
             countdown_timer = countdown_timer - 1
@@ -223,7 +259,7 @@ def draw_map_screen():
         if location_glow_intensity <= 80:
             location_glow_direction = 0
     
-    PRINT_TEXT(-120, -80, location_names[current_location])
+    PRINT_TEXT(-120, 120, location_names[current_location])
 
     # Draw only the selected location with glow effect
     loc_x = location_x_coords[current_location]
@@ -254,44 +290,9 @@ def draw_title_screen():
         title_state = 0
 
 def draw_level_background():
-    # Draws the background specific to current_location
-    SET_INTENSITY(60)
-    
-    # Select background based on current_location (0-16)
-    if current_location == 0:
-        DRAW_VECTOR("fuji_bg", 0, 50)
-    elif current_location == 1:
-        DRAW_VECTOR("keirin_bg", 0, 50)
-    elif current_location == 2:
-        DRAW_VECTOR("buddha_bg", 0, 50)
-    elif current_location == 3:
-        DRAW_VECTOR("angkor_bg", 0, 50)
-    elif current_location == 4:
-        DRAW_VECTOR("ayers_bg", 0, 50)
-    elif current_location == 5:
-        DRAW_VECTOR("taj_bg", 0, 50)
-    elif current_location == 6:
-        DRAW_VECTOR("leningrad_bg", 0, 50)
-    elif current_location == 7:
-        DRAW_VECTOR("paris_bg", 0, 50)
-    elif current_location == 8:
-        DRAW_VECTOR("london_bg", 0, 50)
-    elif current_location == 9:
-        DRAW_VECTOR("barcelona_bg", 0, 50)
-    elif current_location == 10:
-        DRAW_VECTOR("athens_bg", 0, 50)
-    elif current_location == 11:
-        DRAW_VECTOR("pyramids_bg", 0, 50)
-    elif current_location == 12:
-        DRAW_VECTOR("kilimanjaro_bg", 0, 50)
-    elif current_location == 13:
-        DRAW_VECTOR("newyork_bg", 0, 50)
-    elif current_location == 14:
-        DRAW_VECTOR("mayan_bg", 0, 50)
-    elif current_location == 15:
-        DRAW_VECTOR("antarctica_bg", 0, 50)
-    else:  # current_location == 16
-        DRAW_VECTOR("easter_bg", 0, 50)
+    # Draws the background from loaded level data
+    if current_level_ptr != 0:
+        SHOW_LEVEL()
 
 def draw_game_level():
     # Draw level-specific background
@@ -399,8 +400,9 @@ def draw_game_level():
 
 def spawn_enemies():
     #"""Spawn enemies for current level - called ONCE when game starts"""
-    count = level_enemy_count[current_location]
-    speed = level_enemy_speed[current_location]
+    # TODO: Get from loaded level gameConfig
+    count = 1  # Start simple for testing
+    speed = 1
     
     i = 0
     while i < count:

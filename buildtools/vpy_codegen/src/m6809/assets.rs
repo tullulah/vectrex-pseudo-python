@@ -147,7 +147,7 @@ fn collect_asset_names_from_expr(expr: &Expr, used_names: &mut HashSet<String>) 
 /// Searches for:
 /// - assets/vectors/*.vec (vector graphics)
 /// - assets/music/*.vmus (music)
-/// - assets/levels/*.vlevel (level data)
+/// - assets/levels/*.vplay (level data)
 /// - assets/sfx/*.vsfx (sound effects)
 pub fn discover_assets(source_path: &Path) -> Vec<AssetInfo> {
     let mut assets = Vec::new();
@@ -210,13 +210,13 @@ pub fn discover_assets(source_path: &Path) -> Vec<AssetInfo> {
         }
     }
     
-    // Search for level assets (assets/levels/*.vlevel)
+    // Search for level assets (assets/levels/*.vplay)
     let levels_dir = project_root.join("assets").join("levels");
     if levels_dir.is_dir() {
         if let Ok(entries) = fs::read_dir(&levels_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                if path.extension().and_then(|e| e.to_str()) == Some("vlevel") {
+                if path.extension().and_then(|e| e.to_str()) == Some("vplay") {
                     if let Some(name) = path.file_stem().and_then(|n| n.to_str()) {
                         eprintln!("[DEBUG ASSETS] Found level: {} at {:?}", name, path);
                         assets.push(AssetInfo {
@@ -327,7 +327,7 @@ pub fn prepare_assets_with_sizes(assets: &[AssetInfo]) -> Vec<SizedAsset> {
     for asset in assets.iter().filter(|a| matches!(a.asset_type, AssetType::Level)) {
         match crate::levelres::VPlayLevel::load(Path::new(&asset.path)) {
             Ok(resource) => {
-                let asm_code = resource.compile_to_asm();
+                let asm_code = resource.compile_to_asm_with_name(Some(&asset.name));
                 let binary_size = estimate_asm_size(&asm_code);
                 eprintln!("[DEBUG ASSETS] Level '{}': {} bytes estimated", asset.name, binary_size);
                 sized_assets.push(SizedAsset {
@@ -518,7 +518,7 @@ pub fn generate_assets_asm(assets: &[AssetInfo]) -> Result<String, String> {
         eprintln!("[DEBUG ASSETS] Generating ASM for level: {}", asset.name);
         match crate::levelres::VPlayLevel::load(Path::new(&asset.path)) {
             Ok(resource) => {
-                out.push_str(&resource.compile_to_asm());
+                out.push_str(&resource.compile_to_asm_with_name(Some(&asset.name)));
             },
             Err(e) => {
                 eprintln!("[WARNING] Failed to load level asset '{}': {}", asset.name, e);

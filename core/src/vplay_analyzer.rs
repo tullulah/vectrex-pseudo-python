@@ -74,14 +74,14 @@ pub struct VPlayLevel {
 
 /// Scan project for .vplay files and analyze buffer requirements
 pub fn analyze_project_vplay_files(project_root: &Path) -> Result<BufferRequirements, String> {
-    let assets_dir = project_root.join("assets").join("playground");
+    let assets_dir = project_root.join("assets").join("levels");
     
     let mut max_objects = 0;
     let mut any_physics = false;
     let mut analyzed_files = Vec::new();
     
     if !assets_dir.exists() {
-        // No assets/playground directory = no levels = no buffer needed
+        // No assets/levels directory = no levels = no buffer needed
         return Ok(BufferRequirements {
             max_physics_objects: 0,
             needs_buffer: false,
@@ -89,9 +89,9 @@ pub fn analyze_project_vplay_files(project_root: &Path) -> Result<BufferRequirem
         });
     }
     
-    // Scan all .vplay files in assets/playground
+    // Scan all .vplay files in assets/levels
     let entries = fs::read_dir(&assets_dir)
-        .map_err(|e| format!("Failed to read assets/playground: {}", e))?;
+        .map_err(|e| format!("Failed to read assets/levels: {}", e))?;
     
     for entry in entries {
         let entry = entry.map_err(|e| format!("Failed to read directory entry: {}", e))?;

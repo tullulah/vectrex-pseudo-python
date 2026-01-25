@@ -1,0 +1,42 @@
+{
+  "version": "2.0",
+  "type": "level",
+  "metadata": {
+    "name": "07_leningrad",
+    "displayName": "LENINGRAD (RU)",
+    "author": "Pang Team",
+    "difficulty": "medium",
+    "levelNumber": 7,
+    "mapPosition": {
+      "x": 80,
+      "y": 100
+    }
+  },
+  "worldBounds": {
+    "xMin": -96,
+    "xMax": 95,
+    "yMin": -128,
+    "yMax": 127
+  },
+  "gameConfig": {
+    "enemyCount": 3,
+    "enemySpeed": 2,
+    "timeLimit": 0
+  },
+  "layers": {
+    "background": [
+      {
+        "id": "leningrad_bg_bg",
+        "type": "background",
+        "vectorName": "leningrad_bg",
+        "x": 0,
+        "y": 0,
+        "rotation": 0,
+        "scale": 1,
+        "physicsEnabled": false,
+        "layer": "background"
+      }
+    ],
+    "gameplay": []
+  }
+}

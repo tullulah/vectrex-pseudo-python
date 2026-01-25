@@ -126,7 +126,7 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
   const clearAllBreakpoints = useEditorStore(s => s.clearAllBreakpoints);
   const pdbData = useDebugStore(s => s.pdbData);
   const currentVpyLine = useDebugStore(s => s.currentVpyLine); // Phase 6.1: Track current line
-  const currentVpyFile = useDebugStore(s => s.currentVpyFile); // CRITICAL: Track which VPy file the breakpoint is in
+  // Note: currentVpyFile removed - not available in DebugStore
   const debugState = useDebugStore(s => s.state); // Phase 6.1: Track debug state
 
   const targetUri = uri || active;
@@ -1070,21 +1070,18 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
     // Extract just the filename from the URI (e.g., "main.vpy" from "file:///path/to/main.vpy")
     const currentFileName = doc.uri.split('/').pop() || '';
     
-    // Check if this is the correct VPy file
-    const isCorrectVpyFile = currentVpyFile && currentFileName === currentVpyFile;
-    
     // Check if we're in ASM debugging mode and this is the ASM file
     const isAsmDebuggingMode = (window as any).asmDebuggingMode === true;
     const asmDebuggingFile = (window as any).asmDebuggingFile;
     const isCorrectAsmFile = isAsmDebuggingMode && doc.uri === asmDebuggingFile;
     
-    console.log(`[Monaco] 🔍 Highlight check: debugState=${debugState}, currentVpyLine=${currentVpyLine}, currentVpyFile=${currentVpyFile}, currentFileName=${currentFileName}, isCorrectVpyFile=${isCorrectVpyFile}, isCorrectAsmFile=${isCorrectAsmFile}, isActiveDoc=${isActiveDoc}, isVpyFile=${isVpyFile}, isAsmFile=${isAsmFile}`);
+    console.log(`[Monaco] 🔍 Highlight check: debugState=${debugState}, currentVpyLine=${currentVpyLine}, currentFileName=${currentFileName}, isCorrectAsmFile=${isCorrectAsmFile}, isActiveDoc=${isActiveDoc}, isVpyFile=${isVpyFile}, isAsmFile=${isAsmFile}`);
     
     // Apply highlight if:
     // - We're paused AND have a valid line number AND
-    // - (this is the correct VPy file in VPy debugging mode) OR (this is the correct ASM file in ASM debugging mode)
+    // - (this is the active VPy file) OR (this is the correct ASM file in ASM debugging mode)
     const shouldHighlight = debugState === 'paused' && currentVpyLine !== null && isActiveDoc && 
-                           (isCorrectVpyFile || isCorrectAsmFile);
+                           (isVpyFile || isCorrectAsmFile);
     
     if (shouldHighlight) {
       const targetFile = isCorrectAsmFile ? 'ASM' : 'VPy';
@@ -1120,7 +1117,7 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
         []
       );
     }
-  }, [debugState, currentVpyLine, currentVpyFile, doc, active]);
+  }, [debugState, currentVpyLine, doc, active]);
 
   return (
     <Editor

@@ -1,0 +1,42 @@
+{
+  "version": "2.0",
+  "type": "level",
+  "metadata": {
+    "name": "17_easter_island",
+    "displayName": "EASTER ISLAND (CL)",
+    "author": "Pang Team",
+    "difficulty": "extreme",
+    "levelNumber": 17,
+    "mapPosition": {
+      "x": 45,
+      "y": -30
+    }
+  },
+  "worldBounds": {
+    "xMin": -96,
+    "xMax": 95,
+    "yMin": -128,
+    "yMax": 127
+  },
+  "gameConfig": {
+    "enemyCount": 7,
+    "enemySpeed": 5,
+    "timeLimit": 0
+  },
+  "layers": {
+    "background": [
+      {
+        "id": "easter_bg_bg",
+        "type": "background",
+        "vectorName": "easter_bg",
+        "x": 0,
+        "y": 0,
+        "rotation": 0,
+        "scale": 1,
+        "physicsEnabled": false,
+        "layer": "background"
+      }
+    ],
+    "gameplay": []
+  }
+}

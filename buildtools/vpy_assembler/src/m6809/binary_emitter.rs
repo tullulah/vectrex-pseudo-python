@@ -508,6 +508,62 @@ impl BinaryEmitter {
         self.emit(value);
     }
 
+    /// ADCA #immediate (opcode 0x89) - Add with Carry A
+    pub fn adca_immediate(&mut self, value: u8) {
+        self.record_line_mapping();
+        self.emit(0x89);
+        self.emit(value);
+    }
+
+    /// ADCA extended (opcode 0xB9) - Add with Carry A
+    pub fn adca_extended(&mut self, addr: u16) {
+        self.record_line_mapping();
+        self.emit(0xB9);
+        self.emit_word(addr);
+    }
+
+    /// ADCA direct (opcode 0x99) - Add with Carry A
+    pub fn adca_direct(&mut self, addr: u8) {
+        self.record_line_mapping();
+        self.emit(0x99);
+        self.emit(addr);
+    }
+
+    /// ADCA indexed (opcode 0xA9) - Add with Carry A
+    pub fn adca_indexed(&mut self, postbyte: u8) {
+        self.record_line_mapping();
+        self.emit(0xA9);
+        self.emit(postbyte);
+    }
+
+    /// ADCB #immediate (opcode 0xC9) - Add with Carry B
+    pub fn adcb_immediate(&mut self, value: u8) {
+        self.record_line_mapping();
+        self.emit(0xC9);
+        self.emit(value);
+    }
+
+    /// ADCB extended (opcode 0xF9) - Add with Carry B
+    pub fn adcb_extended(&mut self, addr: u16) {
+        self.record_line_mapping();
+        self.emit(0xF9);
+        self.emit_word(addr);
+    }
+
+    /// ADCB direct (opcode 0xD9) - Add with Carry B
+    pub fn adcb_direct(&mut self, addr: u8) {
+        self.record_line_mapping();
+        self.emit(0xD9);
+        self.emit(addr);
+    }
+
+    /// ADCB indexed (opcode 0xE9) - Add with Carry B
+    pub fn adcb_indexed(&mut self, postbyte: u8) {
+        self.record_line_mapping();
+        self.emit(0xE9);
+        self.emit(postbyte);
+    }
+
     /// ADDD #immediate (opcode 0xC3) - 16-bit add to D register
     pub fn addd_immediate(&mut self, value: u16) {
         self.record_line_mapping();
@@ -632,6 +688,27 @@ impl BinaryEmitter {
         self.record_line_mapping();
         self.emit(0x88);
         self.emit(value);
+    }
+
+    /// EORB #immediate (opcode 0xC8) - Exclusive OR B
+    pub fn eorb_immediate(&mut self, value: u8) {
+        self.record_line_mapping();
+        self.emit(0xC8);
+        self.emit(value);
+    }
+
+    /// EORB extended (opcode 0xF8) - Exclusive OR B
+    pub fn eorb_extended(&mut self, addr: u16) {
+        self.record_line_mapping();
+        self.emit(0xF8);
+        self.emit_word(addr);
+    }
+
+    /// DAA (opcode 0x19) - Decimal Adjust A
+    /// Adjusts accumulator A after BCD addition
+    pub fn daa(&mut self) {
+        self.record_line_mapping();
+        self.emit(0x19);
     }
 
     /// CLRA (opcode 0x4F)
@@ -807,6 +884,14 @@ impl BinaryEmitter {
     pub fn abx(&mut self) {
         self.record_line_mapping();
         self.emit(0x3A);
+    }
+
+    /// MUL (opcode 0x3D) - Multiply A by B, result in D
+    /// Unsigned 8-bit × 8-bit → 16-bit multiplication
+    /// D = A × B (D register = concatenation of A:B)
+    pub fn mul(&mut self) {
+        self.record_line_mapping();
+        self.emit(0x3D);
     }
 
     /// SEX (opcode 0x1D) - Sign EXtend B into A
@@ -1085,6 +1170,38 @@ impl BinaryEmitter {
     /// STU extended (opcode 0xFF)
     pub fn stu_extended(&mut self, addr: u16) {
         self.record_line_mapping();
+        self.emit(0xFF);
+        self.emit_word(addr);
+    }
+
+    /// STS #immediate (opcode 0x10DF) - Store Stack Pointer
+    pub fn sts_immediate(&mut self, value: u16) {
+        self.record_line_mapping();
+        self.emit(0x10);
+        self.emit(0xDF);
+        self.emit_word(value);
+    }
+
+    /// STS direct (opcode 0x10DF)
+    pub fn sts_direct(&mut self, addr: u8) {
+        self.record_line_mapping();
+        self.emit(0x10);
+        self.emit(0xDF);
+        self.emit(addr);
+    }
+
+    /// STS indexed (opcode 0x10EF + postbyte)
+    pub fn sts_indexed(&mut self, postbyte: u8) {
+        self.record_line_mapping();
+        self.emit(0x10);
+        self.emit(0xEF);
+        self.emit(postbyte);
+    }
+
+    /// STS extended (opcode 0x10FF)
+    pub fn sts_extended(&mut self, addr: u16) {
+        self.record_line_mapping();
+        self.emit(0x10);
         self.emit(0xFF);
         self.emit_word(addr);
     }

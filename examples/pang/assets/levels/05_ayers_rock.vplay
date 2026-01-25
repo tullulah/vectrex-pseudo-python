@@ -1,0 +1,45 @@
+{
+  "version": "2.0",
+  "type": "level",
+  "metadata": {
+    "name": "05_ayers_rock",
+    "author": "",
+    "difficulty": "medium",
+    "timeLimit": 0,
+    "targetScore": 0,
+    "description": "Created in Playground - 2026-01-25"
+  },
+  "worldBounds": {
+    "xMin": -96,
+    "xMax": 95,
+    "yMin": -128,
+    "yMax": 127
+  },
+  "layers": {
+    "background": [
+      {
+        "id": "ayers_bg_bg",
+        "type": "background",
+        "vectorName": "ayers_bg",
+        "x": 0,
+        "y": 0,
+        "rotation": 0,
+        "scale": 0.7,
+        "physicsEnabled": false,
+        "layer": "background",
+        "velocity": {
+          "x": 0,
+          "y": 0
+        }
+      }
+    ],
+    "gameplay": [],
+    "foreground": []
+  },
+  "spawnPoints": {
+    "player": {
+      "x": 0,
+      "y": -100
+    }
+  }
+}

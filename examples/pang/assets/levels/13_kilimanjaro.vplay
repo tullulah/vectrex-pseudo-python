@@ -1,0 +1,42 @@
+{
+  "version": "2.0",
+  "type": "level",
+  "metadata": {
+    "name": "13_kilimanjaro",
+    "displayName": "MOUNT KILIMANJARO (TZ)",
+    "author": "Pang Team",
+    "difficulty": "very_hard",
+    "levelNumber": 13,
+    "mapPosition": {
+      "x": 85,
+      "y": 20
+    }
+  },
+  "worldBounds": {
+    "xMin": -96,
+    "xMax": 95,
+    "yMin": -128,
+    "yMax": 127
+  },
+  "gameConfig": {
+    "enemyCount": 5,
+    "enemySpeed": 4,
+    "timeLimit": 0
+  },
+  "layers": {
+    "background": [
+      {
+        "id": "kilimanjaro_bg_bg",
+        "type": "background",
+        "vectorName": "kilimanjaro_bg",
+        "x": 0,
+        "y": 0,
+        "rotation": 0,
+        "scale": 1,
+        "physicsEnabled": false,
+        "layer": "background"
+      }
+    ],
+    "gameplay": []
+  }
+}

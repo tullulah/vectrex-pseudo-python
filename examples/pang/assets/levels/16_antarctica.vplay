@@ -1,0 +1,42 @@
+{
+  "version": "2.0",
+  "type": "level",
+  "metadata": {
+    "name": "16_antarctica",
+    "displayName": "ANTARCTICA (AQ)",
+    "author": "Pang Team",
+    "difficulty": "extreme",
+    "levelNumber": 16,
+    "mapPosition": {
+      "x": 0,
+      "y": -60
+    }
+  },
+  "worldBounds": {
+    "xMin": -96,
+    "xMax": 95,
+    "yMin": -128,
+    "yMax": 127
+  },
+  "gameConfig": {
+    "enemyCount": 6,
+    "enemySpeed": 5,
+    "timeLimit": 0
+  },
+  "layers": {
+    "background": [
+      {
+        "id": "antarctica_bg_bg",
+        "type": "background",
+        "vectorName": "antarctica_bg",
+        "x": 0,
+        "y": 0,
+        "rotation": 0,
+        "scale": 1,
+        "physicsEnabled": false,
+        "layer": "background"
+      }
+    ],
+    "gameplay": []
+  }
+}

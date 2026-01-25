@@ -1,0 +1,42 @@
+{
+  "version": "2.0",
+  "type": "level",
+  "metadata": {
+    "name": "11_athens",
+    "displayName": "ATHENS (GR)",
+    "author": "Pang Team",
+    "difficulty": "hard",
+    "levelNumber": 11,
+    "mapPosition": {
+      "x": 15,
+      "y": 60
+    }
+  },
+  "worldBounds": {
+    "xMin": -96,
+    "xMax": 95,
+    "yMin": -128,
+    "yMax": 127
+  },
+  "gameConfig": {
+    "enemyCount": 4,
+    "enemySpeed": 3,
+    "timeLimit": 0
+  },
+  "layers": {
+    "background": [
+      {
+        "id": "athens_bg_bg",
+        "type": "background",
+        "vectorName": "athens_bg",
+        "x": 0,
+        "y": 0,
+        "rotation": 0,
+        "scale": 1,
+        "physicsEnabled": false,
+        "layer": "background"
+      }
+    ],
+    "gameplay": []
+  }
+}

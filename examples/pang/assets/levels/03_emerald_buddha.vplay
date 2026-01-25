@@ -1,0 +1,42 @@
+{
+  "version": "2.0",
+  "type": "level",
+  "metadata": {
+    "name": "03_emerald_buddha",
+    "displayName": "EMERALD BUDDHA TEMPLE (TH)",
+    "author": "Pang Team",
+    "difficulty": "easy",
+    "levelNumber": 3,
+    "mapPosition": {
+      "x": -40,
+      "y": -20
+    }
+  },
+  "worldBounds": {
+    "xMin": -96,
+    "xMax": 95,
+    "yMin": -128,
+    "yMax": 127
+  },
+  "gameConfig": {
+    "enemyCount": 2,
+    "enemySpeed": 1,
+    "timeLimit": 0
+  },
+  "layers": {
+    "background": [
+      {
+        "id": "buddha_bg_bg",
+        "type": "background",
+        "vectorName": "buddha_bg",
+        "x": 0,
+        "y": 0,
+        "rotation": 0,
+        "scale": 1,
+        "physicsEnabled": false,
+        "layer": "background"
+      }
+    ],
+    "gameplay": []
+  }
+}

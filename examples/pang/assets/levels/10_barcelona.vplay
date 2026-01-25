@@ -1,0 +1,42 @@
+{
+  "version": "2.0",
+  "type": "level",
+  "metadata": {
+    "name": "10_barcelona",
+    "displayName": "BARCELONA (ES)",
+    "author": "Pang Team",
+    "difficulty": "hard",
+    "levelNumber": 10,
+    "mapPosition": {
+      "x": -15,
+      "y": 30
+    }
+  },
+  "worldBounds": {
+    "xMin": -96,
+    "xMax": 95,
+    "yMin": -128,
+    "yMax": 127
+  },
+  "gameConfig": {
+    "enemyCount": 4,
+    "enemySpeed": 3,
+    "timeLimit": 0
+  },
+  "layers": {
+    "background": [
+      {
+        "id": "barcelona_bg_bg",
+        "type": "background",
+        "vectorName": "barcelona_bg",
+        "x": 0,
+        "y": 0,
+        "rotation": 0,
+        "scale": 1,
+        "physicsEnabled": false,
+        "layer": "background"
+      }
+    ],
+    "gameplay": []
+  }
+}

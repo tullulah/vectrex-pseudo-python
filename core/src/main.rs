@@ -112,8 +112,8 @@ fn discover_assets(source_path: &Path) -> Vec<codegen::AssetInfo> {
         }
     }
     
-    // Search for level data (assets/playground/*.vplay)
-    let levels_dir = project_root.join("assets").join("playground");
+    // Search for level data (assets/levels/*.vplay)
+    let levels_dir = project_root.join("assets").join("levels");
     if levels_dir.is_dir() {
         if let Ok(entries) = fs::read_dir(&levels_dir) {
             for entry in entries.flatten() {

@@ -17,20 +17,22 @@ function getLineAddressMap(pdb: PdbData | null): Record<number, number> {
   if (!pdb) return result;
   
   if (pdb.vpyLineMap) {
-    // Multibank: hex address string → {file, line, column}
-    // NOTE: Keys are stored as decimal strings (e.g., "155" not "0x9B")
+    // Multibank: address hex string → {file, line, column}
     for (const [addr, info] of Object.entries(pdb.vpyLineMap)) {
-      // Try parsing as decimal first (current format bug)
-      // If it starts with "0x", parse as hex
+      // Parse address (might be decimal or hex string)
       const address = addr.startsWith('0x') 
         ? parseInt(addr, 16)
         : parseInt(addr, 10);
       result[info.line] = address;
     }
   } else if (pdb.lineMap) {
-    // Single-bank: line → address hex string
-    for (const [line, addrHex] of Object.entries(pdb.lineMap)) {
-      result[parseInt(line, 10)] = parseInt(addrHex, 16);
+    // Single-bank: address hex string → line string
+    for (const [addrHex, lineStr] of Object.entries(pdb.lineMap)) {
+      const address = parseInt(addrHex, 16);
+      const line = parseInt(lineStr, 10);
+      if (!isNaN(address) && !isNaN(line)) {
+        result[line] = address;
+      }
     }
   }
   
@@ -138,19 +140,26 @@ const getCurrentVpyLineForPC = (pc: number, pdbData: any): number | null => {
   
   const pcStr = formatAddress(pc);
   
-  // Try vpyLineMap first (multibank)
+  // Try vpyLineMap first (multibank format)
   if (pdbData.vpyLineMap) {
-    const pcDec = parseInt(pcStr, 16);
-    if (pdbData.vpyLineMap[pcDec]) {
-      return pdbData.vpyLineMap[pcDec].line;
+    // vpyLineMap keys are address strings (might be decimal or hex)
+    for (const [addr, info] of Object.entries(pdbData.vpyLineMap)) {
+      const address = addr.startsWith('0x') 
+        ? parseInt(addr, 16)
+        : parseInt(addr, 10);
+      if (address === pc) {
+        return (info as { line: number; file: string; address: string }).line;
+      }
     }
   }
   
-  // Try lineMap (single-bank)
+  // Try lineMap (single-bank format)
   if (pdbData.lineMap) {
-    for (const [lineStr, addr] of Object.entries(pdbData.lineMap)) {
-      if ((addr as string).toLowerCase() === pcStr.toLowerCase()) {
-        return parseInt(lineStr, 10);
+    // lineMap is address hex string → line string
+    for (const [addrHex, lineStr] of Object.entries(pdbData.lineMap)) {
+      const address = parseInt(addrHex, 16);
+      if (address === pc) {
+        return parseInt(lineStr as string, 10);
       }
     }
   }
@@ -1306,7 +1315,7 @@ export const EmulatorPanel: React.FC = () => {
                   }
                 }
                 console.log(`[EmulatorPanel] 📍 Highlighting VPy line ${lineNumber} in ${vpyFileName} (PC: ${event.data.pc})`);
-                debugStore.setCurrentVpyLineWithFile(lineNumber, vpyFileName); // CRITICAL: Pass both line and file
+                debugStore.setCurrentVpyLine(lineNumber); // Set current line (file tracking not supported)
                 
                 // CRITICAL: Auto-switch to VPy file if we're not already in it
                 const editorStore = useEditorStore.getState();
@@ -1420,12 +1429,12 @@ export const EmulatorPanel: React.FC = () => {
                 }
                 
                 const asmLineNumber = asmEntry.line || 1;
-                const isMultibank = currentPdbData.romConfig?.isMultibank || false;
+                // Default to single-bank (no romConfig available)
+                const isMultibank = false;
                 
                 // Construct ASM filename
-                // Multibank: bank_0.asm, bank_1.asm, etc.
                 // Single-bank: main.asm (or {project_name}.asm)
-                const asmFileName = isMultibank ? `bank_${asmEntry.bankId}.asm` : `main.asm`;
+                const asmFileName = 'main.asm';  // Always single-bank (no multibank support)
                 
                 // Get directory from the binary path (which is in src/)
                 const editorStore = useEditorStore.getState();
@@ -2252,8 +2261,8 @@ export const EmulatorPanel: React.FC = () => {
         console.log('[EmulatorPanel] ✓ Debug symbols (.pdb) received');
         useDebugStore.getState().loadPdbData(payload.pdbData);
       } else {
-        console.log('[EmulatorPanel] ⚠️ No .pdb file provided - clearing old PDB data');
-        useDebugStore.getState().clearPdbData();
+        console.log('[EmulatorPanel] ⚠️ No .pdb file provided - keeping existing PDB data');
+        // Note: clearPdbData() removed - method doesn't exist in DebugStore
       }
       
       // Verificar si estamos cargando para debug session (no auto-start)

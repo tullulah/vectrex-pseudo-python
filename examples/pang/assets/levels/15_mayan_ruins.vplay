@@ -1,0 +1,42 @@
+{
+  "version": "2.0",
+  "type": "level",
+  "metadata": {
+    "name": "15_mayan_ruins",
+    "displayName": "MAYAN RUINS (MX)",
+    "author": "Pang Team",
+    "difficulty": "very_hard",
+    "levelNumber": 15,
+    "mapPosition": {
+      "x": -45,
+      "y": 0
+    }
+  },
+  "worldBounds": {
+    "xMin": -96,
+    "xMax": 95,
+    "yMin": -128,
+    "yMax": 127
+  },
+  "gameConfig": {
+    "enemyCount": 6,
+    "enemySpeed": 4,
+    "timeLimit": 0
+  },
+  "layers": {
+    "background": [
+      {
+        "id": "mayan_bg_bg",
+        "type": "background",
+        "vectorName": "mayan_bg",
+        "x": 0,
+        "y": 0,
+        "rotation": 0,
+        "scale": 1,
+        "physicsEnabled": false,
+        "layer": "background"
+      }
+    ],
+    "gameplay": []
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "version": "2.0",
+  "type": "level",
+  "metadata": {
+    "name": "06_taj_mahal",
+    "displayName": "TAJ MAHAL (IN)",
+    "author": "Pang Team",
+    "difficulty": "medium",
+    "levelNumber": 6,
+    "mapPosition": {
+      "x": 50,
+      "y": 70
+    }
+  },
+  "worldBounds": {
+    "xMin": -96,
+    "xMax": 95,
+    "yMin": -128,
+    "yMax": 127
+  },
+  "gameConfig": {
+    "enemyCount": 3,
+    "enemySpeed": 2,
+    "timeLimit": 0
+  },
+  "layers": {
+    "background": [
+      {
+        "id": "taj_bg_bg",
+        "type": "background",
+        "vectorName": "taj_bg",
+        "x": 0,
+        "y": 0,
+        "rotation": 0,
+        "scale": 1,
+        "physicsEnabled": false,
+        "layer": "background"
+      }
+    ],
+    "gameplay": []
+  }
+}

@@ -439,10 +439,10 @@ export const VPY_FUNCTIONS: VPyFunction[] = [
     syntax: "LOAD_LEVEL(level_name)",
     description: "Loads a level from .vplay asset file into RAM, extracting metadata and layer pointers",
     parameters: [
-      { name: "level_name", type: "string", description: "Name of the .vplay level file (without extension) from assets/playground/", required: true }
+      { name: "level_name", type: "string", description: "Name of the .vplay level file (without extension) from assets/levels/", required: true }
     ],
     examples: [
-      "# Load level from assets/playground/test_level.vplay",
+      "# Load level from assets/levels/",
       "level_ptr = LOAD_LEVEL(\"test_level\")",
       "",
       "# Access level data after loading",

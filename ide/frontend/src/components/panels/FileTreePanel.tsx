@@ -439,10 +439,10 @@ export const FileTreePanel: React.FC = () => {
     if (node.isDir) {
       toggleDir(node.path);
     } else {
-      // Handle .vplay files specially - open playground in Activity Bar
-      if (node.name.endsWith('.vplay')) {
+      // Handle .vplay files in assets/levels/ - open in playground editor
+      if (node.name.endsWith('.vplay') && node.path.includes('assets/levels/')) {
         const sceneName = node.name.replace('.vplay', '');
-        console.log('[FileTree] Opening playground scene:', sceneName);
+        console.log('[FileTree] Opening level scene:', sceneName);
         
         // Switch to playground view in Activity Bar
         const switchEvent = new CustomEvent('activity:switchToPlayground');

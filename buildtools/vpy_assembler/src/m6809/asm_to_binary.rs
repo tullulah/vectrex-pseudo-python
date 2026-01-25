@@ -584,6 +584,7 @@ fn parse_and_emit_instruction(emitter: &mut BinaryEmitter, line: &str, equates: 
         "BSR" => emit_bsr(emitter, operand, last_global_label),
         "RTS" => { emitter.rts(); Ok(()) },
         "NOP" => { emitter.nop(); Ok(()) },
+        "DAA" => { emitter.daa(); Ok(()) },
         "BRA" => emit_bra(emitter, operand, last_global_label),
         "BEQ" => emit_beq(emitter, operand, last_global_label),
         "BNE" => emit_bne(emitter, operand, last_global_label),
@@ -628,6 +629,8 @@ fn parse_and_emit_instruction(emitter: &mut BinaryEmitter, line: &str, equates: 
         "SUBD" => emit_subd(emitter, operand, equates),
         "SBCA" => emit_sbca(emitter, operand, equates),
         "SBCB" => emit_sbcb(emitter, operand, equates),
+        "ADCA" => emit_adca(emitter, operand, equates),
+        "ADCB" => emit_adcb(emitter, operand, equates),
         
         // === LOGIC ===
         "ANDA" => emit_anda(emitter, operand, equates),
@@ -637,6 +640,7 @@ fn parse_and_emit_instruction(emitter: &mut BinaryEmitter, line: &str, equates: 
         "ORB" => emit_orb(emitter, operand, equates),
         "ORA" => emit_ora(emitter, operand, equates),
         "EORA" => emit_eora(emitter, operand, equates),
+        "EORB" => emit_eorb(emitter, operand, equates),
         
         // === REGISTER OPS ===
         "CLRA" => { emitter.clra(); Ok(()) },
@@ -659,6 +663,7 @@ fn parse_and_emit_instruction(emitter: &mut BinaryEmitter, line: &str, equates: 
         "RORA" => { emitter.rora(); Ok(()) },
         "RORB" => { emitter.rorb(); Ok(()) },
         "ABX" => { emitter.abx(); Ok(()) },
+        "MUL" => { emitter.mul(); Ok(()) },
         "TSTA" => { emitter.tsta(); Ok(()) },
         "TSTB" => { emitter.tstb(); Ok(()) },
         "TST" => emit_tst(emitter, operand, equates),
@@ -688,6 +693,7 @@ fn parse_and_emit_instruction(emitter: &mut BinaryEmitter, line: &str, equates: 
         "STX" => emit_stx(emitter, operand, equates),
         "STY" => emit_sty(emitter, operand, equates),
         "STU" => emit_stu(emitter, operand, equates),
+        "STS" => emit_sts(emitter, operand, equates),
         "LEAX" | "LEAY" | "LEAS" | "LEAU" => emit_lea(emitter, &mnemonic, operand),
         
         // === STACK OPS ===
@@ -1709,6 +1715,98 @@ fn emit_addb(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<Strin
     }
 }
 
+fn emit_adca(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String, u16>) -> Result<(), String> {
+    if operand.starts_with('#') {
+        let val = parse_immediate(&operand[1..])?;
+        emitter.adca_immediate(val);
+        Ok(())
+    } else if operand.starts_with('<') {
+        // Direct mode
+        let addr_str = operand[1..].trim();
+        match evaluate_expression(addr_str, equates) {
+            Ok(addr) => {
+                if addr > 0xFF {
+                    return Err(format!("Direct mode address out of range: 0x{:04X}", addr));
+                }
+                emitter.adca_direct(addr as u8);
+                Ok(())
+            }
+            Err(msg) => Err(msg)
+        }
+    } else if operand.contains(',') {
+        // Indexed mode
+        let (postbyte, offset) = parse_indexed_mode(operand)?;
+        emitter.adca_indexed(postbyte);
+        if let Some(off) = offset {
+            emitter.emit(off as u8);
+        }
+        Ok(())
+    } else {
+        // Extended mode
+        match evaluate_expression(operand, equates) {
+            Ok(addr) => {
+                emitter.adca_extended(addr);
+                Ok(())
+            }
+            Err(msg) => {
+                if msg.starts_with("SYMBOL:") {
+                    let (symbol, addend) = parse_symbol_and_addend(&msg)?;
+                    emitter.emit_extended_symbol_ref(0xB9, &symbol, addend);
+                    Ok(())
+                } else {
+                    Err(msg)
+                }
+            }
+        }
+    }
+}
+
+fn emit_adcb(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String, u16>) -> Result<(), String> {
+    if operand.starts_with('#') {
+        let val = parse_immediate(&operand[1..])?;
+        emitter.adcb_immediate(val);
+        Ok(())
+    } else if operand.starts_with('<') {
+        // Direct mode
+        let addr_str = operand[1..].trim();
+        match evaluate_expression(addr_str, equates) {
+            Ok(addr) => {
+                if addr > 0xFF {
+                    return Err(format!("Direct mode address out of range: 0x{:04X}", addr));
+                }
+                emitter.adcb_direct(addr as u8);
+                Ok(())
+            }
+            Err(msg) => Err(msg)
+        }
+    } else if operand.contains(',') {
+        // Indexed mode
+        let (postbyte, offset) = parse_indexed_mode(operand)?;
+        emitter.adcb_indexed(postbyte);
+        if let Some(off) = offset {
+            emitter.emit(off as u8);
+        }
+        Ok(())
+    } else {
+        // Extended mode
+        match evaluate_expression(operand, equates) {
+            Ok(addr) => {
+                emitter.adcb_extended(addr);
+                Ok(())
+            }
+            Err(msg) => {
+                if msg.starts_with("SYMBOL:") {
+                    let (symbol, addend) = parse_symbol_and_addend(&msg)?;
+                    emitter.emit_extended_symbol_ref(0xF9, &symbol, addend);
+                    Ok(())
+                } else {
+                    Err(msg)
+                }
+            }
+        }
+    }
+}
+
 fn emit_suba(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String, u16>) -> Result<(), String> {
     if operand.starts_with('#') {
         let val = parse_immediate(&operand[1..])?;
@@ -2157,6 +2255,50 @@ fn emit_eora(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<Strin
                     emitter.add_symbol_ref(symbol, false, 2);
                     emitter.emit(0xB8);
                     emitter.emit_word(0);
+                    Ok(())
+                } else {
+                    Err(msg)
+                }
+            }
+        }
+    }
+}
+
+fn emit_eorb(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String, u16>) -> Result<(), String> {
+    if operand.starts_with('#') {
+        // IMMEDIATE MODE: EORB #$value
+        let val = parse_immediate(&operand[1..])?;
+        emitter.eorb_immediate(val);
+        Ok(())
+    } else if operand.contains(',') {
+        // INDEXED MODE: EORB offset,register
+        emitter.emit(0xE8); // EORB indexed opcode
+        let (postbyte, offset) = parse_indexed_mode(operand)?;
+        emitter.emit(postbyte);
+        if let Some(off) = offset {
+            emitter.emit(off as u8);
+        }
+        Ok(())
+    } else {
+        // EXTENDED or DIRECT MODE
+        match evaluate_expression(operand, equates) {
+            Ok(addr) => {
+                if addr < 256 {
+                    // DIRECT MODE (8-bit address)
+                    emitter.emit(0xD8); // EORB direct opcode
+                    emitter.emit(addr as u8);
+                } else {
+                    // EXTENDED MODE (16-bit address)
+                    emitter.eorb_extended(addr);
+                }
+                Ok(())
+            }
+            Err(msg) => {
+                if msg.starts_with("SYMBOL:") {
+                    // Unresolved symbol - assume EXTENDED mode
+                    let symbol = &msg[7..];
+                    emitter.add_symbol_ref(symbol, false, 2);
+                    emitter.eorb_extended(0); // Placeholder, will be patched
                     Ok(())
                 } else {
                     Err(msg)
@@ -3015,6 +3157,64 @@ fn emit_stu(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
     } else {
         let addr = parse_address(operand)?;
         emitter.stu_extended(addr);
+    }
+    Ok(())
+}
+
+fn emit_sts(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String, u16>) -> Result<(), String> {
+    // STS (Store Stack Pointer) - Page 2 instruction (prefix 0x10)
+    // Addressing modes: Direct (0x10DF), Indexed (0x10EF), Extended (0x10FF)
+    if operand.contains(',') {
+        // INDEXED MODE: STS offset,register
+        let (postbyte, offset) = parse_indexed_mode(operand)?;
+        emitter.sts_indexed(postbyte);
+        if let Some(off) = offset {
+            emitter.emit(off as u8);
+        }
+    } else if operand.starts_with('<') {
+        // DIRECT MODE: STS <$addr (8-bit address)
+        let operand_without_prefix = &operand[1..];
+        match resolve_address(operand_without_prefix, equates) {
+            Ok(addr) => {
+                if addr >= 256 {
+                    return Err(format!("Direct mode address out of range (0-255): ${:X}", addr));
+                }
+                emitter.sts_direct(addr as u8);
+            },
+            Err(e) if e.starts_with("SYMBOL:") => {
+                // Direct mode with symbol - emit opcode and add symbol ref for 1 byte
+                let (symbol, addend) = parse_symbol_and_addend(&e)?;
+                if addend >= 256 {
+                    return Err(format!("Direct mode addend out of range (0-255): {}", addend));
+                }
+                emitter.emit(0x10);
+                emitter.emit(0xDF); // STS direct opcode bytes
+                emitter.add_symbol_ref(&symbol, false, 1); // 1-byte address
+                emitter.emit(addend as u8);
+            },
+            Err(e) => return Err(e),
+        }
+    } else {
+        // EXTENDED MODE: STS $addr (16-bit address) or STS SYMBOL
+        let upper = operand.to_uppercase();
+        if let Some(&addr) = equates.get(&upper) {
+            emitter.sts_extended(addr);
+        } else {
+            match resolve_address(operand, equates) {
+                Ok(addr) => {
+                    emitter.sts_extended(addr);
+                },
+                Err(e) if e.starts_with("SYMBOL:") => {
+                    // Page 2 extended mode with symbol - emit manually
+                    let (symbol, addend) = parse_symbol_and_addend(&e)?;
+                    emitter.emit(0x10);
+                    emitter.emit(0xFF); // STS extended opcode bytes
+                    emitter.add_symbol_ref(&symbol, false, 2); // 2-byte address
+                    emitter.emit_word(addend as u16);
+                },
+                Err(e) => return Err(e),
+            }
+        }
     }
     Ok(())
 }
