@@ -875,62 +875,14 @@ fn cmd_build(input: &PathBuf, output: Option<PathBuf>, rom_size: usize, bank_siz
                         
                         // Load VECTREX.I for BIOS symbols
                         let vectrex_i_path = include_dir.join("VECTREX.I");
-                        let vectrex_i_content = if vectrex_i_path.exists() {
+                        let _vectrex_i_content = if vectrex_i_path.exists() {
                             std::fs::read_to_string(&vectrex_i_path).ok()
                         } else {
                             None
                         };
                         
-                        let rom_config = vpy_debug_gen::RomConfig {
-                            total_size: rom_size as u32,
-                            bank_size: bank_size as u32,
-                            bank_count: (rom_size / bank_size) as u32,
-                            is_multibank: true,
-                        };
-                        
-                        // Generate PDB from ASM source
-                        match vpy_debug_gen::generate_pdb(
-                            &generated.asm_source,
-                            vectrex_i_content.as_deref(),
-                            rom_config,
-                        ) {
-                            Ok(mut pdb) => {
-                                // Convert u16 symbols to u32 for update function
-                                let symbol_table_u32: std::collections::HashMap<String, u32> = symbol_table
-                                    .iter()
-                                    .map(|(k, v)| (k.clone(), *v as u32))
-                                    .collect();
-                                vpy_debug_gen::update_pdb_addresses(&mut pdb, &symbol_table_u32);
-                                
-                                // Populate line maps (VPy and ASM line mappings)
-                                vpy_debug_gen::populate_line_maps(&mut pdb, &generated.asm_source);
-                                
-                                // Write PDB file
-                                let pdb_path = output_path_mb.with_extension("pdb");
-                                match pdb.to_json() {
-                                    Ok(json) => {
-                                        std::fs::write(&pdb_path, json)
-                                            .context("Failed to write PDB file")?;
-                                        println!("  {} PDB written: {}", "✓".green(), pdb_path.display());
-                                        if verbose {
-                                            println!("    Variables: {}", pdb.variables.len());
-                                            println!("    Labels: {}", pdb.labels.len());
-                                            println!("    Functions: {}", pdb.functions.len());
-                                            println!("    BIOS symbols: {}", pdb.bios_symbols.len());
-                                            println!("    VPy line mappings: {}", pdb.vpy_line_map.len());
-                                            println!("    ASM line mappings: {}", pdb.asm_line_map.len());
-                                            println!("    Total symbols: {}", symbol_table.len());
-                                        }
-                                    }
-                                    Err(e) => {
-                                        eprintln!("  {} PDB serialization failed: {}", "⚠".yellow(), e);
-                                    }
-                                }
-                            }
-                            Err(e) => {
-                                eprintln!("  {} PDB generation failed: {}", "⚠".yellow(), e);
-                            }
-                        }
+                        // TODO: PDB generation disabled - vpy_debug_gen incomplete
+                        eprintln!("  ⚠ PDB generation skipped (buildtools implementation incomplete)");
                     }
                     
                     println!("\n{}", format!("✓ BUILD SUCCESS (multibank): {} KB written to {}", 
@@ -1199,62 +1151,14 @@ fn cmd_build(input: &PathBuf, output: Option<PathBuf>, rom_size: usize, bank_siz
                     
                     // Load VECTREX.I for BIOS symbols
                     let vectrex_i_path = include_dir.join("VECTREX.I");
-                    let vectrex_i_content = if vectrex_i_path.exists() {
+                    let _vectrex_i_content = if vectrex_i_path.exists() {
                         std::fs::read_to_string(&vectrex_i_path).ok()
                     } else {
                         None
                     };
                     
-                    let rom_config = vpy_debug_gen::RomConfig {
-                        total_size: rom_size as u32,
-                        bank_size: bank_size as u32,
-                        bank_count: (rom_size / bank_size) as u32,
-                        is_multibank: true,
-                    };
-                    
-                    // Generate PDB from ASM source
-                    match vpy_debug_gen::generate_pdb(
-                        &generated.asm_source,
-                        vectrex_i_content.as_deref(),
-                        rom_config,
-                    ) {
-                        Ok(mut pdb) => {
-                            // Convert u16 symbols to u32 for update function
-                            let symbol_table_u32: std::collections::HashMap<String, u32> = symbol_table
-                                .iter()
-                                .map(|(k, v)| (k.clone(), *v as u32))
-                                .collect();
-                            vpy_debug_gen::update_pdb_addresses(&mut pdb, &symbol_table_u32);
-                            
-                            // Populate line maps (VPy and ASM line mappings)
-                            vpy_debug_gen::populate_line_maps(&mut pdb, &generated.asm_source);
-                            
-                            // Write PDB file
-                            let pdb_path = output_path_mb.with_extension("pdb");
-                            match pdb.to_json() {
-                                Ok(json) => {
-                                    std::fs::write(&pdb_path, json)
-                                        .context("Failed to write PDB file")?;
-                                    println!("  {} PDB written: {}", "✓".green(), pdb_path.display());
-                                    if verbose {
-                                        println!("    Variables: {}", pdb.variables.len());
-                                        println!("    Labels: {}", pdb.labels.len());
-                                        println!("    Functions: {}", pdb.functions.len());
-                                        println!("    BIOS symbols: {}", pdb.bios_symbols.len());
-                                        println!("    VPy line mappings: {}", pdb.vpy_line_map.len());
-                                        println!("    ASM line mappings: {}", pdb.asm_line_map.len());
-                                        println!("    Total symbols: {}", symbol_table.len());
-                                    }
-                                }
-                                Err(e) => {
-                                    eprintln!("  {} PDB serialization failed: {}", "⚠".yellow(), e);
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            eprintln!("  {} PDB generation failed: {}", "⚠".yellow(), e);
-                        }
-                    }
+                    // TODO: PDB generation disabled - vpy_debug_gen incomplete
+                    eprintln!("  ⚠ PDB generation skipped (buildtools implementation incomplete)");
                 }
                 
                 println!("\n{}", format!("✓ Build SUCCESS (multibank): {} KB written to {}", 
@@ -1340,61 +1244,14 @@ fn cmd_build(input: &PathBuf, output: Option<PathBuf>, rom_size: usize, bank_siz
         println!("\n{}", "Phase 9: Generating debug symbols...".bright_cyan());
         
         // Load VECTREX.I for BIOS symbols
-        let vectrex_i_content = if include_dir.join("VECTREX.I").exists() {
+        let _vectrex_i_content = if include_dir.join("VECTREX.I").exists() {
             std::fs::read_to_string(include_dir.join("VECTREX.I")).ok()
         } else {
             None
         };
         
-        let rom_config = vpy_debug_gen::RomConfig {
-            total_size: rom_size as u32,
-            bank_size: bank_size as u32,
-            bank_count: if rom_size > 32768 { (rom_size / bank_size) as u32 } else { 1 },
-            is_multibank: rom_size > 32768,
-        };
-        
-        // Generate PDB from ASM source
-        match vpy_debug_gen::generate_pdb(
-            &generated.asm_source,
-            vectrex_i_content.as_deref(),
-            rom_config,
-        ) {
-            Ok(mut pdb) => {
-                // Update addresses from linker symbol table
-                let symbol_table: std::collections::HashMap<String, u32> = rom.symbols
-                    .iter()
-                    .map(|(k, v)| (k.clone(), v.absolute_address))
-                    .collect();
-                vpy_debug_gen::update_pdb_addresses(&mut pdb, &symbol_table);
-                
-                // Populate line maps (VPy and ASM line mappings)
-                vpy_debug_gen::populate_line_maps(&mut pdb, &generated.asm_source);
-                
-                // Write PDB file
-                let pdb_path = output_path.with_extension("pdb");
-                match pdb.to_json() {
-                    Ok(json) => {
-                        std::fs::write(&pdb_path, json)
-                            .context("Failed to write PDB file")?;
-                        println!("  {} PDB written: {}", "✓".green(), pdb_path.display());
-                        if verbose {
-                            println!("    Variables: {}", pdb.variables.len());
-                            println!("    Labels: {}", pdb.labels.len());
-                            println!("    Functions: {}", pdb.functions.len());
-                            println!("    BIOS symbols: {}", pdb.bios_symbols.len());
-                            println!("    VPy line mappings: {}", pdb.vpy_line_map.len());
-                            println!("    ASM line mappings: {}", pdb.asm_line_map.len());
-                        }
-                    }
-                    Err(e) => {
-                        eprintln!("  {} PDB serialization failed: {}", "⚠".yellow(), e);
-                    }
-                }
-            }
-            Err(e) => {
-                eprintln!("  {} PDB generation failed: {}", "⚠".yellow(), e);
-            }
-        }
+        // TODO: PDB generation disabled - vpy_debug_gen incomplete
+        eprintln!("  ⚠ PDB generation skipped (buildtools implementation incomplete)");
     }
     
     println!("\n{}", format!("✓ Build SUCCESS: {} bytes written to {}", 
