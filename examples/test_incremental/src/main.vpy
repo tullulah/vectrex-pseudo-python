@@ -15,7 +15,7 @@ def loop():
     SET_INTENSITY(title_intensity)
     
     PRINT_TEXT(0,-40,"HOLA")
-    #DRAW_VECTOR("logo", 0, 0)
-    # if(playing == 0):
-    #     playing = 1
-    #     PLAY_MUSIC("music1")
+    DRAW_VECTOR("logo", 0, 0)
+    if(playing == 0):
+        playing = 1
+        PLAY_MUSIC("music1")
