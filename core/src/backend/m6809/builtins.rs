@@ -34,6 +34,7 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
         "J1_X"|"J1_Y"|"UPDATE_BUTTONS"|"J1_BUTTON_1"|"J1_BUTTON_2"|"J1_BUTTON_3"|"J1_BUTTON_4"|
         "J2_X"|"J2_Y"|"J2_BUTTON_1"|"J2_BUTTON_2"|"J2_BUTTON_3"|"J2_BUTTON_4"|
         "LOAD_LEVEL"|"SHOW_LEVEL"|"UPDATE_LEVEL"|
+        "CREATE_ANIM"|"DESTROY_ANIM"|"UPDATE_ANIM"|"DRAW_ANIM"|"SET_ANIM_STATE"|"SET_ANIM_MIRROR"|
         "SIN"|"COS"|"TAN"|"MATH_SIN"|"MATH_COS"|"MATH_TAN"|
     "ABS"|"MATH_ABS"|"MIN"|"MATH_MIN"|"MAX"|"MATH_MAX"|"CLAMP"|"MATH_CLAMP"|"LEN"|
     "MUL_A"|"DIV_A"|"MOD_A"|
@@ -627,6 +628,119 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
         add_native_call_comment(out, "UPDATE_LEVEL");
         out.push_str("    JSR UPDATE_LEVEL_RUNTIME\n");
         out.push_str("    CLRA\n    CLRB\n    STD RESULT\n");
+        return true;
+    }
+    
+    // ========== ANIMATION SYSTEM BUILTINS (Phase 2) ==========
+    
+    // CREATE_ANIM: Create animation instance from asset name
+    // Usage: anim_id = CREATE_ANIM("player_walk")
+    // Returns: Instance ID (0-15), or -1 if pool is full
+    if up == "CREATE_ANIM" && args.len() == 1 {
+        if let Expr::StringLit(anim_name) = &args[0] {
+            // Check if animation asset exists
+            let anim_exists = opts.assets.iter().any(|a| {
+                a.name == *anim_name && matches!(a.asset_type, crate::codegen::AssetType::Animation)
+            });
+            
+            if anim_exists {
+                let symbol = format!("_{}_ANIM", anim_name.to_uppercase().replace("-", "_").replace(" ", "_"));
+                out.push_str(&format!("; CREATE_ANIM(\"{}\") - allocate instance from pool\n", anim_name));
+                out.push_str(&format!("    LDX #{}        ; Load animation data pointer\n", symbol));
+                out.push_str("    JSR CREATE_ANIM_RUNTIME  ; Returns instance ID in D\n");
+                out.push_str("    STD RESULT               ; Store instance ID (0-15 or -1)\n");
+                return true;
+            } else {
+                out.push_str(&format!("; ERROR: Animation asset '{}' not found\n", anim_name));
+                out.push_str("    LDD #-1\n    STD RESULT  ; Return -1 (error)\n");
+                return true;
+            }
+        }
+    }
+    
+    // DESTROY_ANIM: Free animation instance back to pool
+    // Usage: DESTROY_ANIM(anim_id)
+    if up == "DESTROY_ANIM" && args.len() == 1 {
+        out.push_str("; DESTROY_ANIM(instance_id) - free instance\n");
+        emit_expr(&args[0], out, fctx, string_map, opts);
+        out.push_str("    LDD RESULT               ; Instance ID\n");
+        out.push_str("    JSR DESTROY_ANIM_RUNTIME ; Mark as inactive\n");
+        out.push_str("    LDD #0\n    STD RESULT\n");
+        return true;
+    }
+    
+    // UPDATE_ANIM: Update animation position and advance frame
+    // Usage: UPDATE_ANIM(anim_id, x, y)
+    if up == "UPDATE_ANIM" && args.len() == 3 {
+        out.push_str("; UPDATE_ANIM(instance_id, x, y) - update position + advance frame\n");
+        
+        // Evaluate instance_id → RESULT
+        emit_expr(&args[0], out, fctx, string_map, opts);
+        out.push_str("    LDD RESULT\n");
+        out.push_str("    STD TMPPTR               ; Save instance_id\n");
+        
+        // Evaluate x → RESULT
+        emit_expr(&args[1], out, fctx, string_map, opts);
+        out.push_str("    LDD RESULT\n");
+        out.push_str("    STD TMPPTR+2             ; Save X position\n");
+        
+        // Evaluate y → RESULT
+        emit_expr(&args[2], out, fctx, string_map, opts);
+        out.push_str("    LDD RESULT\n");
+        out.push_str("    STD TMPPTR+4             ; Save Y position\n");
+        
+        // Call runtime with all 3 params
+        out.push_str("    LDD TMPPTR               ; Instance ID\n");
+        out.push_str("    LDX TMPPTR+2             ; X position\n");
+        out.push_str("    LDY TMPPTR+4             ; Y position\n");
+        out.push_str("    JSR UPDATE_ANIM_RUNTIME  ; Update instance\n");
+        out.push_str("    LDD #0\n    STD RESULT\n");
+        return true;
+    }
+    
+    // DRAW_ANIM: Draw current animation frame
+    // Usage: DRAW_ANIM(anim_id)
+    if up == "DRAW_ANIM" && args.len() == 1 {
+        out.push_str("; DRAW_ANIM(instance_id) - render current frame\n");
+        emit_expr(&args[0], out, fctx, string_map, opts);
+        out.push_str("    LDD RESULT               ; Instance ID\n");
+        out.push_str("    JSR DRAW_ANIM_RUNTIME    ; Draw at stored position\n");
+        out.push_str("    LDD #0\n    STD RESULT\n");
+        return true;
+    }
+    
+    // SET_ANIM_STATE: Change animation state (for state machines)
+    // Usage: SET_ANIM_STATE(anim_id, "walking")
+    if up == "SET_ANIM_STATE" && args.len() == 2 {
+        if let Expr::StringLit(state_name) = &args[1] {
+            out.push_str(&format!("; SET_ANIM_STATE(instance_id, \"{}\") - change state\n", state_name));
+            emit_expr(&args[0], out, fctx, string_map, opts);
+            out.push_str("    LDD RESULT               ; Instance ID\n");
+            // TODO: State lookup requires animation data pointer - implement in Phase 4
+            out.push_str(&format!("; TODO: State lookup for '{}'\n", state_name));
+            out.push_str("    LDD #0\n    STD RESULT\n");
+            return true;
+        }
+    }
+    
+    // SET_ANIM_MIRROR: Set mirror mode (0=none, 1=X, 2=Y, 3=XY)
+    // Usage: SET_ANIM_MIRROR(anim_id, mirror)
+    if up == "SET_ANIM_MIRROR" && args.len() == 2 {
+        out.push_str("; SET_ANIM_MIRROR(instance_id, mirror) - set mirror flags\n");
+        
+        // Evaluate instance_id
+        emit_expr(&args[0], out, fctx, string_map, opts);
+        out.push_str("    LDD RESULT\n");
+        out.push_str("    STD TMPPTR               ; Save instance_id\n");
+        
+        // Evaluate mirror value
+        emit_expr(&args[1], out, fctx, string_map, opts);
+        out.push_str("    LDD RESULT               ; Mirror value (0-3)\n");
+        
+        // Call runtime
+        out.push_str("    LDX TMPPTR               ; Instance ID\n");
+        out.push_str("    JSR SET_ANIM_MIRROR_RUNTIME\n");
+        out.push_str("    LDD #0\n    STD RESULT\n");
         return true;
     }
     

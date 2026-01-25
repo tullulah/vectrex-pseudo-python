@@ -80,6 +80,14 @@ static BUILTIN_ARITIES: &[(&str, usize)] = &[
     ("SFX_UPDATE", 0),      // Process SFX envelope/pitch per frame (deprecated - use AUDIO_UPDATE)
     ("STOP_MUSIC", 0),      // Stop background music
     
+    // Animation functions (new - Phase 2)
+    ("CREATE_ANIM", 1),     // Create animation instance: name -> returns instance ID (0-15)
+    ("DESTROY_ANIM", 1),    // Destroy animation instance: instance_id
+    ("UPDATE_ANIM", 3),     // Update animation: instance_id, x, y
+    ("DRAW_ANIM", 1),       // Draw current animation frame: instance_id
+    ("SET_ANIM_STATE", 2),  // Set animation state: instance_id, state_name
+    ("SET_ANIM_MIRROR", 2), // Set mirror mode: instance_id, mirror (0-3)
+    
     // Malban algorithm (vector list processing)
     ("DRAW_VECTOR_LIST", 4), // Draw vector list: (list_ptr, y, x, scale)
     
@@ -194,10 +202,11 @@ pub struct AssetInfo {
 #[allow(dead_code)]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AssetType {
-    Vector,  // .vec file
-    Music,   // .vmus file (background music, loops)
-    Sfx,     // .vsfx file (sound effect, parametric SFXR-style)
-    Level,   // .vplay file (level data for games)
+    Vector,     // .vec file
+    Music,      // .vmus file (background music, loops)
+    Sfx,        // .vsfx file (sound effect, parametric SFXR-style)
+    Level,      // .vplay file (level data for games)
+    Animation,  // .vanim file (sprite animations with state machines)
 }
 
 /// Buffer requirements calculated from .vplay analysis

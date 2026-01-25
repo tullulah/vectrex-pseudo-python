@@ -113,11 +113,12 @@ fn analyze_used_assets(module: &Module, assets: &[crate::codegen::AssetInfo]) ->
             Expr::Call(call_info) => {
                 let name_upper = call_info.name.to_uppercase();
                 // Check for DRAW_VECTOR("asset_name", x, y), DRAW_VECTOR_EX("asset_name", x, y, mirror, intensity), 
-                // PLAY_MUSIC("asset_name"), PLAY_SFX("asset_name"), or LOAD_LEVEL("level_name")
+                // PLAY_MUSIC("asset_name"), PLAY_SFX("asset_name"), CREATE_ANIM("asset_name"), or LOAD_LEVEL("level_name")
                 if (name_upper == "DRAW_VECTOR" && call_info.args.len() == 3) || 
                    (name_upper == "DRAW_VECTOR_EX" && call_info.args.len() == 5) ||
                    (name_upper == "PLAY_MUSIC" && call_info.args.len() == 1) ||
                    (name_upper == "PLAY_SFX" && call_info.args.len() == 1) ||
+                   (name_upper == "CREATE_ANIM" && call_info.args.len() == 1) ||
                    (name_upper == "LOAD_LEVEL" && call_info.args.len() == 1) {
                     if let Expr::StringLit(asset_name) = &call_info.args[0] {
                         eprintln!("[DEBUG] Found asset usage: {} ({})", asset_name, name_upper);
@@ -1262,6 +1263,18 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                             Err(e) => {
                                 out.push_str(&format!("; ERROR: Failed to load/generate SFX asset {}: {}\n", asset.path, e));
                             }
+                        }
+                    },
+                    crate::codegen::AssetType::Animation => {
+                        // Animation assets - load and generate ASM data
+                        if let Ok(anim) = crate::animres::VAnimAnimation::load(std::path::Path::new(&asset.path)) {
+                            out.push_str(&format!("; Animation Asset: {} (from {})\n", asset.name, asset.path));
+                            out.push_str(&format!("; {} frame(s), {} state(s)\n", anim.frames.len(), anim.states.len()));
+                            let asm = anim.compile_to_asm_with_name(Some(&asset.name));
+                            out.push_str(&asm);
+                            out.push_str("\n");
+                        } else {
+                            out.push_str(&format!("; ERROR: Failed to load animation asset: {}\n", asset.path));
                         }
                     }
                 }
