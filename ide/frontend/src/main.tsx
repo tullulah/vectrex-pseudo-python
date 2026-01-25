@@ -20,6 +20,8 @@ import { ActivityBar, ActivityBarItem } from './components/ActivityBar.js';
 import { GitPanel } from './components/panels/GitPanel.js';
 import { FileTreePanel } from './components/panels/FileTreePanel.js';
 import { PlaygroundPanel } from './components/panels/PlaygroundPanel.js';
+import { SettingsPanel } from './components/panels/SettingsPanel.js';
+import { useSettings } from './state/settingsStore.js';
 
 // Initialize store reference for cross-store access
 setEditorStoreRef(useEditorStore);
@@ -40,6 +42,9 @@ function App() {
   const allDiagnostics = useEditorStore(s => s.allDiagnostics);
   const setDiagnosticsBySource = useEditorStore(s => s.setDiagnosticsBySource);
   const updateContent = useEditorStore(s => s.updateContent);
+  
+  // Settings
+  const compilerBackend = useSettings(s => s.compiler);
 
   const initializedRef = useRef(false);
 
@@ -468,7 +473,8 @@ function App() {
       
       const args: any = {
         path: filePath,
-        autoStart: autoRun
+        autoStart: autoRun,
+        compilerBackend // from useSettings
       };
       
       // If building from project, include output path
@@ -564,7 +570,7 @@ function App() {
       isCompilingRef.current = false;
       logger.debug('Build', 'Build process completed, flag cleared');
     }
-  }, [documents]);
+  }, [documents, compilerBackend]);
 
   const commandExec = useCallback(async (id: string, payload?: any) => {
     const apiFiles: any = (window as any).files;
@@ -763,7 +769,8 @@ def loop():
 
           const args: any = {
             path: filePath,
-            autoStart: false  // No auto-run, queremos control manual
+            autoStart: false,  // No auto-run, queremos control manual
+            compilerBackend // from useSettings
           };
 
           // Si el documento está sucio, enviarlo para que se guarde antes de compilar
@@ -1478,6 +1485,7 @@ def loop():
                 }}>
                   {activeSidebarPanel === 'files' && <FileTreePanel />}
                   {activeSidebarPanel === 'git' && <GitPanel />}
+                  {activeSidebarPanel === 'settings' && <SettingsPanel />}
                 </div>
                 {/* Resize handle */}
                 <div

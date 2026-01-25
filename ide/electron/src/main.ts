@@ -830,16 +830,38 @@ ipcMain.handle('bin:open', async () => {
 // Removed ipcMain.handle('emu:load') legacy handler.
 
 // Resolve compiler binary path. Supports env override VPY_COMPILER_BIN.
-function resolveCompilerPath(): string | null {
+// @param backend: 'buildtools' (default, new modular compiler) or 'core' (legacy compiler)
+function resolveCompilerPath(backend: 'buildtools' | 'core' = 'buildtools'): string | null {
   const override = process.env.VPY_COMPILER_BIN;
   if (override) {
     try { if (existsSync(override)) return override; } catch {}
     mainWindow?.webContents.send('run://stderr', `VPY_COMPILER_BIN set but file not found: ${override}`);
   }
-  // NEW BUILDTOOLS COMPILER: vpy_cli (replaces vectrexc)
-  const names = process.platform === 'win32' ? ['vpy_cli.exe'] : ['vpy_cli'];
+  
   const cwd = process.cwd();
   const candidates: string[] = [];
+  
+  if (backend === 'core') {
+    // LEGACY CORE COMPILER: vectrexc
+    const names = process.platform === 'win32' ? ['vectrexc.exe'] : ['vectrexc'];
+    for (const exe of names) {
+      candidates.push(
+        join(cwd, 'target', 'debug', exe),
+        join(cwd, 'target', 'release', exe),
+        join(cwd, 'core', 'target', 'debug', exe),
+        join(cwd, 'core', 'target', 'release', exe),
+        join(cwd, exe),
+        join(cwd, '..', '..', 'target', 'debug', exe),
+        join(cwd, '..', '..', 'target', 'release', exe),
+      );
+    }
+    for (const p of candidates) { try { if (existsSync(p)) return p; } catch {} }
+    mainWindow?.webContents.send('run://stderr', `Core compiler (vectrexc) not found. Tried paths:\n${candidates.join('\n')}\nBuild with: cargo build --bin vectrexc --release`);
+    return null;
+  }
+  
+  // NEW BUILDTOOLS COMPILER: vpy_cli (default)
+  const names = process.platform === 'win32' ? ['vpy_cli.exe'] : ['vpy_cli'];
   for (const exe of names) {
     candidates.push(
       join(cwd, 'buildtools', 'target', 'debug', exe),
@@ -928,8 +950,13 @@ function parseCompilerDiagnostics(output: string, sourceFile: string): Array<{ f
 }
 
 // Exported function for direct invocation (e.g. from MCP server)
-export async function executeCompilation(args: { path: string; saveIfDirty?: { content: string; expectedMTime?: number }; autoStart?: boolean; outputPath?: string }) {
-  const { path, saveIfDirty, autoStart, outputPath } = args || {} as any;
+export async function executeCompilation(args: { path: string; saveIfDirty?: { content: string; expectedMTime?: number }; autoStart?: boolean; outputPath?: string; compilerBackend?: 'buildtools' | 'core' }) {
+  // CRITICAL: Log received args to debug compiler selection
+  console.log('[RUN] executeCompilation received args:', JSON.stringify({ ...args, saveIfDirty: args?.saveIfDirty ? '...' : undefined }));
+  
+  const { path, saveIfDirty, autoStart, outputPath, compilerBackend = 'buildtools' } = args || {} as any;
+  
+  console.log('[RUN] Extracted compilerBackend:', compilerBackend);
   
   // Check if we have a project open - if so, compile the project instead of individual file
   const project = getCurrentProject();
@@ -1014,12 +1041,12 @@ export async function executeCompilation(args: { path: string; saveIfDirty?: { c
   // Re-extract outputPath after potentially reading from .vpyproj
   const finalOutputPath = args.outputPath || outputPath;
   
-  const compiler = resolveCompilerPath();
+  const compiler = resolveCompilerPath(compilerBackend);
   if (!compiler) return { error: 'compiler_not_found' };
   
   // CRITICAL: Always log compiler path for debugging binary resolution
-  console.log('[RUN] ✓ Resolved compiler:', compiler);
-  mainWindow?.webContents.send('run://stdout', `[Compiler] Using: ${compiler}\n`);
+  console.log('[RUN] ✓ Resolved compiler:', compiler, '(backend:', compilerBackend, ')');
+  mainWindow?.webContents.send('run://stdout', `[Compiler] Using: ${compiler} (${compilerBackend})\n`);
   
   const verbose = process.env.VPY_IDE_VERBOSE_RUN === '1';
   if (verbose) console.log('[RUN] spawning compiler', compiler, fsPath);
@@ -1048,19 +1075,29 @@ export async function executeCompilation(args: { path: string; saveIfDirty?: { c
       } catch {}
     }
     
-    const argsv = ['build', fsPath, '--output', finalBinPath];
+    // Build compiler arguments based on backend
+    let argsv: string[];
     
-    // Add ROM size configuration if in project mode (read from .vpyproj if needed)
-    // Default: 32KB single-bank
-    argsv.push('--rom-size', '32768');
-    argsv.push('--bank-size', '32768');
-    
-    // Always generate debug symbols
-    argsv.push('--debug');
-    
-    // If verbose mode, add --verbose flag
-    if (verbose) {
-      argsv.push('--verbose');
+    if (compilerBackend === 'core') {
+      // LEGACY CORE COMPILER (vectrexc) ARGUMENTS
+      // Usage: vectrexc build <file.vpy> --target vectrex --title TITLE --bin [--include-dir DIR]
+      argsv = ['build', fsPath, '--target', 'vectrex', '--title', basename(fsPath).replace(/\.[^.]+$/, '').toUpperCase(), '--bin', '--include-dir', workspaceRoot];
+    } else {
+      // NEW BUILDTOOLS COMPILER (vpy_cli) ARGUMENTS
+      argsv = ['build', fsPath, '--output', finalBinPath];
+      
+      // Add ROM size configuration if in project mode (read from .vpyproj if needed)
+      // Default: 32KB single-bank
+      argsv.push('--rom-size', '32768');
+      argsv.push('--bank-size', '32768');
+      
+      // Always generate debug symbols
+      argsv.push('--debug');
+      
+      // If verbose mode, add --verbose flag
+      if (verbose) {
+        argsv.push('--verbose');
+      }
     }
     
     // CRITICAL: Delete old .asm and .bin files before compilation to avoid stale files
@@ -1212,6 +1249,19 @@ export async function executeCompilation(args: { path: string; saveIfDirty?: { c
           if (pdbExists) {
             const pdbContent = await fs.readFile(pdbPath, 'utf-8');
             pdbData = JSON.parse(pdbContent);
+            
+            // COMPATIBILITY: Transform PDB v2.0 format to legacy format for frontend
+            // PDB v2.0 has vpy_line_map (address → {file, line, column})
+            // Frontend expects lineMap (line → address)
+            if (pdbData.version === '2.0' && pdbData.vpy_line_map && !pdbData.lineMap) {
+              pdbData.lineMap = {};
+              for (const [addr, loc] of Object.entries(pdbData.vpy_line_map)) {
+                const location = loc as { file: string; line: number; column: number | null };
+                const lineKey = location.line.toString();
+                pdbData.lineMap[lineKey] = addr;
+              }
+            }
+            
             mainWindow?.webContents.send('run://status', `✓ Phase 3 SUCCESS: Debug symbols loaded (.pdb)`);
             mainWindow?.webContents.send('run://stdout', `✓ Debug symbols: ${pdbPath}`);
           } else {
