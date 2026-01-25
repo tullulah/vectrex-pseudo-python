@@ -2148,7 +2148,300 @@ DCR_DELTA_TABLE:\n\
         out.push_str("    \n");
         } // End conditional ULR_GAMEPLAY_COLLISIONS
     }
+    
+    // ============================================================================
+    // ANIMATION SYSTEM RUNTIME (Phase 3) - 2026-01-15
+    // ============================================================================
+    // Instance pool-based animation system supporting up to 16 concurrent animations.
+    //
+    // Instance structure (12 bytes each):
+    //   +0: anim_ptr (2 bytes)    - Pointer to animation data in ROM
+    //   +2: frame_idx (1 byte)    - Current frame index (0-N)
+    //   +3: counter (1 byte)      - Frame tick counter
+    //   +4: state_idx (1 byte)    - Current state index
+    //   +5: mirror (1 byte)       - Mirror flags (0-3)
+    //   +6: x (2 bytes)           - X position (signed 16-bit)
+    //   +8: y (2 bytes)           - Y position (signed 16-bit)
+    //   +10: active (1 byte)      - Active flag (0=inactive, 1=active)
+    //   +11: (unused, 1 byte)     - Reserved for future use
+    //
+    // Animation ROM data format (from animres.rs):
+    //   +0: num_frames (1 byte)
+    //   +1: num_states (1 byte)
+    //   +2: controller_flags (1 byte) - bit 0: mirror_on_left
+    //   +3: frame_table_ptr (2 bytes) - Pointer to frame table
+    //   +5: state_table_ptr (2 bytes) - Pointer to state table
+    //
+    // Frame table format:
+    //   Each frame (11 bytes):
+    //     +0: vector_ptr (2 bytes) - Pointer to vector asset
+    //     +2: duration (2 bytes)   - Duration in ticks
+    //     +4: intensity (1 byte)
+    //     +5: offset_x (2 bytes)
+    //     +7: offset_y (2 bytes)
+    //     +9: mirror (1 byte)
+    //     +10: (reserved, 1 byte)
+    // ============================================================================
+    
+    if w.contains("CREATE_ANIM_RUNTIME") {
+        out.push_str(r#"; CREATE_ANIM_RUNTIME - Find free instance slot and initialize
+; Input: X = animation data pointer (ROM)
+; Output: D = instance ID (0-15), or -1 if pool full
+CREATE_ANIM_RUNTIME:
+    ; Search for inactive slot
+    PSHS X              ; Save animation pointer
+    LDX #ANIM_POOL      ; Start of instance pool
+    CLRA                ; Instance ID counter = 0
+CAR_SEARCH:
+    CMPA #16            ; Checked all 16 instances?
+    BEQ CAR_POOL_FULL   ; Yes, pool full
+    TST 10,X            ; Check active flag (offset +10)
+    BEQ CAR_FOUND_SLOT  ; Found inactive slot
+    LEAX 12,X           ; Move to next instance (12 bytes each)
+    INCA                ; Increment ID counter
+    BRA CAR_SEARCH
+CAR_FOUND_SLOT:
+    ; Initialize instance
+    PULS D              ; Get animation pointer to D
+    STD 0,X             ; Store anim_ptr (offset +0)
+    CLR 2,X             ; frame_idx = 0 (offset +2)
+    CLR 3,X             ; counter = 0 (offset +3)
+    CLR 4,X             ; state_idx = 0 (offset +4)
+    CLR 5,X             ; mirror = 0 (offset +5)
+    CLR 6,X             ; x = 0 (offset +6, high byte)
+    CLR 7,X             ; x = 0 (offset +7, low byte)
+    CLR 8,X             ; y = 0 (offset +8, high byte)
+    CLR 9,X             ; y = 0 (offset +9, low byte)
+    LDB #1
+    STB 10,X            ; active = 1 (offset +10)
+    ; Return instance ID in D (already in A from counter)
+    TFR A,B             ; A = instance ID, B = 0
+    CLRA                ; D = 0:ID (16-bit result)
+    STD RESULT          ; Store in RESULT
+    RTS
+CAR_POOL_FULL:
+    ; No free slots - return -1
+    LDD #$FFFF
+    STD RESULT
+    PULS X              ; Clean up stack
+    RTS
+
+"#);
+    }
+    
+    if w.contains("UPDATE_ANIM_RUNTIME") {
+        out.push_str(r#"; UPDATE_ANIM_RUNTIME - Update animation position and advance frame
+; Input: D = instance_id, X = x_position, Y = y_position
+UPDATE_ANIM_RUNTIME:
+    ; Validate instance ID (must be 0-15)
+    CMPB #16            ; Check if ID >= 16
+    BHS UAR_INVALID     ; Invalid ID, return
+    
+    ; Calculate instance address: ANIM_POOL + (ID * 12)
+    PSHS D              ; Save ID
+    LDB 1,S             ; Get ID low byte
+    LDA #12             ; Instance size
+    MUL                 ; D = ID * 12
+    ADDD #ANIM_POOL     ; D = instance address
+    TFR D,U             ; U = instance pointer
+    
+    ; Check if instance is active
+    TST 10,U            ; Check active flag (offset +10)
+    BEQ UAR_INACTIVE    ; Inactive, skip
+    
+    ; Store new position
+    STX 6,U             ; Store x (offset +6, 16-bit)
+    STY 8,U             ; Store y (offset +8, 16-bit)
+    
+    ; Advance frame counter
+    INC 3,U             ; counter++ (offset +3)
+    
+    ; Get current frame data
+    LDX 0,U             ; Load anim_ptr (offset +0)
+    LDY 3,X             ; Load frame_table_ptr (offset +3 in anim data)
+    
+    ; Calculate current frame address: frame_table + (frame_idx * 11)
+    LDA 2,U             ; Load frame_idx (offset +2)
+    LDB #11             ; Frame size
+    MUL                 ; D = frame_idx * 11
+    LEAY D,Y            ; Y = frame_table + offset
+    
+    ; Check if counter >= duration
+    LDD 2,Y             ; Load duration from frame data (offset +2)
+    CMPB 3,U            ; Compare with counter (offset +3)
+    BHI UAR_DONE        ; counter < duration, done
+    
+    ; Advance to next frame
+    CLR 3,U             ; Reset counter (offset +3)
+    INC 2,U             ; frame_idx++ (offset +2)
+    
+    ; Check if we reached end of state (need to loop)
+    LDX 0,U             ; Reload anim_ptr
+    LDA 0,X             ; Load num_frames (offset +0 in anim data)
+    CMPA 2,U            ; Compare with frame_idx
+    BHI UAR_DONE        ; frame_idx < num_frames, done
+    
+    ; Loop back to first frame of current state
+    ; TODO (Phase 4): Implement proper state machine with start_frame
+    CLR 2,U             ; frame_idx = 0 (simple loop for now)
+    
+UAR_DONE:
+    PULS D              ; Clean up stack
+    RTS
+UAR_INVALID:
+    RTS                 ; Invalid ID, do nothing
+UAR_INACTIVE:
+    PULS D              ; Clean up stack
+    RTS
+
+"#);
+    }
+    
+    if w.contains("DRAW_ANIM_RUNTIME") {
+        out.push_str(r#"; DRAW_ANIM_RUNTIME - Render current frame of animation
+; Input: D = instance_id
+DRAW_ANIM_RUNTIME:
+    ; Validate instance ID
+    CMPB #16
+    BHS DAR_INVALID
+    
+    ; Calculate instance address: ANIM_POOL + (ID * 12)
+    PSHS D              ; Save ID
+    LDB 1,S             ; Get ID low byte
+    LDA #12
+    MUL                 ; D = ID * 12
+    ADDD #ANIM_POOL
+    TFR D,U             ; U = instance pointer
+    
+    ; Check if active
+    TST 10,U
+    BEQ DAR_INACTIVE
+    
+    ; Get animation data pointer
+    LDX 0,U             ; Load anim_ptr (offset +0)
+    LDY 3,X             ; Load frame_table_ptr (offset +3 in anim data)
+    
+    ; Calculate current frame address: frame_table + (frame_idx * 11)
+    LDA 2,U             ; Load frame_idx (offset +2)
+    LDB #11
+    MUL
+    LEAY D,Y            ; Y = current frame data
+    
+    ; Read frame data for DRAW_VECTOR_EX call
+    LDX 0,Y             ; Load vector_ptr (offset +0 in frame)
+    PSHS X              ; Save vector_ptr for Draw_VLc call
+    
+    ; Calculate final position: instance.x + frame.offset_x
+    LDD 6,U             ; Load instance x (offset +6)
+    ADDD 5,Y            ; Add frame offset_x (offset +5 in frame)
+    PSHS D              ; Save final_x
+    
+    ; Calculate final position: instance.y + frame.offset_y
+    LDD 8,U             ; Load instance y (offset +8)
+    ADDD 7,Y            ; Add frame offset_y (offset +7 in frame)
+    PSHS D              ; Save final_y
+    
+    ; Get mirror mode from frame (override if instance has custom mirror)
+    LDA 9,Y             ; Load frame mirror (offset +9 in frame)
+    LDB 5,U             ; Load instance mirror (offset +5)
+    TSTB
+    BEQ DAR_USE_FRAME_MIRROR
+    TFR B,A             ; Use instance mirror if non-zero
+DAR_USE_FRAME_MIRROR:
+    PSHS A              ; Save mirror
+    
+    ; Get intensity from frame
+    LDA 4,Y             ; Load intensity (offset +4 in frame)
+    PSHS A              ; Save intensity
+    
+    ; Call drawing function (simplified - full implementation would use DRAW_VECTOR_EX)
+    ; For now, just set intensity and draw vector at instance position
+    
+    ; Set intensity
+    LDA ,S              ; Get intensity from stack (don't pop yet)
+    JSR $F2AB           ; BIOS Intensity_a
+    
+    ; Move to position (y, x)
+    LDA 2,S             ; Get y (second word on stack, high byte)
+    LDB 3,S             ; Get x (third word on stack, low byte)
+    JSR $F312           ; BIOS Moveto_d
+    
+    ; Draw vector
+    LDX 5,S             ; Get vector_ptr from bottom of stack
+    JSR $F408           ; BIOS Draw_VLc
+    
+    ; Clean up stack (5 words: intensity, mirror, final_y, final_x, vector_ptr)
+    LEAS 7,S            ; Pop 7 bytes (1+1+2+2+2 = 8 but S points to next)
+    
+DAR_DONE:
+    PULS D              ; Restore ID from stack
+    RTS
+DAR_INVALID:
+    RTS
+DAR_INACTIVE:
+    PULS D
+    RTS
+
+"#);
+    }
+    
+    if w.contains("DESTROY_ANIM_RUNTIME") {
+        out.push_str(r#"; DESTROY_ANIM_RUNTIME - Free animation instance
+; Input: D = instance_id
+DESTROY_ANIM_RUNTIME:
+    ; Validate instance ID
+    CMPB #16
+    BHS DESTR_INVALID
+    
+    ; Calculate instance address
+    LDA #12
+    MUL                 ; D = ID * 12
+    ADDD #ANIM_POOL
+    TFR D,X             ; X = instance pointer
+    
+    ; Mark as inactive
+    CLR 10,X            ; active = 0 (offset +10)
+    
+DESTR_INVALID:
+    RTS
+
+"#);
+    }
+    
+    if w.contains("SET_ANIM_MIRROR_RUNTIME") {
+        out.push_str(r#"; SET_ANIM_MIRROR_RUNTIME - Set mirror flags for animation instance
+; Input: X = instance_id (in X per builtins.rs), D = mirror_value
+SET_ANIM_MIRROR_RUNTIME:
+    ; Validate instance ID (X contains ID as 16-bit)
+    CMPX #16
+    BHS SAMR_INVALID
+    
+    ; Calculate instance address: ANIM_POOL + (ID * 12)
+    PSHS D              ; Save mirror value
+    TFR X,D             ; D = instance ID
+    LDA #12
+    MUL                 ; D = ID * 12
+    ADDD #ANIM_POOL
+    TFR D,X             ; X = instance pointer
+    
+    ; Check if active
+    TST 10,X            ; Check active flag
+    BEQ SAMR_INACTIVE
+    
+    ; Store mirror value
+    PULS D              ; Get mirror value
+    STB 5,X             ; Store mirror (offset +5, low byte only)
+    RTS
+    
+SAMR_INACTIVE:
+    PULS D              ; Clean stack
+SAMR_INVALID:
+    RTS
+
+"#);
+    }
 }
+
 
 // power_of_two_const: return shift count if expression is a numeric power-of-two (>1).
 

@@ -334,6 +334,26 @@ pub fn scan_expr_runtime(e: &Expr, usage: &mut RuntimeUsage) {
                 usage.uses_draw_circle = true;
                 usage.wrappers_used.insert("DRAW_CIRCLE_RUNTIME".to_string());
             }
+            // Animation system: track animation runtime helpers (Phase 3 - 2026-01-15)
+            if up == "CREATE_ANIM" {
+                usage.wrappers_used.insert("CREATE_ANIM_RUNTIME".to_string());
+            }
+            if up == "UPDATE_ANIM" {
+                usage.wrappers_used.insert("UPDATE_ANIM_RUNTIME".to_string());
+            }
+            if up == "DRAW_ANIM" {
+                usage.wrappers_used.insert("DRAW_ANIM_RUNTIME".to_string());
+            }
+            if up == "DESTROY_ANIM" {
+                usage.wrappers_used.insert("DESTROY_ANIM_RUNTIME".to_string());
+            }
+            if up == "SET_ANIM_MIRROR" {
+                usage.wrappers_used.insert("SET_ANIM_MIRROR_RUNTIME".to_string());
+            }
+            if up == "SET_ANIM_STATE" {
+                // Phase 4 TODO: SET_ANIM_STATE_RUNTIME
+                usage.wrappers_used.insert("SET_ANIM_STATE_RUNTIME".to_string());
+            }
             for a in &ci.args { scan_expr_runtime(a, usage); }
         }
         Expr::MethodCall(mc) => {

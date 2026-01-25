@@ -437,6 +437,9 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
     let has_sfx_assets = opts.assets.iter().any(|a| {
         matches!(a.asset_type, crate::codegen::AssetType::Sfx)
     });
+    let has_animation_assets = opts.assets.iter().any(|a| {
+        matches!(a.asset_type, crate::codegen::AssetType::Animation)
+    });
     
     // Calculate max args needed (for VAR_ARG* allocation)
     let max_args = compute_max_args_used(module);
@@ -504,6 +507,22 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         ram.allocate("SFX_ACTIVE", 1, "Playback state ($00=stopped, $01=playing)");
         ram.allocate("SFX_PHASE", 1, "Envelope phase (0=A,1=D,2=S,3=R)");
         ram.allocate("SFX_VOL", 1, "Current volume level (0-15)");
+    }
+    
+    // 7.1 Animation instance pool (if animation assets exist)
+    // Pool of 16 instances × 12 bytes = 192 bytes
+    // Instance structure (12 bytes):
+    //   +0: anim_ptr (2 bytes) - Pointer to animation data in ROM
+    //   +2: frame_idx (1 byte) - Current frame index
+    //   +3: counter (1 byte) - Frame tick counter
+    //   +4: state_idx (1 byte) - Current state index
+    //   +5: mirror (1 byte) - Mirror flags (0-3)
+    //   +6: x (2 bytes) - X position (signed 16-bit)
+    //   +8: y (2 bytes) - Y position (signed 16-bit)
+    //   +10: active (1 byte) - Active flag (0=inactive, 1=active)
+    //   +11: (unused, 1 byte) - Reserved for alignment
+    if has_animation_assets {
+        ram.allocate("ANIM_POOL", 192, "Animation instance pool (16 instances × 12 bytes)");
     }
     
     // 8. PRINT_NUMBER buffer (always allocate if not suppressed)

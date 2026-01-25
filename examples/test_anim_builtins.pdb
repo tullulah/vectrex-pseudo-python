@@ -16,51 +16,9 @@
   "asmFunctions": {},
   "asmAddressMap": {},
   "variables": {
-    "TMPPTR2": {
-      "name": "TMPPTR2",
-      "address": "0xC884",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "arg1": {
-      "name": "arg1",
-      "address": "0xC88E",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "TMPPTR": {
-      "name": "TMPPTR",
-      "address": "0xC882",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "TEMP_Y": {
-      "name": "TEMP_Y",
-      "address": "0xC889",
-      "size": 1,
-      "type": "unknown",
-      "declLine": null
-    },
-    "TEMP_X": {
-      "name": "TEMP_X",
-      "address": "0xC888",
-      "size": 1,
-      "type": "unknown",
-      "declLine": null
-    },
-    "arg0": {
-      "name": "arg0",
-      "address": "0xC88C",
-      "size": 2,
-      "type": "unknown",
-      "declLine": null
-    },
-    "NUM_STR": {
-      "name": "NUM_STR",
-      "address": "0xC88A",
+    "TEMP_YX": {
+      "name": "TEMP_YX",
+      "address": "0xC886",
       "size": 2,
       "type": "unknown",
       "declLine": null
@@ -72,23 +30,72 @@
       "type": "unknown",
       "declLine": null
     },
-    "arg3": {
-      "name": "arg3",
-      "address": "0xC892",
+    "arg0": {
+      "name": "arg0",
+      "address": "0xC94C",
       "size": 2,
       "type": "unknown",
       "declLine": null
     },
-    "TEMP_YX": {
-      "name": "TEMP_YX",
-      "address": "0xC886",
+    "TEMP_Y": {
+      "name": "TEMP_Y",
+      "address": "0xC889",
+      "size": 1,
+      "type": "unknown",
+      "declLine": null
+    },
+    "arg3": {
+      "name": "arg3",
+      "address": "0xC952",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "TEMP_X": {
+      "name": "TEMP_X",
+      "address": "0xC888",
+      "size": 1,
+      "type": "unknown",
+      "declLine": null
+    },
+    "TMPPTR": {
+      "name": "TMPPTR",
+      "address": "0xC882",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "arg1": {
+      "name": "arg1",
+      "address": "0xC94E",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "NUM_STR": {
+      "name": "NUM_STR",
+      "address": "0xC94A",
       "size": 2,
       "type": "unknown",
       "declLine": null
     },
     "arg2": {
       "name": "arg2",
-      "address": "0xC890",
+      "address": "0xC950",
+      "size": 2,
+      "type": "unknown",
+      "declLine": null
+    },
+    "ANIM_POOL": {
+      "name": "ANIM_POOL",
+      "address": "0xC88A",
+      "size": 192,
+      "type": "unknown",
+      "declLine": null
+    },
+    "TMPPTR2": {
+      "name": "TMPPTR2",
+      "address": "0xC884",
       "size": 2,
       "type": "unknown",
       "declLine": null
