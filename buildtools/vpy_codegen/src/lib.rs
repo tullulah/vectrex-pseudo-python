@@ -8,6 +8,7 @@ pub mod vecres;
 pub mod musres;
 pub mod levelres;
 pub mod sfxres;
+pub mod animres;
 
 use std::collections::HashMap;
 use thiserror::Error;
