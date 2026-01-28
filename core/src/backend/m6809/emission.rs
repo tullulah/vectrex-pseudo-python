@@ -2156,14 +2156,14 @@ DCR_DELTA_TABLE:\n\
     //
     // Instance structure (12 bytes each):
     //   +0: anim_ptr (2 bytes)    - Pointer to animation data in ROM
-    //   +2: frame_idx (1 byte)    - Current frame index (0-N)
-    //   +3: counter (1 byte)      - Frame tick counter
-    //   +4: state_idx (1 byte)    - Current state index
+    //   +2: frame_idx (1 byte)    - Current frame index within state (0-N)
+    //   +3: counter (1 byte)      - Frame tick counter (for duration)
+    //   +4: state_idx (1 byte)    - Current state index (for state machines)
     //   +5: mirror (1 byte)       - Mirror flags (0-3)
     //   +6: x (2 bytes)           - X position (signed 16-bit)
     //   +8: y (2 bytes)           - Y position (signed 16-bit)
     //   +10: active (1 byte)      - Active flag (0=inactive, 1=active)
-    //   +11: (unused, 1 byte)     - Reserved for future use
+    //   +11: state_num_frames (1 byte) - Number of frames in current state (for looping)
     //
     // Animation ROM data format (from animres.rs):
     //   +0: num_frames (1 byte)
@@ -2195,13 +2195,14 @@ CREATE_ANIM_RUNTIME:
 CAR_SEARCH:
     CMPA #16            ; Checked all 16 instances?
     BEQ CAR_POOL_FULL   ; Yes, pool full
-    TST 10,X            ; Check active flag (offset +10)
-    BEQ CAR_FOUND_SLOT  ; Found inactive slot
+    LDB 10,X            ; Load active flag (8-bit offset mode)
+    BEQ CAR_FOUND_SLOT  ; Found inactive slot (B=0)
     LEAX 12,X           ; Move to next instance (12 bytes each)
     INCA                ; Increment ID counter
     BRA CAR_SEARCH
 CAR_FOUND_SLOT:
     ; Initialize instance
+    PSHS A              ; CRITICAL FIX: Save instance ID (A) before PULS D overwrites it
     PULS D              ; Get animation pointer to D
     STD 0,X             ; Store anim_ptr (offset +0)
     CLR 2,X             ; frame_idx = 0 (offset +2)
@@ -2214,8 +2215,9 @@ CAR_FOUND_SLOT:
     CLR 9,X             ; y = 0 (offset +9, low byte)
     LDB #1
     STB 10,X            ; active = 1 (offset +10)
-    ; Return instance ID in D (already in A from counter)
-    TFR A,B             ; A = instance ID, B = 0
+    ; Return instance ID in D (restore A from stack)
+    PULS A              ; FIXED: Restore instance ID
+    TFR A,B             ; B = A (make 16-bit: D = A:A)
     CLRA                ; D = 0:ID (16-bit result)
     STD RESULT          ; Store in RESULT
     RTS
@@ -2275,15 +2277,50 @@ UPDATE_ANIM_RUNTIME:
     CLR 3,U             ; Reset counter (offset +3)
     INC 2,U             ; frame_idx++ (offset +2)
     
-    ; Check if we reached end of state (need to loop)
+    ; Check if we reached end of state
+    ; If state_num_frames is set (non-zero), use it for bounds checking
+    LDA 11,U            ; Load state_num_frames (offset +11)
+    BEQ UAR_NO_STATE    ; If 0, no state active - use total frames
+    
+    ; State-based looping
+    CMPA 2,U            ; Compare state_num_frames with frame_idx
+    BHI UAR_DONE        ; frame_idx < state_num_frames, continue
+    
+    ; Reached end of state - loop back to first frame of state
+    ; Get state table and read first frame index
+    LDX 0,U             ; Load anim_ptr
+    LDD 5,X             ; Load state_table_ptr (offset +5 in anim data)
+    BEQ UAR_NO_STATE    ; No state table, fall back to simple loop
+    
+    ; Calculate state entry address
+    TFR D,Y             ; Y = state_table_ptr
+    LDB 4,U             ; Load current state_idx (offset +4)
+    BEQ UAR_STATE_FOUND ; If state 0, already there
+    
+UAR_STATE_SEEK:
+    ; Skip to target state
+    LDA 0,Y             ; Load num_frames_in_state
+    ADDA #2             ; Add header size
+    LEAY A,Y            ; Advance to next state
+    DECB
+    BNE UAR_STATE_SEEK
+    
+UAR_STATE_FOUND:
+    ; Y points to current state entry
+    ; Read first frame index
+    LDA 2,Y             ; Load first frame index
+    STA 2,U             ; Reset frame_idx to state start
+    BRA UAR_DONE
+    
+UAR_NO_STATE:
+    ; No state system - simple loop through all frames
     LDX 0,U             ; Reload anim_ptr
     LDA 0,X             ; Load num_frames (offset +0 in anim data)
     CMPA 2,U            ; Compare with frame_idx
     BHI UAR_DONE        ; frame_idx < num_frames, done
     
-    ; Loop back to first frame of current state
-    ; TODO (Phase 4): Implement proper state machine with start_frame
-    CLR 2,U             ; frame_idx = 0 (simple loop for now)
+    ; Loop back to frame 0
+    CLR 2,U             ; frame_idx = 0
     
 UAR_DONE:
     PULS D              ; Clean up stack
@@ -2403,6 +2440,99 @@ DESTROY_ANIM_RUNTIME:
     CLR 10,X            ; active = 0 (offset +10)
     
 DESTR_INVALID:
+    RTS
+
+"#);
+    }
+    
+    if w.contains("SET_ANIM_STATE_RUNTIME") {
+        out.push_str(r#"; SET_ANIM_STATE_RUNTIME - Change animation state (Phase 4: State Machines COMPLETE)
+; Input: VAR_ARG0 = instance_id, VAR_ARG1 = state_index
+; Animation Data Structure (offset from anim_ptr):
+;   +0: num_frames (1 byte)
+;   +1: num_states (1 byte)
+;   +2: controller_flags (1 byte)
+;   +3: frame_table_ptr (2 bytes)
+;   +5: state_table_ptr (2 bytes) - can be $0000 if no states
+; State Table Entry Structure:
+;   +0: num_frames_in_state (1 byte)
+;   +1: loop_state (1 byte) - 0=hold, 1=loop
+;   +2+: frame_indices (1 byte each) - indices into frame table
+SET_ANIM_STATE_RUNTIME:
+    ; Validate instance ID
+    LDD VAR_ARG0
+    CMPB #16
+    BHS SASR_INVALID
+    
+    ; Calculate instance address: ANIM_POOL + (ID * 12)
+    LDA #12
+    MUL                 ; D = ID * 12
+    ADDD #ANIM_POOL
+    TFR D,X             ; X = instance pointer
+    
+    ; Check if active
+    TST 10,X            ; Check active flag (offset +10)
+    BEQ SASR_INVALID
+    
+    ; Load animation data pointer
+    LDU 0,X             ; U = anim_ptr (offset +0 in instance)
+    
+    ; Check if animation has states
+    LDD 5,U             ; Load state_table_ptr (offset +5 in anim data)
+    BEQ SASR_NO_STATES  ; If NULL, animation has no states
+    
+    ; Calculate state entry address: state_table_ptr + state calculations
+    ; Each state entry is variable size: 2 + num_frames_in_state bytes
+    ; So we need to iterate through states until we reach target state_index
+    TFR D,Y             ; Y = state_table_ptr (base of state table)
+    LDA VAR_ARG1+1      ; A = target state_index (low byte)
+    BEQ SASR_FOUND_STATE ; If state 0, we're already there
+    
+    ; Iterate through states to find target state
+    PSHS X              ; Save instance pointer
+    LDB A               ; B = remaining states to skip
+    
+SASR_STATE_LOOP:
+    ; Current state entry is at Y
+    ; Size = 2 + num_frames_in_state
+    LDA 0,Y             ; Load num_frames_in_state
+    ADDA #2             ; Add header size (num_frames + loop_state)
+    LEAY A,Y            ; Y += state entry size (advance to next state)
+    DECB                ; remaining--
+    BNE SASR_STATE_LOOP ; Continue until we reach target state
+    
+    PULS X              ; Restore instance pointer
+    
+SASR_FOUND_STATE:
+    ; Y now points to target state entry
+    ; Read state data
+    LDA 0,Y             ; num_frames_in_state
+    LDB 1,Y             ; loop_state flag
+    
+    ; Update instance with state info
+    ; Store state index
+    LDA VAR_ARG1+1      ; Get state_index back
+    STA 4,X             ; Update state_idx (offset +4 in instance)
+    
+    ; Store state's first frame index as current frame
+    LDA 2,Y             ; Load first frame index in state
+    STA 2,X             ; Update frame_idx (offset +2 in instance)
+    
+    ; Store state frame count (for bounds checking in UPDATE_ANIM)
+    LDA 0,Y             ; num_frames_in_state
+    STA 11,X            ; Store in state_num_frames (offset +11)
+    
+    ; Reset frame counter to restart timing
+    CLR 3,X             ; counter = 0 (offset +3)
+    
+    RTS
+    
+SASR_NO_STATES:
+    ; Animation has no states - just reset frame counter
+    CLR 3,X             ; counter = 0
+    RTS
+    
+SASR_INVALID:
     RTS
 
 "#);

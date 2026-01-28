@@ -644,7 +644,8 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
             });
             
             if anim_exists {
-                let symbol = format!("_{}_ANIM", anim_name.to_uppercase().replace("-", "_").replace(" ", "_"));
+                // Note: Don't add _ANIM suffix - animation label is just _ASSETNAME
+                let symbol = format!("_{}", anim_name.to_uppercase().replace("-", "_").replace(" ", "_"));
                 out.push_str(&format!("; CREATE_ANIM(\"{}\") - allocate instance from pool\n", anim_name));
                 out.push_str(&format!("    LDX #{}        ; Load animation data pointer\n", symbol));
                 out.push_str("    JSR CREATE_ANIM_RUNTIME  ; Returns instance ID in D\n");
@@ -710,17 +711,24 @@ pub fn emit_builtin_call(name: &str, args: &Vec<Expr>, out: &mut String, fctx: &
     }
     
     // SET_ANIM_STATE: Change animation state (for state machines)
-    // Usage: SET_ANIM_STATE(anim_id, "walking")
+    // Usage: SET_ANIM_STATE(anim_id, state_index)
     if up == "SET_ANIM_STATE" && args.len() == 2 {
-        if let Expr::StringLit(state_name) = &args[1] {
-            out.push_str(&format!("; SET_ANIM_STATE(instance_id, \"{}\") - change state\n", state_name));
-            emit_expr(&args[0], out, fctx, string_map, opts);
-            out.push_str("    LDD RESULT               ; Instance ID\n");
-            // TODO: State lookup requires animation data pointer - implement in Phase 4
-            out.push_str(&format!("; TODO: State lookup for '{}'\n", state_name));
-            out.push_str("    LDD #0\n    STD RESULT\n");
-            return true;
-        }
+        out.push_str("; SET_ANIM_STATE(instance_id, state_index) - change state\n");
+        
+        // Evaluate instance_id
+        emit_expr(&args[0], out, fctx, string_map, opts);
+        out.push_str("    LDD RESULT               ; Instance ID\n");
+        out.push_str("    STD VAR_ARG0\n");
+        
+        // Evaluate state_index (can be number or variable)
+        emit_expr(&args[1], out, fctx, string_map, opts);
+        out.push_str("    LDD RESULT               ; State index\n");
+        out.push_str("    STD VAR_ARG1\n");
+        
+        // Call runtime (Phase 4: Currently just resets frame counter)
+        out.push_str("    JSR SET_ANIM_STATE_RUNTIME\n");
+        out.push_str("    LDD #0\n    STD RESULT\n");
+        return true;
     }
     
     // SET_ANIM_MIRROR: Set mirror mode (0=none, 1=X, 2=Y, 3=XY)

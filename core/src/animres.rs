@@ -154,7 +154,8 @@ impl VAnimAnimation {
         out.push_str("\n");
         
         // Main animation data structure
-        out.push_str(&format!("_{}_ANIM:\n", label_base));
+        // Note: Don't add _ANIM suffix here - it's added by the code generator
+        out.push_str(&format!("_{}:\n", label_base));
         out.push_str(&format!("    FCB {}          ; num_frames\n", self.frames.len()));
         out.push_str(&format!("    FCB {}          ; num_states\n", self.states.len()));
         

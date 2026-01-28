@@ -25,7 +25,8 @@ pub fn emit_stmt(stmt: &Stmt, out: &mut String, loop_ctx: &LoopCtx, fctx: &FuncC
                     if let Some(off) = fctx.offset_of(name) {
                         out.push_str(&format!("    LDX RESULT\n    STX {} ,S\n", off));
                     } else {
-                        out.push_str(&format!("    LDX RESULT\n    LDU #VAR_{}\n    STU TMPPTR\n    STX ,U\n", name.to_uppercase()));
+                        // FIXED 2026-01-16: Eliminado STU TMPPTR innecesario que no hacía nada
+                        out.push_str(&format!("    LDX RESULT\n    STX VAR_{}\n", name.to_uppercase()));
                     }
                 }
                 crate::ast::AssignTarget::Index { target: array_expr, index, .. } => {

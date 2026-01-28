@@ -746,6 +746,14 @@ impl BinaryEmitter {
         self.emit(0x1E);
     }
 
+    /// MUL (opcode 0x3D) - Multiply unsigned 8-bit A * B → 16-bit D (A:B)
+    /// D = A * B (unsigned multiplication)
+    /// Sets Z flag if result is zero, clears N, V flags, sets C if bit 7 of result is set
+    pub fn mul(&mut self) {
+        self.record_line_mapping();
+        self.emit(0x3D);
+    }
+
     /// TSTA (opcode 0x4D) - Test A (actualiza flags sin modificar A)
     pub fn tsta(&mut self) {
         self.record_line_mapping();

@@ -145,6 +145,29 @@ fn discover_assets(source_path: &Path) -> Vec<codegen::AssetInfo> {
                             path: path.display().to_string(),
                             asset_type: codegen::AssetType::Animation,
                         });
+                        
+                        // Parse .vanim to discover referenced vector assets
+                        if let Ok(anim_data) = fs::read_to_string(&path) {
+                            if let Ok(anim) = serde_json::from_str::<vectrex_lang::animres::VAnimAnimation>(&anim_data) {
+                                // Collect unique vector names from all frames
+                                let mut vector_names = std::collections::HashSet::new();
+                                for frame in &anim.frames {
+                                    vector_names.insert(frame.vector_name.clone());
+                                }
+                                
+                                // Add each referenced vector as an asset (if not already added)
+                                for vec_name in vector_names {
+                                    let vec_path = vectors_dir.join(format!("{}.vec", vec_name));
+                                    if vec_path.exists() && !assets.iter().any(|a| a.name == vec_name) {
+                                        assets.push(codegen::AssetInfo {
+                                            name: vec_name.clone(),
+                                            path: vec_path.display().to_string(),
+                                            asset_type: codegen::AssetType::Vector,
+                                        });
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }

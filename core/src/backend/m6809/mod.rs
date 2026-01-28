@@ -98,6 +98,42 @@ fn extract_level_vectors(level_name: &str, assets: &[crate::codegen::AssetInfo])
     Vec::new()
 }
 
+// extract_animation_vectors: Parse .vanim JSON and extract all vector_name references
+fn extract_animation_vectors(anim_name: &str, assets: &[crate::codegen::AssetInfo]) -> Vec<String> {
+    use crate::codegen::AssetType;
+    
+    // Find the animation asset
+    let anim_asset = assets.iter().find(|a| {
+        matches!(a.asset_type, AssetType::Animation) && a.name == anim_name
+    });
+    
+    if let Some(anim_asset) = anim_asset {
+        // Load and parse the animation JSON
+        if let Ok(json_str) = std::fs::read_to_string(&anim_asset.path) {
+            if let Ok(anim_data) = serde_json::from_str::<serde_json::Value>(&json_str) {
+                let mut vectors = std::collections::HashSet::new();
+                
+                // Extract vector_name from all frames
+                if let Some(frames) = anim_data.get("frames").and_then(|f| f.as_array()) {
+                    for frame in frames {
+                        // Try both formats: vectorName (standard .vanim) and vector_name (legacy)
+                        let vector_name = frame.get("vectorName")
+                            .or_else(|| frame.get("vector_name"))
+                            .and_then(|v| v.as_str());
+                        
+                        if let Some(vector_name) = vector_name {
+                            vectors.insert(vector_name.to_string());
+                        }
+                    }
+                }
+                
+                return vectors.into_iter().collect();
+            }
+        }
+    }
+    Vec::new()
+}
+
 // analyze_used_assets: Scan module for DRAW_VECTOR() and PLAY_MUSIC() calls
 // Returns set of asset names that are actually used in the code
 fn analyze_used_assets(module: &Module, assets: &[crate::codegen::AssetInfo]) -> std::collections::HashSet<String> {
@@ -129,6 +165,15 @@ fn analyze_used_assets(module: &Module, assets: &[crate::codegen::AssetInfo]) ->
                             let level_vectors = extract_level_vectors(asset_name, assets);
                             for vec_name in level_vectors {
                                 eprintln!("[DEBUG] Level '{}' references vector: {}", asset_name, vec_name);
+                                used.insert(vec_name);
+                            }
+                        }
+                        
+                        // If creating animation, also mark vectors it references as used
+                        if name_upper == "CREATE_ANIM" {
+                            let anim_vectors = extract_animation_vectors(asset_name, assets);
+                            for vec_name in anim_vectors {
+                                eprintln!("[DEBUG] Animation '{}' references vector: {}", asset_name, vec_name);
                                 used.insert(vec_name);
                             }
                         }
@@ -868,6 +913,19 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
         out.push_str("    STA $C822    ; Vec_Joy_Mux_2_Y (disable joystick 2 - saves cycles)\n");
         out.push_str("    ; Mux configured - J1_X()/J1_Y() can now be called\n\n");
         
+        // Initialize ANIM_POOL if there are animation assets
+        if has_animation_assets {
+            out.push_str("    ; === Initialize Animation Pool (mark all 16 slots as inactive) ===\n");
+            out.push_str("    LDX #ANIM_POOL\n");
+            out.push_str("    LDA #16          ; 16 animation slots\n");
+            out.push_str("ANIM_POOL_INIT_LOOP:\n");
+            out.push_str("    CLR 0,X          ; Clear 'active' flag (byte 0 of each 12-byte slot)\n");
+            out.push_str("    LEAX 12,X        ; Move to next slot (12 bytes per instance)\n");
+            out.push_str("    DECA\n");
+            out.push_str("    BNE ANIM_POOL_INIT_LOOP\n");
+            out.push_str("    ; Animation pool ready for CREATE_ANIM calls\n\n");
+        }
+        
         // WAIT_RECAL now auto-injected in LOOP_BODY at start of every frame
         out.push_str("    ; JSR Wait_Recal is now called at start of LOOP_BODY (see auto-inject)\n");
         out.push_str("    LDA #$80\n    STA VIA_t1_cnt_lo\n");
@@ -1226,6 +1284,7 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
             out.push_str("; ========================================\n\n");
             
             for asset in assets_to_embed {
+                eprintln!("[DEBUG] Embedding asset '{}' of type: {:?}", asset.name, asset.asset_type);
                 match asset.asset_type {
                     crate::codegen::AssetType::Vector => {
                         use crate::vecres::VecResource;
@@ -1286,14 +1345,19 @@ pub fn emit_with_debug(module: &Module, _t: Target, ti: &TargetInfo, opts: &Code
                     },
                     crate::codegen::AssetType::Animation => {
                         // Animation assets - load and generate ASM data
-                        if let Ok(anim) = crate::animres::VAnimAnimation::load(std::path::Path::new(&asset.path)) {
-                            out.push_str(&format!("; Animation Asset: {} (from {})\n", asset.name, asset.path));
-                            out.push_str(&format!("; {} frame(s), {} state(s)\n", anim.frames.len(), anim.states.len()));
-                            let asm = anim.compile_to_asm_with_name(Some(&asset.name));
-                            out.push_str(&asm);
-                            out.push_str("\n");
-                        } else {
-                            out.push_str(&format!("; ERROR: Failed to load animation asset: {}\n", asset.path));
+                        match crate::animres::VAnimAnimation::load(std::path::Path::new(&asset.path)) {
+                            Ok(anim) => {
+                                out.push_str(&format!("; Animation Asset: {} (from {})\n", asset.name, asset.path));
+                                out.push_str(&format!("; {} frame(s), {} state(s)\n", anim.frames.len(), anim.states.len()));
+                                let asm = anim.compile_to_asm_with_name(Some(&asset.name));
+                                out.push_str(&asm);
+                                out.push_str("\n");
+                            },
+                            Err(e) => {
+                                eprintln!("[DEBUG] Failed to load animation {}: {:?}", asset.path, e);
+                                out.push_str(&format!("; ERROR: Failed to load animation asset: {}\n", asset.path));
+                                out.push_str(&format!("; Error details: {}\n", e));
+                            }
                         }
                     }
                 }

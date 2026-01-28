@@ -580,6 +580,7 @@ fn parse_and_emit_instruction(emitter: &mut BinaryEmitter, line: &str, equates: 
         "COMB" => { emitter.comb(); Ok(()) },
         "SEX" => { emitter.sex(); Ok(()) },
         "EXCH" => { emitter.exch(); Ok(()) },
+        "MUL" => { emitter.mul(); Ok(()) },
         
         // === TRANSFER/COMPARE ===
         "TFR" => emit_tfr(emitter, operand),
@@ -899,7 +900,8 @@ fn emit_ldd(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
             emitter.emit(off as u8);
         }
     } else {
-        match resolve_address(operand, equates) {
+        // Direct/extended or expression (e.g., RESULT+4, VAR_X+2)
+        match evaluate_expression(operand, equates) {
             Ok(addr) => {
                 emitter.ldd_extended(addr);
             },
@@ -1015,7 +1017,8 @@ fn emit_std(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
         }
         Ok(())
     } else {
-        match resolve_address(operand, equates) {
+        // Direct/extended or expression (e.g., TMPPTR+2)
+        match evaluate_expression(operand, equates) {
             Ok(addr) => {
                 emitter.std_extended(addr);
             },
@@ -2310,8 +2313,16 @@ fn emit_dec(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
 }
 
 fn emit_tst(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String, u16>) -> Result<(), String> {
-    // TST para memoria (extended mode - opcode 0x7D)
-    if operand.chars().all(|c| c.is_alphanumeric() || c == '_') {
+    if operand.contains(',') {
+        // Modo indexado: TST 10,X  TST ,Y+  etc.
+        let (postbyte, offset) = parse_indexed_mode(operand)?;
+        emitter.emit(0x0D); // TST indexed opcode
+        emitter.emit(postbyte);
+        if let Some(off) = offset {
+            emitter.emit(off as u8);
+        }
+        Ok(())
+    } else if operand.chars().all(|c| c.is_alphanumeric() || c == '_') {
         // Es un símbolo
         emitter.tst_extended_sym(operand);
         Ok(())
@@ -2409,10 +2420,13 @@ fn parse_indexed_mode(operand: &str) -> Result<(u8, Option<i8>), String> {
                 let postbyte = ((offset as u8) & 0x1F) | reg_bits;
                 eprintln!("🐛   → 5-bit postbyte: 0x{:02X}", postbyte);
                 return Ok((postbyte, None));
-            } else {
-                // 8-bit offset
+            } else if offset >= -128 && offset <= 127 {
+                // 8-bit offset (-128 to +127)
                 eprintln!("🐛   → 8-bit postbyte: 0x{:02X} offset={}", 0x88 | reg_bits, offset);
                 return Ok((0x88 | reg_bits, Some(offset)));
+            } else {
+                // 16-bit offset required (not implemented yet)
+                return Err(format!("Offset {} fuera de rango 8-bit (-128 a +127), necesita modo 16-bit no implementado", offset));
             }
         }
     }
@@ -2631,7 +2645,7 @@ fn emit_ldx(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
         // Force extended addressing (lwasm compatibility) - LDX has no DP mode anyway
         let addr = resolve_address(&operand[1..], equates)?;
         emitter.ldx_extended(addr);
-    } else if operand.contains(',') || operand.contains('+') || operand.contains('-') {
+    } else if operand.contains(',') {
         // Indexed mode: ,Y  ,Y++  5,Y  etc.
         let (postbyte, offset) = parse_indexed_mode(operand)?;
         emitter.ldx_indexed(postbyte);
@@ -2647,8 +2661,17 @@ fn emit_ldx(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
             emitter.ldx_extended_sym(operand);
         }
     } else {
-        let addr = parse_address(operand)?;
-        emitter.ldx_extended(addr);
+        // Expression (e.g., TMPPTR+2, RESULT+4)
+        match evaluate_expression(operand, equates) {
+            Ok(addr) => emitter.ldx_extended(addr),
+            Err(e) if e.starts_with("SYMBOL:") => {
+                let (symbol, addend) = parse_symbol_and_addend(&e)?;
+                emitter.emit(0xBE); // LDX extended opcode
+                emitter.add_symbol_ref(&symbol, false, 2);
+                emitter.emit_word(addend as u16); // Emit addend as address offset
+            }
+            Err(e) => return Err(e),
+        }
     }
     Ok(())
 }
@@ -2680,8 +2703,18 @@ fn emit_ldy(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
             emitter.emit(off as u8);
         }
     } else {
-        let addr = parse_address(operand)?;
-        emitter.ldy_extended(addr);
+        // Expression or simple address
+        match evaluate_expression(operand, equates) {
+            Ok(addr) => emitter.ldy_extended(addr),
+            Err(e) if e.starts_with("SYMBOL:") => {
+                let (symbol, addend) = parse_symbol_and_addend(&e)?;
+                emitter.emit(0x10); // LDY extended prefix
+                emitter.emit(0xBE); // LDY extended opcode
+                emitter.add_symbol_ref(&symbol, false, 2);
+                emitter.emit_word(addend as u16);
+            }
+            Err(e) => return Err(e),
+        }
     }
     Ok(())
 }
@@ -2699,13 +2732,16 @@ fn emit_stx(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
         let addr = resolve_address(&operand[1..], equates)?;
         emitter.stx_extended(addr);
     } else {
-        // Extended addressing
-        let upper = operand.to_uppercase();
-        if let Some(&addr) = equates.get(&upper) {
-            emitter.stx_extended(addr);
-        } else {
-            let addr = parse_address(operand)?;
-            emitter.stx_extended(addr);
+        // Extended addressing or expression
+        match evaluate_expression(operand, equates) {
+            Ok(addr) => emitter.stx_extended(addr),
+            Err(e) if e.starts_with("SYMBOL:") => {
+                let (symbol, addend) = parse_symbol_and_addend(&e)?;
+                emitter.emit(0xBF); // STX extended opcode
+                emitter.add_symbol_ref(&symbol, false, 2);
+                emitter.emit_word(addend as u16);
+            }
+            Err(e) => return Err(e),
         }
     }
     Ok(())
@@ -2720,13 +2756,17 @@ fn emit_sty(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
             emitter.emit(off as u8);
         }
     } else {
-        // Extended addressing
-        let upper = operand.to_uppercase();
-        if let Some(&addr) = equates.get(&upper) {
-            emitter.sty_extended(addr);
-        } else {
-            let addr = parse_address(operand)?;
-            emitter.sty_extended(addr);
+        // Extended addressing or expression
+        match evaluate_expression(operand, equates) {
+            Ok(addr) => emitter.sty_extended(addr),
+            Err(e) if e.starts_with("SYMBOL:") => {
+                let (symbol, addend) = parse_symbol_and_addend(&e)?;
+                emitter.emit(0x10); // STY extended prefix
+                emitter.emit(0xBF); // STY extended opcode
+                emitter.add_symbol_ref(&symbol, false, 2);
+                emitter.emit_word(addend as u16);
+            }
+            Err(e) => return Err(e),
         }
     }
     Ok(())
@@ -2773,19 +2813,32 @@ fn emit_ldu(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
             emitter.ldu_extended_sym(operand);
         }
     } else {
-        let addr = parse_address(operand)?;
-        emitter.ldu_extended(addr);
+        // Expression or simple address
+        match evaluate_expression(operand, equates) {
+            Ok(addr) => emitter.ldu_extended(addr),
+            Err(e) if e.starts_with("SYMBOL:") => {
+                let (symbol, addend) = parse_symbol_and_addend(&e)?;
+                emitter.emit(0xFE); // LDU extended opcode
+                emitter.add_symbol_ref(&symbol, false, 2);
+                emitter.emit_word(addend as u16);
+            }
+            Err(e) => return Err(e),
+        }
     }
     Ok(())
 }
 
 fn emit_stu(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String, u16>) -> Result<(), String> {
-    let upper = operand.to_uppercase();
-    if let Some(&addr) = equates.get(&upper) {
-        emitter.stu_extended(addr);
-    } else {
-        let addr = parse_address(operand)?;
-        emitter.stu_extended(addr);
+    // Expression or simple address
+    match evaluate_expression(operand, equates) {
+        Ok(addr) => emitter.stu_extended(addr),
+        Err(e) if e.starts_with("SYMBOL:") => {
+            let (symbol, addend) = parse_symbol_and_addend(&e)?;
+            emitter.emit(0xFF); // STU extended opcode
+            emitter.add_symbol_ref(&symbol, false, 2);
+            emitter.emit_word(addend as u16);
+        }
+        Err(e) => return Err(e),
     }
     Ok(())
 }
