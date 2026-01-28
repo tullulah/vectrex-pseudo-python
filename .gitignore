@@ -4,12 +4,13 @@ buildtools/target/
 **/*.rs.bk
 emulator_v2/target/
 
-# Generated assembly outputs (use redirection to keep if needed)
+# Generated compilation outputs (examples and tests)
 /*.asm
 tests/*.asm
-
-# If you want to ignore all top-level generated .asm add (commented):
-#/*.asm
+examples/**/build/
+examples/**/*.asm
+examples/**/*.bin
+examples/**/*.pdb
 
 # Editor / IDE
 .vscode/
