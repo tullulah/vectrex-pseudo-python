@@ -1,0 +1,72 @@
+{
+  "version": "1.0",
+  "name": "player_walk",
+  "author": "VPy Animation System",
+  "created": "2026-01-25",
+  "frames": [
+    {
+      "id": "walk_1",
+      "vectorName": "player_walk_1",
+      "duration": 5,
+      "intensity": 80
+    },
+    {
+      "id": "walk_2",
+      "vectorName": "player_walk_2",
+      "duration": 5,
+      "intensity": 80
+    },
+    {
+      "id": "walk_3",
+      "vectorName": "player_walk_3",
+      "duration": 5,
+      "intensity": 80
+    },
+    {
+      "id": "walk_4",
+      "vectorName": "player_walk_4",
+      "duration": 5,
+      "intensity": 80
+    },
+    {
+      "id": "walk_5",
+      "vectorName": "player_walk_5",
+      "duration": 5,
+      "intensity": 80
+    }
+  ],
+  "states": {
+    "walking": {
+      "name": "walking",
+      "frames": ["walk_1", "walk_2", "walk_3", "walk_4", "walk_5"],
+      "loop": true,
+      "transitions": [
+        {
+          "trigger": "input_idle",
+          "targetState": "idle"
+        }
+      ]
+    },
+    "idle": {
+      "name": "idle",
+      "frames": ["walk_1"],
+      "loop": true,
+      "transitions": [
+        {
+          "trigger": "input_left",
+          "targetState": "walking"
+        },
+        {
+          "trigger": "input_right",
+          "targetState": "walking"
+        }
+      ]
+    }
+  },
+  "controller": {
+    "mirrorOnLeft": true,
+    "stateLeft": "walking",
+    "stateRight": "walking",
+    "stateIdle": "idle"
+  }
+}

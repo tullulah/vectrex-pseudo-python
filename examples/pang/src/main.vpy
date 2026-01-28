@@ -54,10 +54,8 @@ player_x = 0             # Player X position
 const player_y = -70          # Player Y position (on ground)
 move_speed = 0           # Current movement speed (calculated from joystick)
 abs_joy = 0              # Helper for absolute value calculation
-player_anim_frame = 1    # Current animation frame (1-5)
-player_anim_counter = 0  # Frame counter for animation timing
-const player_anim_speed = 5    # Frames per animation frame
 player_facing = 1        # Direction facing: 1=right, -1=left
+player_anim_id = -1      # Animation instance ID
 
 # Enemy (bubble) system - maximum 8 enemies
 const MAX_ENEMIES = 8
@@ -94,6 +92,9 @@ def main():
     hook_active = 0
     hook_x = 0
     hook_y = -70
+    
+    # Initialize player animation
+    player_anim_id = CREATE_ANIM("player_anim")
 
 def loop():
 
@@ -340,39 +341,21 @@ def draw_game_level():
         else:
             player_facing = 1
         
-        # Animate walking (faster animation with higher speed)
-        player_anim_counter = player_anim_counter + 1
-        # Animation speed inversely proportional to joystick value
-        anim_threshold = player_anim_speed
-        if joy_x < -80 or joy_x > 80:
-            anim_threshold = player_anim_speed / 2  # Faster animation
-        
-        if player_anim_counter >= anim_threshold:
-            player_anim_counter = 0
-            player_anim_frame = player_anim_frame + 1
-            if player_anim_frame > 5:
-                player_anim_frame = 1
+        # Set animation state to walking
+        SET_ANIM_STATE(player_anim_id, 1)  # State 1 = walking
     else:
-        # Not moving - reset to idle frame
-        player_anim_frame = 1
-        player_anim_counter = 0
+        # Not moving - set to idle
+        SET_ANIM_STATE(player_anim_id, 0)  # State 0 = idle
    
-    # Determine mirror mode based on facing direction
+    # Set mirror based on facing direction
     mirror_mode = 0
     if player_facing == -1:
         mirror_mode = 1  # Mirror X (flip horizontally)
+    SET_ANIM_MIRROR(player_anim_id, mirror_mode)
     
-    # Draw animated sprite
-    if player_anim_frame == 1:
-        DRAW_VECTOR_EX("player_walk_1", player_x, player_y, mirror_mode, 80)
-    elif player_anim_frame == 2:
-        DRAW_VECTOR_EX("player_walk_2", player_x, player_y, mirror_mode, 80)
-    elif player_anim_frame == 3:
-        DRAW_VECTOR_EX("player_walk_3", player_x, player_y, mirror_mode, 80)
-    elif player_anim_frame == 4:
-        DRAW_VECTOR_EX("player_walk_4", player_x, player_y, mirror_mode, 80)
-    else:
-        DRAW_VECTOR_EX("player_walk_5", player_x, player_y, mirror_mode, 80)
+    # Update and draw player animation
+    UPDATE_ANIM(player_anim_id, player_x, player_y)
+    DRAW_ANIM(player_anim_id)
     
     # Update and draw enemies
     update_enemies()

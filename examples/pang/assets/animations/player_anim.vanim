@@ -1,0 +1,56 @@
+{
+  "version": "1.0",
+  "name": "player_anim",
+  "author": "VPy Animation System - Phase 5",
+  "created": "2026-01-27",
+  "frames": [
+    {
+      "id": "idle",
+      "vectorName": "player_walk_1",
+      "duration": 30,
+      "intensity": 80
+    },
+    {
+      "id": "walk_1",
+      "vectorName": "player_walk_1",
+      "duration": 5,
+      "intensity": 80
+    },
+    {
+      "id": "walk_2",
+      "vectorName": "player_walk_2",
+      "duration": 5,
+      "intensity": 80
+    },
+    {
+      "id": "walk_3",
+      "vectorName": "player_walk_3",
+      "duration": 5,
+      "intensity": 80
+    },
+    {
+      "id": "walk_4",
+      "vectorName": "player_walk_4",
+      "duration": 5,
+      "intensity": 80
+    },
+    {
+      "id": "walk_5",
+      "vectorName": "player_walk_5",
+      "duration": 5,
+      "intensity": 80
+    }
+  ],
+  "states": {
+    "idle": {
+      "name": "idle",
+      "frames": ["idle"],
+      "loop_state": true
+    },
+    "walking": {
+      "name": "walking",
+      "frames": ["walk_1", "walk_2", "walk_3", "walk_4", "walk_5"],
+      "loop_state": true
+    }
+  }
+}
