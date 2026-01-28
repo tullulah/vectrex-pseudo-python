@@ -504,6 +504,19 @@ export class MCPServer {
         required: ['name'],
       },
     });
+
+    this.registerTool('project/create_animation', this.createAnimation.bind(this), {
+      name: 'project/create_animation',
+      description: 'Create .vanim animation file with multi-frame vector sequences and state machines. Structure: {"version":"1.0","name":"player_anim","frames":[...],"states":{...}}. Frames reference .vec files. States define sequences (idle, walking, etc.).',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Animation file name (without .vanim extension)' },
+          content: { type: 'string', description: 'Valid JSON string for animation definition. Leave empty for default template.' },
+        },
+        required: ['name'],
+      },
+    });
   }
 
   private registerTool(name: string, handler: MCPToolHandler, schema: MCPTool) {
@@ -2616,6 +2629,163 @@ def loop():
       };
     } catch (error: any) {
       throw new Error(`Failed to create SFX file: ${error.message}`);
+    }
+  }
+
+  private async createAnimation(params: any): Promise<any> {
+    const fs = await import('fs/promises');
+    const path = await import('path');
+    
+    if (!this.mainWindow) {
+      throw new Error('No main window available');
+    }
+
+    // Get project root
+    const projectRoot = await this.mainWindow.webContents.executeJavaScript(`
+      (function() {
+        const store = window.__projectStore__;
+        if (!store) throw new Error('Project store not available');
+        const state = store.getState();
+        return state.project?.rootPath || state.vpyProject?.rootDir;
+      })()
+    `);
+
+    if (!projectRoot) {
+      throw new Error('No project open');
+    }
+
+    // Validate parameters
+    if (!params || typeof params !== 'object') {
+      throw new Error('Invalid parameters: expected object with "name" field');
+    }
+    
+    const { name, content } = params;
+    
+    if (!name || typeof name !== 'string') {
+      throw new Error('Invalid or missing "name" parameter. Must be a non-empty string.');
+    }
+    
+    const fileName = name.endsWith('.vanim') ? name : `${name}.vanim`;
+    const animPath = path.join(projectRoot, 'assets', 'animations', fileName);
+    
+    // Validate JSON format if content provided
+    if (content) {
+      try {
+        const parsed = JSON.parse(content);
+        if (!parsed.version || !Array.isArray(parsed.frames) || !parsed.states) {
+          throw new Error('Invalid animation JSON structure. Required fields: version, frames (array), states (object)');
+        }
+        
+        // Validate frames structure
+        if (parsed.frames.length > 0) {
+          const firstFrame = parsed.frames[0];
+          if (!firstFrame.id || !firstFrame.vectorName || typeof firstFrame.duration !== 'number') {
+            throw new Error('Invalid frame structure. Required fields: id, vectorName, duration');
+          }
+        }
+        
+        // Validate states structure (must be HashMap, not array)
+        if (Array.isArray(parsed.states)) {
+          throw new Error('States must be an object (HashMap), not an array. Example: {"idle": {...}, "walking": {...}}');
+        }
+        
+        // Validate at least one state exists
+        const stateKeys = Object.keys(parsed.states);
+        if (stateKeys.length === 0) {
+          throw new Error('At least one state is required');
+        }
+        
+        // Validate state structure
+        const firstState = parsed.states[stateKeys[0]];
+        if (!Array.isArray(firstState.frames) || typeof firstState.loop_state !== 'boolean') {
+          throw new Error('Invalid state structure. Required fields: frames (array of frame IDs), loop_state (boolean)');
+        }
+      } catch (error: any) {
+        if (error.message.includes('Invalid animation') || error.message.includes('Invalid frame') || error.message.includes('Invalid state') || error.message.includes('States must be')) {
+          throw error;
+        }
+        throw new Error(`Animation file MUST be valid JSON format. Error: ${error.message}\n\nExample format:\n{"version":"1.0","name":"player_anim","frames":[{"id":"idle","vectorName":"player_idle","duration":10,"intensity":127,"offset_x":0,"offset_y":0,"mirror":0}],"states":{"idle":{"name":"idle","frames":["idle"],"loop_state":true}}}\n\nNOTE: states is a HashMap (object), NOT an array. Use loop_state (NOT loop).`);
+      }
+    }
+    
+    // Default animation template if no content provided
+    const defaultContent = content || `{
+  "version": "1.0",
+  "name": "${name}",
+  "frames": [
+    {
+      "id": "idle",
+      "vectorName": "${name}_idle",
+      "duration": 10,
+      "intensity": 127,
+      "offset_x": 0,
+      "offset_y": 0,
+      "mirror": 0
+    },
+    {
+      "id": "frame_1",
+      "vectorName": "${name}_frame1",
+      "duration": 5,
+      "intensity": 127,
+      "offset_x": 0,
+      "offset_y": 0,
+      "mirror": 0
+    }
+  ],
+  "states": {
+    "idle": {
+      "name": "idle",
+      "frames": ["idle"],
+      "loop_state": true
+    },
+    "action": {
+      "name": "action",
+      "frames": ["frame_1"],
+      "loop_state": false
+    }
+  }
+}
+`;
+
+    try {
+      // Ensure animations directory exists
+      await fs.mkdir(path.dirname(animPath), { recursive: true });
+      
+      // Write animation file
+      await fs.writeFile(animPath, defaultContent, 'utf-8');
+      
+      // Get file stats for metadata
+      const stats = await fs.stat(animPath);
+      
+      // Open in editor with proper file metadata
+      const fileUri = `file://${animPath}`;
+      await this.mainWindow.webContents.executeJavaScript(`
+        (function() {
+          const store = window.__editorStore__;
+          if (store) {
+            const doc = {
+              uri: '${fileUri.replace(/\\/g, '\\\\')}',
+              language: 'json',
+              content: ${JSON.stringify(defaultContent)},
+              dirty: false,
+              diagnostics: [],
+              lastSavedContent: ${JSON.stringify(defaultContent)},
+              mtime: ${stats.mtimeMs},
+              size: ${stats.size}
+            };
+            store.getState().openDocument(doc);
+          }
+        })()
+      `);
+      
+      return {
+        success: true,
+        filePath: animPath,
+        relativePath: `assets/animations/${fileName}`,
+        message: `Animation file '${fileName}' created and opened successfully`
+      };
+    } catch (error: any) {
+      throw new Error(`Failed to create animation file: ${error.message}`);
     }
   }
 }

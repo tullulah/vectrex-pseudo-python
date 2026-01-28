@@ -6,6 +6,7 @@ import { MonacoEditorWrapper } from './MonacoEditorWrapper';
 import { VectorEditor } from './VectorEditor';
 import { MusicEditor } from './MusicEditor';
 import { SFXEditor } from './SFXEditor';
+import { AnimationEditor } from './AnimationEditor';
 
 // Basic custom tab bar replacing flexlayout doc:* logic.
 // Phase 1: single group, order = documents array order.
@@ -41,6 +42,7 @@ export const EditorSurface: React.FC = () => {
   const isVectorFile = active?.endsWith('.vec') || false;
   const isMusicFile = active?.endsWith('.vmus') || false;
   const isSfxFile = active?.endsWith('.vsfx') || false;
+  const isAnimFile = active?.endsWith('.vanim') || false;
   
   // Parse vector resource from document content
   const vectorResource = useMemo(() => {
@@ -72,6 +74,16 @@ export const EditorSurface: React.FC = () => {
     }
   }, [isSfxFile, activeDoc?.content]);
 
+  // Parse animation resource from document content
+  const animResource = useMemo(() => {
+    if (!isAnimFile || !activeDoc?.content) return undefined;
+    try {
+      return JSON.parse(activeDoc.content);
+    } catch {
+      return undefined;
+    }
+  }, [isAnimFile, activeDoc?.content]);
+
   // Handle vector editor changes
   const handleVectorChange = useCallback((resource: any) => {
     if (!active) return;
@@ -93,6 +105,13 @@ export const EditorSurface: React.FC = () => {
     useEditorStore.getState().updateContent(active, newContent);
   }, [active]);
 
+  // Handle animation editor changes
+  const handleAnimChange = useCallback((resource: any) => {
+    if (!active) return;
+    const newContent = JSON.stringify(resource, null, 2);
+    useEditorStore.getState().updateContent(active, newContent);
+  }, [active]);
+
   return (
     <div className="vpy-editor-surface">
       <div className="vpy-tab-bar">
@@ -101,7 +120,8 @@ export const EditorSurface: React.FC = () => {
           const isVec = doc.uri.endsWith('.vec');
           const isMus = doc.uri.endsWith('.vmus');
           const isSfx = doc.uri.endsWith('.vsfx');
-          const icon = isSfx ? '🔊' : isMus ? '🎵' : isVec ? '🎨' : '📄';
+          const isAnim = doc.uri.endsWith('.vanim');
+          const icon = isSfx ? '🔊' : isMus ? '🎵' : isVec ? '🎨' : isAnim ? '🎬' : '📄';
           return (
             <div key={doc.uri}
               className={"vpy-tab" + (doc.uri===active?" active":"") + (doc.dirty?" dirty":"")}
@@ -118,6 +138,15 @@ export const EditorSurface: React.FC = () => {
       <div className="vpy-editor-body">
         {!active ? (
           <WelcomeView />
+        ) : isAnimFile ? (
+          <div style={{ background: '#1e1e2e', width: '100%', height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'flex-start', paddingTop: 16 }}>
+            <AnimationEditor 
+              resource={animResource} 
+              onChange={handleAnimChange}
+              width={1200}
+              height={700}
+            />
+          </div>
         ) : isSfxFile ? (
           <div style={{ background: '#16213e', width: '100%', height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'flex-start', paddingTop: 16 }}>
             <SFXEditor 

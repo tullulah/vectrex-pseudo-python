@@ -21,6 +21,7 @@ import { MemoryPanel } from './panels/MemoryPanel';
 import { TracePanel } from './panels/TracePanel';
 import { PsgLogPanel } from './panels/PsgLogPanel';
 import { BiosCallsPanel } from './panels/BiosCallsPanel';
+import { BreakpointsPanel } from './panels/BreakpointsPanel';
 import { AiAssistantPanel } from './panels/AiAssistantPanel';
 import { PlaygroundPanel } from './panels/PlaygroundPanel';
 
@@ -53,6 +54,7 @@ const defaultJson = {
             "children": [
               { "type": "tab", "name": "Debug", "component": "debug" },
               { "type": "tab", "name": "Errors", "component": "errors" },
+              { "type": "tab", "name": "Breakpoints", "component": "breakpoints" },
               { "type": "tab", "name": "Build Output", "component": "build-output" },
               { "type": "tab", "name": "Compiler Output", "component": "compiler-output" },
               { "type": "tab", "name": "Memory", "component": "memory" },
@@ -110,6 +112,7 @@ export const DockWorkspace: React.FC = () => {
     emulator: { json: null as any },
     debug: { json: null as any },
   errors: { json: null as any },
+  breakpoints: { json: null as any },
   memory: { json: null as any },
   trace: { json: null as any },
   psglog: { json: null as any },
@@ -142,6 +145,7 @@ export const DockWorkspace: React.FC = () => {
       case 'emulator': return <EmulatorPanel key="emulator-panel-singleton" />;
   case 'debug': return <DebugPanel key="debug-panel" />;
   case 'errors': return <ErrorsPanel key="errors-panel" />;
+  case 'breakpoints': return <BreakpointsPanel key="breakpoints-panel" />;
   case 'memory': return <MemoryPanel key="memory-panel" />;
   case 'trace': return <TracePanel key="trace-panel" />;
   case 'psglog': return <PsgLogPanel key="psglog-panel" />;
@@ -288,6 +292,7 @@ export const DockWorkspace: React.FC = () => {
       emulator: t('panel.emulator', 'Emulator'),
       debug: t('panel.debug', 'Debug'),
       errors: t('panel.errors', 'Errors'),
+      breakpoints: t('panel.breakpoints', 'Breakpoints'),
       output: t('panel.output', 'Output'),
       'build-output': 'Build Output',
       'compiler-output': 'Compiler Output',
@@ -396,7 +401,7 @@ export const DockWorkspace: React.FC = () => {
       // Detect orientation/edge: inspect first panel child component to infer its last saved location
       // We'll treat debug/errors as bottom, files as left, emulator as right.
       let edge: 'left' | 'right' | 'bottom' | 'top' = 'top';
-  if (panelChildren.every(pc => pc === 'debug' || pc === 'errors' || pc === 'output')) edge = 'bottom';
+  if (panelChildren.every(pc => pc === 'debug' || pc === 'errors' || pc === 'breakpoints' || pc === 'output')) edge = 'bottom';
       else if (panelChildren.every(pc => pc === 'files')) edge = 'left';
   else if (panelChildren.every(pc => pc === 'emulator' || pc === 'memory' || pc === 'trace' || pc === 'bioscalls')) edge = 'right';
       // top currently unused but reserved if future top docking added
@@ -407,7 +412,7 @@ export const DockWorkspace: React.FC = () => {
         if (parentId) {
           // edge inference again
           let edge: 'left'|'right'|'bottom'|'top' = 'top';
-          if (pc === 'files') edge='left'; else if (pc==='emulator' || pc==='memory' || pc==='trace' || pc==='bioscalls') edge='right'; else if (pc==='debug' || pc==='errors' || pc==='output') edge='bottom';
+          if (pc === 'files') edge='left'; else if (pc==='emulator' || pc==='memory' || pc==='trace' || pc==='bioscalls') edge='right'; else if (pc==='debug' || pc==='errors' || pc==='breakpoints' || pc==='output') edge='bottom';
           panelMetaRef.current[pc] = { edge, parentTabsetId: parentId };
         }
       });
@@ -464,7 +469,7 @@ export const DockWorkspace: React.FC = () => {
     const unsub = dockBus.on((ev: DockEvent) => {
       if (ev.type === 'toggle') {
         const comp = ev.component;
-  if (hasComponent(comp) && ['files','editor','emulator','debug','errors','output','memory','trace','bioscalls','editor-placeholder'].includes(comp)) {
+  if (hasComponent(comp) && ['files','editor','emulator','debug','errors','breakpoints','output','memory','trace','bioscalls','editor-placeholder'].includes(comp)) {
           // Capture existing node before removal for restoration later
           let targetNode: any | undefined; let parentId: string | undefined; let index: number | undefined; let parentWeight: number | undefined;
           model.visitNodes((n:any) => {

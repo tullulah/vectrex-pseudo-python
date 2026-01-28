@@ -210,6 +210,122 @@ export const VPY_FUNCTIONS: VPyFunction[] = [
     notes: "AUTOMATIC: Compiler auto-injects this after WAIT_RECAL in loop(). Updates music (channel B) and SFX (channel C) together. Sets DP=$D0 for BIOS Sound_Byte calls. No manual call needed - it's built-in."
   },
   {
+    name: "CREATE_ANIM",
+    syntax: "CREATE_ANIM(name)",
+    description: "Creates animation instance from .vanim asset and returns instance ID",
+    parameters: [
+      { name: "name", type: "string", description: "Name of the animation asset (without .vanim extension)", required: true }
+    ],
+    examples: [
+      "# In main() - create animation instances",
+      "player_anim_id = CREATE_ANIM(\"player_anim\")",
+      "enemy_anim_id = CREATE_ANIM(\"enemy_walk\")",
+      "",
+      "# Instance pool: max 16 simultaneous animations",
+      "# Returns: 0-15 (valid ID) or -1 (pool full)"
+    ],
+    category: "animation",
+    notes: "Animation system supports state machines with multiple states per animation. Max 16 concurrent instances. Instance ID must be stored in variable for use with UPDATE_ANIM, DRAW_ANIM, SET_ANIM_STATE, etc."
+  },
+  {
+    name: "UPDATE_ANIM",
+    syntax: "UPDATE_ANIM(anim_id, x, y)",
+    description: "Updates animation frame counter and stores position for drawing",
+    parameters: [
+      { name: "anim_id", type: "int", description: "Animation instance ID (from CREATE_ANIM)", required: true },
+      { name: "x", type: "int", description: "X position for drawing (-127 to +127)", required: true },
+      { name: "y", type: "int", description: "Y position for drawing (-127 to +127)", required: true }
+    ],
+    examples: [
+      "def loop():",
+      "    WAIT_RECAL()",
+      "    ",
+      "    # Update animation position + advance frame",
+      "    UPDATE_ANIM(player_anim_id, player_x, player_y)",
+      "    ",
+      "    # Draw current frame at stored position",
+      "    DRAW_ANIM(player_anim_id)"
+    ],
+    category: "animation",
+    notes: "Must be called before DRAW_ANIM. Advances frame counter based on duration in .vanim. Stores position in instance data for DRAW_ANIM to use. Handles frame looping automatically based on state configuration."
+  },
+  {
+    name: "DRAW_ANIM",
+    syntax: "DRAW_ANIM(anim_id)",
+    description: "Draws current animation frame at position set by UPDATE_ANIM",
+    parameters: [
+      { name: "anim_id", type: "int", description: "Animation instance ID (from CREATE_ANIM)", required: true }
+    ],
+    examples: [
+      "def loop():",
+      "    WAIT_RECAL()",
+      "    UPDATE_ANIM(player_anim_id, player_x, player_y)",
+      "    DRAW_ANIM(player_anim_id)  # Draw at stored position"
+    ],
+    category: "animation",
+    notes: "Draws the vector sprite for the current frame. Uses position from last UPDATE_ANIM call. Uses mirror mode from last SET_ANIM_MIRROR call (if any). Very lightweight - just loads frame data and calls DRAW_VECTOR_EX."
+  },
+  {
+    name: "SET_ANIM_STATE",
+    syntax: "SET_ANIM_STATE(anim_id, state_index)",
+    description: "Changes animation state (switches between idle, walking, attacking, etc.)",
+    parameters: [
+      { name: "anim_id", type: "int", description: "Animation instance ID (from CREATE_ANIM)", required: true },
+      { name: "state_index", type: "int", description: "State index (0-based, defined in .vanim)", required: true }
+    ],
+    examples: [
+      "# Animation states defined in player_anim.vanim:",
+      "# State 0: idle (1 frame, long duration)",
+      "# State 1: walking (5 frames, short duration, loops)",
+      "",
+      "def loop():",
+      "    # Change state based on input",
+      "    if joystick_moving:",
+      "        SET_ANIM_STATE(player_anim_id, 1)  # walking",
+      "    else:",
+      "        SET_ANIM_STATE(player_anim_id, 0)  # idle"
+    ],
+    category: "animation",
+    notes: "State changes are instant - frame resets to first frame of new state. Each state has its own frame list and loop behavior. States are numbered 0,1,2... in order they appear in .vanim states object."
+  },
+  {
+    name: "SET_ANIM_MIRROR",
+    syntax: "SET_ANIM_MIRROR(anim_id, mirror_mode)",
+    description: "Sets mirror/flip mode for animation drawing (affects all frames)",
+    parameters: [
+      { name: "anim_id", type: "int", description: "Animation instance ID (from CREATE_ANIM)", required: true },
+      { name: "mirror_mode", type: "int", description: "Mirror flags: 0=normal, 1=X-flip, 2=Y-flip, 3=XY-flip", required: true }
+    ],
+    examples: [
+      "# Flip sprite based on facing direction",
+      "player_facing = 1  # 1=right, -1=left",
+      "",
+      "def loop():",
+      "    mirror = 0 if player_facing == 1 else 1",
+      "    SET_ANIM_MIRROR(player_anim_id, mirror)",
+      "    UPDATE_ANIM(player_anim_id, player_x, player_y)",
+      "    DRAW_ANIM(player_anim_id)"
+    ],
+    category: "animation",
+    notes: "Mirror modes: 0=normal, 1=horizontal flip (left-right), 2=vertical flip (up-down), 3=both axes (180° rotation). Affects all frames in all states until changed again. Perfect for character facing direction."
+  },
+  {
+    name: "DESTROY_ANIM",
+    syntax: "DESTROY_ANIM(anim_id)",
+    description: "Frees animation instance back to pool (allows creating new animations)",
+    parameters: [
+      { name: "anim_id", type: "int", description: "Animation instance ID to free", required: true }
+    ],
+    examples: [
+      "# Free animation when enemy dies",
+      "if enemy_health <= 0:",
+      "    DESTROY_ANIM(enemy_anim_id)",
+      "    enemy_anim_id = -1  # Mark as invalid"
+    ],
+    category: "animation",
+    notes: "Optional - only needed if you're creating/destroying animations dynamically. If animation count stays constant, no need to destroy. Pool size is 16 instances."
+  },
+  {
     name: "J1_X",
     syntax: "J1_X()",
     description: "Reads Joystick 1 X axis position (DIGITAL by default)",
@@ -804,7 +920,136 @@ Refer to docs/ folder for comprehensive documentation.
 ### Asset System:
 - Vector graphics: assets/vectors/*.vec (JSON)
 - Music files: assets/music/*.vmus (JSON)
-- Access: DRAW_VECTOR("name"), PLAY_MUSIC("name")
+- Animation files: assets/animations/*.vanim (JSON)
+- Access: DRAW_VECTOR("name"), PLAY_MUSIC("name"), CREATE_ANIM("name")
+
+#### Animation Assets (.vanim Format):
+Animation files define multi-frame vector sequences with state machines for characters/objects.
+
+**File Structure**:
+\`\`\`json
+{
+  "version": "1.0",
+  "name": "player_anim",
+  "frames": [
+    {
+      "id": "idle",
+      "vectorName": "player_idle",
+      "duration": 10,
+      "intensity": 127,
+      "offset_x": 0,
+      "offset_y": 0,
+      "mirror": 0
+    },
+    {
+      "id": "walk_1",
+      "vectorName": "player_walk1",
+      "duration": 5,
+      "intensity": 127,
+      "offset_x": 0,
+      "offset_y": 0,
+      "mirror": 0
+    }
+  ],
+  "states": {
+    "idle": {
+      "name": "idle",
+      "frames": ["idle"],
+      "loop_state": true
+    },
+    "walking": {
+      "name": "walking",
+      "frames": ["walk_1", "walk_2", "walk_3", "walk_4"],
+      "loop_state": true
+    }
+  }
+}
+\`\`\`
+
+**Key Fields**:
+- **frames**: Array of frame definitions (each references a .vec file)
+  - **id**: Unique frame identifier (referenced by states)
+  - **vectorName**: Name of .vec asset to draw (must exist in assets/vectors/)
+  - **duration**: Frame duration in game ticks (50 FPS, so 10 = 0.2 seconds)
+  - **intensity**: Brightness 0-127 (can override .vec intensity)
+  - **offset_x/offset_y**: Position offset from anchor point
+  - **mirror**: 0=normal, 1=X-flip, 2=Y-flip, 3=XY-flip
+
+- **states**: HashMap of animation states (idle, walking, attacking, etc.)
+  - **name**: State identifier (for debugging)
+  - **frames**: Array of frame IDs to play in sequence
+  - **loop_state**: true = loop animation, false = play once and stop
+
+**State Indexing**:
+- States are indexed 0-based by their order in the JSON object
+- Example: {"idle": {...}, "walking": {...}} → idle=0, walking=1
+- Use SET_ANIM_STATE(anim_id, 0) for idle, SET_ANIM_STATE(anim_id, 1) for walking
+
+**Integration Workflow**:
+1. Create .vec files for each frame (player_idle.vec, player_walk1.vec, etc.)
+2. Create .vanim file referencing those .vec files
+3. In main(): \`player_id = CREATE_ANIM("player_anim")\`
+4. In loop(): 
+   - \`UPDATE_ANIM(player_id, x, y)\` (advance frame, store position)
+   - \`DRAW_ANIM(player_id)\` (draw at stored position)
+   - \`SET_ANIM_STATE(player_id, state_index)\` (change state based on input)
+   - \`SET_ANIM_MIRROR(player_id, mirror_mode)\` (flip for facing direction)
+
+**Best Practices**:
+- Keep frame durations consistent within a state (5-10 ticks typical)
+- Use loop_state=true for idle/walking, false for attack/death animations
+- Create separate states for each action (idle, walking, jumping, attacking)
+- Use mirror mode for facing direction instead of separate left/right assets
+- Max 16 concurrent animation instances (use DESTROY_ANIM to free if needed)
+
+#### Animation Editor (Visual Tool):
+**Purpose**: Create and edit .vanim files visually in the IDE (like VectorEditor, MusicEditor)
+
+**Opening**: Click any .vanim file in project explorer (🎬 icon in editor tabs)
+
+**Layout** (Three Panels):
+- **Left Panel - Frames**: List of all frames with add/delete/duplicate buttons
+  - Click frame to select and edit properties
+  - Each frame defines: vectorName, duration, intensity, offsets, mirror mode
+- **Center Panel - Preview**: 
+  - Real-time animation preview (256x256 canvas)
+  - Playback controls: Play ▶ / Stop ⏹ buttons
+  - Frame properties editor (appears when frame selected)
+  - Displays: current frame, tick counter, vector name
+  - Mirror mode selector for testing (0=normal, 1=X-flip, 2=Y-flip, 3=XY-flip)
+- **Right Panel - States**: State machine editor
+  - List of all states (idle, walking, etc.)
+  - Add/delete states
+  - Frame sequence: add frames to state, reorder with ▲▼ buttons, remove with ×
+  - Loop checkbox: toggle loop_state for each state
+
+**Workflow**:
+1. **Create vector assets first**: Use VectorEditor to create .vec files (player_idle.vec, player_walk1.vec, etc.)
+2. **Create animation**: Right-click assets/animations/ → "Create Animation" (or use MCP tool)
+3. **Add frames**: 
+   - Click "+ Add" in Frames panel
+   - Select vectorName from dropdown (shows all .vec files in project)
+   - Set duration (ticks), intensity (0-127), offsets, mirror mode
+4. **Create states**:
+   - Click "+ Add" in States panel, enter state name (e.g., "walking")
+   - Use dropdown to add frames to state sequence
+   - Reorder frames with ▲▼ buttons
+   - Toggle loop_state checkbox (usually ON for idle/walking, OFF for attacks)
+5. **Test playback**:
+   - Select a state in States panel
+   - Click Play ▶ to start animation
+   - Watch frame counter advance
+   - Test different mirror modes
+   - Click Stop ⏹ to reset
+6. **Save**: Ctrl+S (or Cmd+S) saves changes to .vanim file
+
+**Tips**:
+- Duplicate frames to quickly create variations (use "Duplicate" button)
+- Preview shows actual vector name text (real vector rendering coming in future update)
+- Frame duration = ticks at 50 FPS (5 ticks = 0.1 seconds, 10 ticks = 0.2 seconds)
+- States show index numbers (0, 1, 2...) for use with SET_ANIM_STATE(id, index)
+- Create separate .vanim files for different characters/objects
+- Test mirror modes before committing to animation design (saves creating duplicate assets)
 
 ### Multi-Module System (Phase 6.3 COMPLETE):
 **IMPORTANT: VPy now supports multi-file projects with import statements!**
@@ -1027,7 +1272,7 @@ export const IDE_AND_GIT_CONTEXT = `
 - Vectrex hardware guidance
 
 ## MCP (Model Context Protocol):
-23 specialized tools for AI integration and project management.
+28 specialized tools for AI integration and project management.
 
 ### COMMUNICATION STYLE:
 **BE CONCISE** - Execute tools silently without announcing them:
@@ -1101,16 +1346,17 @@ Do NOT explain which tools you're using unless the user asks. Just do the work.
 - **project/get_structure** - List ALL project files (USE THIS to verify assets exist)
 - **project/create_vector** - Create .vec file (validates JSON format)
 - **project/create_music** - Create .vmus file (validates JSON format)
+- **project/create_animation** - Create .vanim file (validates JSON format)
 - **project/read_file** - Read any project file (uses RELATIVE paths from project root)
 - **project/write_file** - Write any project file (uses RELATIVE paths from project root)
 
 **CRITICAL Asset Workflow:**
 1. ALWAYS call **project/get_structure** FIRST to see available assets
-2. Check 'assets/vectors/*.vec' and 'assets/music/*.vmus' in response
+2. Check 'assets/vectors/*.vec', 'assets/music/*.vmus', and 'assets/animations/*.vanim' in response
 3. ONLY use asset names that PHYSICALLY exist in the project
 4. Example: If you see 'rocket_base.vec', use DRAW_VECTOR("rocket_base")
 5. NEVER assume generic names like "player", "enemy", "ship_part1" exist
-6. If asset doesn't exist: Ask user or create with project/create_vector
+6. If asset doesn't exist: Ask user or create with project/create_vector, project/create_music, or project/create_animation
 
 **BEST PRACTICE: Prefer Assets Over Manual Drawing**
 ✅ **USE ASSETS (.vec files)** as the DEFAULT approach for all game objects:
@@ -1159,7 +1405,7 @@ Do NOT explain which tools you're using unless the user asks. Just do the work.
 
 ### MCP Tools Reference
 
-**EDITOR TOOLS (7 tools):**
+**EDITOR TOOLS (8 tools):**
 
 1. **editor/list_documents** - List all open documents
    - No parameters required
@@ -1241,7 +1487,7 @@ Do NOT explain which tools you're using unless the user asks. Just do the work.
 2. **debugger/get_callstack** - Get call stack
    - No parameters
 
-**PROJECT TOOLS (8 tools):**
+**PROJECT TOOLS (9 tools):**
 
 1. **project/get_structure** - Get complete project structure
    - No parameters
@@ -1277,6 +1523,15 @@ Do NOT explain which tools you're using unless the user asks. Just do the work.
    - Format: \`{"version":"1.0","name":"Song","author":"Composer","tempo":120,"ticksPerBeat":24,"totalTicks":384,"notes":[{"id":"note1","note":60,"start":0,"duration":48,"velocity":12,"channel":0}],"noise":[{"id":"noise1","start":0,"duration":24,"period":15,"channels":1}],"loopStart":0,"loopEnd":384}\`
    - Note fields: \`note\` (MIDI 0-127, 60=C4), \`velocity\` (0-15 volume), \`channel\` (0=A, 1=B, 2=C)
    - Noise fields: \`period\` (0-31, lower=higher pitch), \`channels\` (bitmask: 1=A, 2=B, 4=C, 7=all)
+
+9. **project/create_animation** - Create .vanim file with JSON validation
+   - \`name\`: string (required) - Filename WITHOUT .vanim extension
+   - \`content\`: string (optional) - Valid JSON or empty for template
+   - Format: \`{"version":"1.0","name":"player_anim","frames":[{"id":"idle","vectorName":"player_idle","duration":10,"intensity":127,"offset_x":0,"offset_y":0,"mirror":0}],"states":{"idle":{"name":"idle","frames":["idle"],"loop_state":true}}}\`
+   - Frame fields: \`id\` (unique identifier), \`vectorName\` (references .vec asset), \`duration\` (ticks at 50 FPS), \`intensity\` (0-127), \`offset_x/offset_y\` (position offset), \`mirror\` (0-3: normal, X-flip, Y-flip, XY-flip)
+   - States structure: HashMap object (NOT array) with state names as keys, each containing \`frames\` (array of frame IDs) and \`loop_state\` (boolean)
+   - ⚠️ NEVER use: states as array, loop (use loop_state), pitch/frequency in frames
+   - ✅ ALWAYS use: states as object {"idle":{...}}, loop_state (boolean), vectorName references existing .vec files
 
 ## IDE Diagnostics and Code Actions
 

@@ -2,7 +2,7 @@
 // Events: toggle:<component>, resetLayout, dockChanged
 // Components: files | editor | emulator | debug | errors | output | memory | trace | psglog | bioscalls | build-output | compiler-output | playground
 // (memory + trace + bioscalls + psglog added for new panels; unify handling so they can be hidden/pinned like others)
-export type DockComponent = 'files' | 'editor' | 'emulator' | 'debug' | 'errors' | 'output' | 'memory' | 'trace' | 'psglog' | 'bioscalls' | 'ai-assistant' | 'build-output' | 'compiler-output' | 'playground';
+export type DockComponent = 'files' | 'editor' | 'emulator' | 'debug' | 'errors' | 'breakpoints' | 'output' | 'memory' | 'trace' | 'psglog' | 'bioscalls' | 'ai-assistant' | 'build-output' | 'compiler-output' | 'playground';
 export type DockEvent =
   | { type: 'toggle'; component: DockComponent } // legacy toggle (may remove later)
   | { type: 'ensure'; component: DockComponent } // ensure exists (create if missing)
