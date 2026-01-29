@@ -24,7 +24,8 @@ interface VecVector {
 interface SceneObject {
   id: string;
   type: 'background' | 'enemy' | 'player' | 'projectile';
-  vectorName: string;
+  vectorName?: string; // Optional - for static vectors
+  animationName?: string; // Optional - for animated objects
   layer?: 'background' | 'gameplay' | 'foreground'; // NUEVO: Layer del nivel
   x: number;
   y: number;
@@ -46,8 +47,10 @@ export function PlaygroundPanel() {
   const [objects, setObjects] = useState<SceneObject[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [availableVectors, setAvailableVectors] = useState<string[]>([]);
+  const [availableAnimations, setAvailableAnimations] = useState<string[]>([]);
   const [loadedVectors, setLoadedVectors] = useState<Map<string, VecVector>>(new Map());
   const [draggedVector, setDraggedVector] = useState<string | null>(null);
+  const [draggedAnimation, setDraggedAnimation] = useState<string | null>(null);
   const [draggingObjectId, setDraggingObjectId] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState<{ x: number; y: number } | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -163,6 +166,41 @@ export function PlaygroundPanel() {
     };
 
     loadVectors();
+  }, [vpyProject]);
+
+  // Load available animations from project
+  useEffect(() => {
+    const loadAnimations = async () => {
+      if (!vpyProject) {
+        console.log('[Playground] No project loaded for animations');
+        return;
+      }
+
+      try {
+        const filesAPI = (window as any).files;
+        if (!filesAPI) {
+          console.error('[Playground] No files API available');
+          return;
+        }
+
+        const projectPath = vpyProject.rootDir;
+        const animPath = `${projectPath}/assets/animations`;
+
+        const result = await filesAPI.readDirectory(animPath);
+        if (!result.error && result.files) {
+          const animFiles = result.files
+            .filter((f: any) => !f.isDir && f.name.endsWith('.vanim'))
+            .map((f: any) => f.name.replace('.vanim', ''));
+          
+          console.log('[Playground] Found animations:', animFiles.length);
+          setAvailableAnimations(animFiles);
+        }
+      } catch (error) {
+        console.log('[Playground] No animations directory');
+      }
+    };
+
+    loadAnimations();
   }, [vpyProject]);
 
   // Load available .vplay scenes
@@ -536,7 +574,7 @@ export function PlaygroundPanel() {
   // Handle drag and drop to add objects
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
-    if (!draggedVector || !canvasRef.current) return;
+    if ((!draggedVector && !draggedAnimation) || !canvasRef.current) return;
 
     const rect = canvasRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
@@ -549,7 +587,8 @@ export function PlaygroundPanel() {
     const newObject: SceneObject = {
       id: `obj_${Date.now()}`,
       type: 'enemy',
-      vectorName: draggedVector,
+      vectorName: draggedVector || undefined,
+      animationName: draggedAnimation || undefined,
       layer: 'gameplay', // Por defecto gameplay
       x: vecX,
       y: vecY,
@@ -565,6 +604,7 @@ export function PlaygroundPanel() {
 
     setObjects([...objects, newObject]);
     setDraggedVector(null);
+    setDraggedAnimation(null);
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -666,6 +706,9 @@ export function PlaygroundPanel() {
 
   // Render a vector sprite from loaded .vec data
   const renderVector = (obj: SceneObject) => {
+    // Solo renderizar si es un vector (no una animación)
+    if (!obj.vectorName) return null;
+    
     const vecData = loadedVectors.get(obj.vectorName);
     if (!vecData) return null;
 
@@ -679,89 +722,72 @@ export function PlaygroundPanel() {
         onMouseDown={(e) => handleObjectMouseDown(e, obj.id)}
         style={{ cursor: draggingObjectId === obj.id ? 'grabbing' : 'grab' }}
       >
-        {vecData.layers.map((layer, layerIdx) => {
-          if (!layer.visible) return null;
-          
-          return layer.paths.map((path, pathIdx) => {
-            const points = path.points.map(p => `${p.x},${-p.y}`).join(' ');
-            const opacity = path.intensity / 255;
-            // Color coding: green=selected, blue=collidable, cyan=non-collidable
-            let color = '#00ff0080'; // default cyan (non-collidable)
-            if (isSelected) {
-              color = '#00ff00'; // bright green when selected
-            } else if (obj.collidable === true) {
-              color = '#4080ff80'; // blue for collidable
-            }
-            
-            if (path.closed) {
-              // Closed polygon
-              return (
-                <polygon
-                  key={`${layerIdx}-${pathIdx}`}
-                  points={points}
-                  fill="none"
-                  stroke={color}
-                  strokeWidth="1"
-                  opacity={opacity}
-                />
-              );
-            } else {
-              // Open polyline
-              return (
-                <polyline
-                  key={`${layerIdx}-${pathIdx}`}
-                  points={points}
-                  fill="none"
-                  stroke={color}
-                  strokeWidth="1"
-                  opacity={opacity}
-                />
-              );
-            }
-          });
-        })}
-        
-        {/* Selection indicator */}
+        {vecData.layers.map((layer, layerIdx) =>
+          layer.paths.map((path, pathIdx) => (
+            <polyline
+              key={`${layerIdx}-${pathIdx}`}
+              points={path.points.map(p => `${p.x},${-p.y}`).join(' ')}
+              fill="none"
+              stroke={isSelected ? '#ffff00' : '#00ff00'}
+              strokeWidth="1.5"
+              strokeOpacity={path.intensity / 255}
+            />
+          ))
+        )}
         {isSelected && (
-          <circle cx="0" cy="0" r="3" fill="#00ff00" opacity="0.5" />
-        )}
-        
-        {/* Collision indicator */}
-        {obj.collidable && !isSelected && (
-          <rect x="-2" y="-2" width="4" height="4" fill="#4080ff" opacity="0.6" />
-        )}
-        
-        {/* Velocity arrow */}
-        {isSelected && editingVelocity && obj.velocity && (
-          <g
-            onMouseDown={handleVelocityArrowMouseDown}
-            style={{ cursor: 'move' }}
-          >
-            <line
-              x1="0"
-              y1="0"
-              x2={(obj.velocity.x || 0) * 3}
-              y2={-(obj.velocity.y || 0) * 3}
-              stroke="#ff8000"
-              strokeWidth="2"
-              markerEnd="url(#arrowhead)"
-            />
-            <circle cx="0" cy="0" r="4" fill="#ff8000" opacity="0.8" />
-            {/* Draggable end point */}
-            <circle
-              cx={(obj.velocity.x || 0) * 3}
-              cy={-(obj.velocity.y || 0) * 3}
-              r="6"
-              fill="#ff8000"
-              stroke="#fff"
-              strokeWidth="1"
-              opacity="0.9"
-              style={{ cursor: 'move' }}
-            />
-          </g>
+          <circle
+            cx="0"
+            cy="0"
+            r="5"
+            fill="none"
+            stroke="#ffff00"
+            strokeWidth="2"
+          />
         )}
       </g>
     );
+  };
+
+  // Render animation (as placeholder icon for now)
+  const renderAnimation = (obj: SceneObject) => {
+    if (!obj.animationName) return null;
+
+    const svgPos = vecToSvg(obj.x, obj.y);
+    const isSelected = selectedId === obj.id;
+
+    return (
+      <g
+        key={obj.id}
+        transform={`translate(${svgPos.x}, ${svgPos.y})`}
+        onMouseDown={(e) => handleObjectMouseDown(e, obj.id)}
+        style={{ cursor: draggingObjectId === obj.id ? 'grabbing' : 'grab' }}
+      >
+        {/* Film reel icon */}
+        <circle cx="0" cy="0" r="8" fill="none" stroke={isSelected ? '#ffff00' : '#00ffff'} strokeWidth="2" />
+        <line x1="-4" y1="0" x2="4" y2="0" stroke={isSelected ? '#ffff00' : '#00ffff'} strokeWidth="1.5" />
+        <line x1="0" y1="-4" x2="0" y2="4" stroke={isSelected ? '#ffff00' : '#00ffff'} strokeWidth="1.5" />
+        {/* Animation name label */}
+        <text
+          x="12"
+          y="4"
+          fill={isSelected ? '#ffff00' : '#00ffff'}
+          fontSize="6"
+          fontFamily="monospace"
+        >
+          {obj.animationName}
+        </text>
+      </g>
+    );
+  };
+
+  // Render object (vector or animation)
+  const renderObject = (obj: SceneObject) => {
+    if (obj.animationName) {
+      return renderAnimation(obj);
+    } else if (obj.vectorName) {
+      return renderVector(obj);
+    }
+    return null;
   };
 
   return (
@@ -943,6 +969,42 @@ export function PlaygroundPanel() {
               </div>
             ))}
           </div>
+          
+          <h3 style={{ fontSize: '12px', margin: '12px 12px 8px 12px', color: '#888', flexShrink: 0 }}>
+            ANIMATIONS
+          </h3>
+          <div style={{
+            flex: 1,
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            padding: '0 12px 12px 12px',
+            minHeight: 0,
+          }}>
+            {availableAnimations.length === 0 && (
+              <div style={{ fontSize: '11px', color: '#666', fontStyle: 'italic' }}>
+                No .vanim files found in assets/animations/
+              </div>
+            )}
+            {availableAnimations.map(anim => (
+              <div
+                key={anim}
+                draggable
+                onDragStart={() => setDraggedAnimation(anim)}
+                style={{
+                  padding: '8px',
+                  marginBottom: '4px',
+                  backgroundColor: '#2d3a2d',
+                  border: '1px solid #4a6a4a',
+                  borderRadius: '4px',
+                  cursor: 'grab',
+                  fontSize: '11px',
+                  fontFamily: 'monospace',
+                }}
+              >
+                🎬 {anim}
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Canvas Area */}
@@ -998,8 +1060,8 @@ export function PlaygroundPanel() {
             {/* Center marker */}
             <circle cx={VECTREX_WIDTH / 2} cy={VECTREX_HEIGHT / 2} r="3" fill="#00ff00" opacity="0.5" />
 
-            {/* Objects - render actual vectors */}
-            {objects.map(obj => renderVector(obj))}
+            {/* Objects - render actual vectors and animations */}
+            {objects.map(obj => renderObject(obj))}
 
             {/* Coordinates display */}
             <text x="5" y="15" fill="#00ff00" fontSize="8" fontFamily="monospace">
@@ -1027,14 +1089,26 @@ export function PlaygroundPanel() {
 
                 return (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    <div>
-                      <label style={{ color: '#888', display: 'block', marginBottom: '4px' }}>
-                        Vector
-                      </label>
-                      <div style={{ color: '#d4d4d4', fontFamily: 'monospace' }}>
-                        {obj.vectorName}
+                    {obj.vectorName && (
+                      <div>
+                        <label style={{ color: '#888', display: 'block', marginBottom: '4px' }}>
+                          Vector
+                        </label>
+                        <div style={{ color: '#d4d4d4', fontFamily: 'monospace' }}>
+                          📦 {obj.vectorName}
+                        </div>
                       </div>
-                    </div>
+                    )}
+                    {obj.animationName && (
+                      <div>
+                        <label style={{ color: '#888', display: 'block', marginBottom: '4px' }}>
+                          Animation
+                        </label>
+                        <div style={{ color: '#6d6', fontFamily: 'monospace' }}>
+                          🎬 {obj.animationName}
+                        </div>
+                      </div>
+                    )}
                     <div>
                       <label style={{ color: '#888', display: 'block', marginBottom: '4px' }}>
                         Layer
