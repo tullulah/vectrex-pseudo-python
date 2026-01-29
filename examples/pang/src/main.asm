@@ -25,7 +25,7 @@
 
 ; === RAM VARIABLE DEFINITIONS (EQU) ===
 ; AUTO-GENERATED - All offsets calculated automatically
-; Total RAM used: 297 bytes
+; Total RAM used: 487 bytes
 RESULT               EQU $C880+$00   ; Main result temporary (2 bytes)
 TMPLEFT              EQU $C880+$02   ; Left operand temp (2 bytes)
 TMPLEFT2             EQU $C880+$04   ; Left operand temp 2 (for nested operations) (2 bytes)
@@ -56,76 +56,76 @@ SFX_TICK             EQU $C880+$2E   ; Current frame counter (2 bytes)
 SFX_ACTIVE           EQU $C880+$30   ; Playback state ($00=stopped, $01=playing) (1 bytes)
 SFX_PHASE            EQU $C880+$31   ; Envelope phase (0=A,1=D,2=S,3=R) (1 bytes)
 SFX_VOL              EQU $C880+$32   ; Current volume level (0-15) (1 bytes)
-NUM_STR              EQU $C880+$33   ; String buffer for PRINT_NUMBER (2 bytes)
-DRAW_VEC_X           EQU $C880+$35   ; X position offset for vector drawing (1 bytes)
-DRAW_VEC_Y           EQU $C880+$36   ; Y position offset for vector drawing (1 bytes)
-MIRROR_X             EQU $C880+$37   ; X-axis mirror flag (0=normal, 1=flip) (1 bytes)
-MIRROR_Y             EQU $C880+$38   ; Y-axis mirror flag (0=normal, 1=flip) (1 bytes)
-DRAW_VEC_INTENSITY   EQU $C880+$39   ; Intensity override (0=use vector's, >0=override) (1 bytes)
-LEVEL_PTR            EQU $C880+$3A   ; Pointer to currently loaded level data (2 bytes)
-LEVEL_BG_COUNT       EQU $C880+$3C   ; SHOW_LEVEL: background object count (1 bytes)
-LEVEL_GP_COUNT       EQU $C880+$3D   ; SHOW_LEVEL: gameplay object count (1 bytes)
-LEVEL_FG_COUNT       EQU $C880+$3E   ; SHOW_LEVEL: foreground object count (1 bytes)
-LEVEL_BG_PTR         EQU $C880+$3F   ; SHOW_LEVEL: background objects pointer (RAM buffer) (2 bytes)
-LEVEL_GP_PTR         EQU $C880+$41   ; SHOW_LEVEL: gameplay objects pointer (RAM buffer) (2 bytes)
-LEVEL_FG_PTR         EQU $C880+$43   ; SHOW_LEVEL: foreground objects pointer (RAM buffer) (2 bytes)
-LEVEL_BG_ROM_PTR     EQU $C880+$45   ; LOAD_LEVEL: background objects pointer (ROM) (2 bytes)
-LEVEL_GP_ROM_PTR     EQU $C880+$47   ; LOAD_LEVEL: gameplay objects pointer (ROM) (2 bytes)
-LEVEL_FG_ROM_PTR     EQU $C880+$49   ; LOAD_LEVEL: foreground objects pointer (ROM) (2 bytes)
-LEVEL_GP_BUFFER      EQU $C880+$4B   ; Gameplay objects buffer (max 2 objects × 14 bytes, auto-sized) (28 bytes)
-UGPC_OUTER_IDX       EQU $C880+$67   ; Outer loop index for collision detection (1 bytes)
-UGPC_OUTER_MAX       EQU $C880+$68   ; Outer loop max value (count-1) (1 bytes)
-UGPC_INNER_IDX       EQU $C880+$69   ; Inner loop index for collision detection (1 bytes)
-UGPC_DX              EQU $C880+$6A   ; Distance X temporary (16-bit) (2 bytes)
-UGPC_DIST            EQU $C880+$6C   ; Manhattan distance temporary (16-bit) (2 bytes)
-VLINE_DX_16          EQU $C880+$6E   ; x1-x0 (16-bit) for line drawing (2 bytes)
-VLINE_DY_16          EQU $C880+$70   ; y1-y0 (16-bit) for line drawing (2 bytes)
-VLINE_DX             EQU $C880+$72   ; Clamped dx (8-bit) (1 bytes)
-VLINE_DY             EQU $C880+$73   ; Clamped dy (8-bit) (1 bytes)
-VLINE_DY_REMAINING   EQU $C880+$74   ; Remaining dy for segment 2 (16-bit) (2 bytes)
-VLINE_DX_REMAINING   EQU $C880+$76   ; Remaining dx for segment 2 (16-bit) (2 bytes)
-VLINE_STEPS          EQU $C880+$78   ; Line drawing step counter (1 bytes)
-VLINE_LIST           EQU $C880+$79   ; 2-byte vector list (Y|endbit, X) (2 bytes)
-VAR_SCREEN           EQU $C880+$7B   ; User variable (2 bytes)
-VAR_TITLE_INTENSITY  EQU $C880+$7D   ; User variable (2 bytes)
-VAR_TITLE_STATE      EQU $C880+$7F   ; User variable (2 bytes)
-VAR_CURRENT_MUSIC    EQU $C880+$81   ; User variable (2 bytes)
-VAR_CURRENT_LEVEL_PTR EQU $C880+$83   ; User variable (2 bytes)
-VAR_JOYSTICK1_STATE_DATA EQU $C880+$85   ; Array data (6 elements) (12 bytes)
-VAR_CURRENT_LOCATION EQU $C880+$91   ; User variable (2 bytes)
-VAR_LOCATION_GLOW_INTENSITY EQU $C880+$93   ; User variable (2 bytes)
-VAR_LOCATION_GLOW_DIRECTION EQU $C880+$95   ; User variable (2 bytes)
-VAR_JOY_X            EQU $C880+$97   ; User variable (2 bytes)
-VAR_JOY_Y            EQU $C880+$99   ; User variable (2 bytes)
-VAR_PREV_JOY_X       EQU $C880+$9B   ; User variable (2 bytes)
-VAR_PREV_JOY_Y       EQU $C880+$9D   ; User variable (2 bytes)
-VAR_COUNTDOWN_TIMER  EQU $C880+$9F   ; User variable (2 bytes)
-VAR_COUNTDOWN_ACTIVE EQU $C880+$A1   ; User variable (2 bytes)
-VAR_JOYSTICK_POLL_COUNTER EQU $C880+$A3   ; User variable (2 bytes)
-VAR_HOOK_ACTIVE      EQU $C880+$A5   ; User variable (2 bytes)
-VAR_HOOK_X           EQU $C880+$A7   ; User variable (2 bytes)
-VAR_HOOK_Y           EQU $C880+$A9   ; User variable (2 bytes)
-VAR_HOOK_GUN_X       EQU $C880+$AB   ; User variable (2 bytes)
-VAR_HOOK_GUN_Y       EQU $C880+$AD   ; User variable (2 bytes)
-VAR_HOOK_INIT_Y      EQU $C880+$AF   ; User variable (2 bytes)
-VAR_PLAYER_X         EQU $C880+$B1   ; User variable (2 bytes)
-VAR_MOVE_SPEED       EQU $C880+$B3   ; User variable (2 bytes)
-VAR_ABS_JOY          EQU $C880+$B5   ; User variable (2 bytes)
-VAR_PLAYER_ANIM_FRAME EQU $C880+$B7   ; User variable (2 bytes)
-VAR_PLAYER_ANIM_COUNTER EQU $C880+$B9   ; User variable (2 bytes)
-VAR_PLAYER_FACING    EQU $C880+$BB   ; User variable (2 bytes)
-VAR_ENEMY_ACTIVE_DATA EQU $C880+$BD   ; Array data (8 elements) (16 bytes)
-VAR_ENEMY_X_DATA     EQU $C880+$CD   ; Array data (8 elements) (16 bytes)
-VAR_ENEMY_Y_DATA     EQU $C880+$DD   ; Array data (8 elements) (16 bytes)
-VAR_ENEMY_VX_DATA    EQU $C880+$ED   ; Array data (8 elements) (16 bytes)
-VAR_ENEMY_VY_DATA    EQU $C880+$FD   ; Array data (8 elements) (16 bytes)
-VAR_ENEMY_SIZE_DATA  EQU $C880+$10D   ; Array data (8 elements) (16 bytes)
-VAR_ARG0             EQU $C880+$11D   ; Function argument 0 (2 bytes)
-VAR_ARG1             EQU $C880+$11F   ; Function argument 1 (2 bytes)
-VAR_ARG2             EQU $C880+$121   ; Function argument 2 (2 bytes)
-VAR_ARG3             EQU $C880+$123   ; Function argument 3 (2 bytes)
-VAR_ARG4             EQU $C880+$125   ; Function argument 4 (2 bytes)
-VAR_ARG5             EQU $C880+$127   ; Function argument 5 (2 bytes)
+ANIM_POOL            EQU $C880+$33   ; Animation instance pool (16 instances × 12 bytes) (192 bytes)
+NUM_STR              EQU $C880+$F3   ; String buffer for PRINT_NUMBER (2 bytes)
+DRAW_VEC_X           EQU $C880+$F5   ; X position offset for vector drawing (1 bytes)
+DRAW_VEC_Y           EQU $C880+$F6   ; Y position offset for vector drawing (1 bytes)
+MIRROR_X             EQU $C880+$F7   ; X-axis mirror flag (0=normal, 1=flip) (1 bytes)
+MIRROR_Y             EQU $C880+$F8   ; Y-axis mirror flag (0=normal, 1=flip) (1 bytes)
+DRAW_VEC_INTENSITY   EQU $C880+$F9   ; Intensity override (0=use vector's, >0=override) (1 bytes)
+LEVEL_PTR            EQU $C880+$FA   ; Pointer to currently loaded level data (2 bytes)
+LEVEL_BG_COUNT       EQU $C880+$FC   ; SHOW_LEVEL: background object count (1 bytes)
+LEVEL_GP_COUNT       EQU $C880+$FD   ; SHOW_LEVEL: gameplay object count (1 bytes)
+LEVEL_FG_COUNT       EQU $C880+$FE   ; SHOW_LEVEL: foreground object count (1 bytes)
+LEVEL_BG_PTR         EQU $C880+$FF   ; SHOW_LEVEL: background objects pointer (RAM buffer) (2 bytes)
+LEVEL_GP_PTR         EQU $C880+$101   ; SHOW_LEVEL: gameplay objects pointer (RAM buffer) (2 bytes)
+LEVEL_FG_PTR         EQU $C880+$103   ; SHOW_LEVEL: foreground objects pointer (RAM buffer) (2 bytes)
+LEVEL_BG_ROM_PTR     EQU $C880+$105   ; LOAD_LEVEL: background objects pointer (ROM) (2 bytes)
+LEVEL_GP_ROM_PTR     EQU $C880+$107   ; LOAD_LEVEL: gameplay objects pointer (ROM) (2 bytes)
+LEVEL_FG_ROM_PTR     EQU $C880+$109   ; LOAD_LEVEL: foreground objects pointer (ROM) (2 bytes)
+LEVEL_GP_BUFFER      EQU $C880+$10B   ; Gameplay objects buffer (max 2 objects × 14 bytes, auto-sized) (28 bytes)
+UGPC_OUTER_IDX       EQU $C880+$127   ; Outer loop index for collision detection (1 bytes)
+UGPC_OUTER_MAX       EQU $C880+$128   ; Outer loop max value (count-1) (1 bytes)
+UGPC_INNER_IDX       EQU $C880+$129   ; Inner loop index for collision detection (1 bytes)
+UGPC_DX              EQU $C880+$12A   ; Distance X temporary (16-bit) (2 bytes)
+UGPC_DIST            EQU $C880+$12C   ; Manhattan distance temporary (16-bit) (2 bytes)
+VLINE_DX_16          EQU $C880+$12E   ; x1-x0 (16-bit) for line drawing (2 bytes)
+VLINE_DY_16          EQU $C880+$130   ; y1-y0 (16-bit) for line drawing (2 bytes)
+VLINE_DX             EQU $C880+$132   ; Clamped dx (8-bit) (1 bytes)
+VLINE_DY             EQU $C880+$133   ; Clamped dy (8-bit) (1 bytes)
+VLINE_DY_REMAINING   EQU $C880+$134   ; Remaining dy for segment 2 (16-bit) (2 bytes)
+VLINE_DX_REMAINING   EQU $C880+$136   ; Remaining dx for segment 2 (16-bit) (2 bytes)
+VLINE_STEPS          EQU $C880+$138   ; Line drawing step counter (1 bytes)
+VLINE_LIST           EQU $C880+$139   ; 2-byte vector list (Y|endbit, X) (2 bytes)
+VAR_SCREEN           EQU $C880+$13B   ; User variable (2 bytes)
+VAR_TITLE_INTENSITY  EQU $C880+$13D   ; User variable (2 bytes)
+VAR_TITLE_STATE      EQU $C880+$13F   ; User variable (2 bytes)
+VAR_CURRENT_MUSIC    EQU $C880+$141   ; User variable (2 bytes)
+VAR_CURRENT_LEVEL_PTR EQU $C880+$143   ; User variable (2 bytes)
+VAR_JOYSTICK1_STATE_DATA EQU $C880+$145   ; Array data (6 elements) (12 bytes)
+VAR_CURRENT_LOCATION EQU $C880+$151   ; User variable (2 bytes)
+VAR_LOCATION_GLOW_INTENSITY EQU $C880+$153   ; User variable (2 bytes)
+VAR_LOCATION_GLOW_DIRECTION EQU $C880+$155   ; User variable (2 bytes)
+VAR_JOY_X            EQU $C880+$157   ; User variable (2 bytes)
+VAR_JOY_Y            EQU $C880+$159   ; User variable (2 bytes)
+VAR_PREV_JOY_X       EQU $C880+$15B   ; User variable (2 bytes)
+VAR_PREV_JOY_Y       EQU $C880+$15D   ; User variable (2 bytes)
+VAR_COUNTDOWN_TIMER  EQU $C880+$15F   ; User variable (2 bytes)
+VAR_COUNTDOWN_ACTIVE EQU $C880+$161   ; User variable (2 bytes)
+VAR_JOYSTICK_POLL_COUNTER EQU $C880+$163   ; User variable (2 bytes)
+VAR_HOOK_ACTIVE      EQU $C880+$165   ; User variable (2 bytes)
+VAR_HOOK_X           EQU $C880+$167   ; User variable (2 bytes)
+VAR_HOOK_Y           EQU $C880+$169   ; User variable (2 bytes)
+VAR_HOOK_GUN_X       EQU $C880+$16B   ; User variable (2 bytes)
+VAR_HOOK_GUN_Y       EQU $C880+$16D   ; User variable (2 bytes)
+VAR_HOOK_INIT_Y      EQU $C880+$16F   ; User variable (2 bytes)
+VAR_PLAYER_X         EQU $C880+$171   ; User variable (2 bytes)
+VAR_MOVE_SPEED       EQU $C880+$173   ; User variable (2 bytes)
+VAR_ABS_JOY          EQU $C880+$175   ; User variable (2 bytes)
+VAR_PLAYER_FACING    EQU $C880+$177   ; User variable (2 bytes)
+VAR_PLAYER_ANIM_ID   EQU $C880+$179   ; User variable (2 bytes)
+VAR_ENEMY_ACTIVE_DATA EQU $C880+$17B   ; Array data (8 elements) (16 bytes)
+VAR_ENEMY_X_DATA     EQU $C880+$18B   ; Array data (8 elements) (16 bytes)
+VAR_ENEMY_Y_DATA     EQU $C880+$19B   ; Array data (8 elements) (16 bytes)
+VAR_ENEMY_VX_DATA    EQU $C880+$1AB   ; Array data (8 elements) (16 bytes)
+VAR_ENEMY_VY_DATA    EQU $C880+$1BB   ; Array data (8 elements) (16 bytes)
+VAR_ENEMY_SIZE_DATA  EQU $C880+$1CB   ; Array data (8 elements) (16 bytes)
+VAR_ARG0             EQU $C880+$1DB   ; Function argument 0 (2 bytes)
+VAR_ARG1             EQU $C880+$1DD   ; Function argument 1 (2 bytes)
+VAR_ARG2             EQU $C880+$1DF   ; Function argument 2 (2 bytes)
+VAR_ARG3             EQU $C880+$1E1   ; Function argument 3 (2 bytes)
+VAR_ARG4             EQU $C880+$1E3   ; Function argument 4 (2 bytes)
+VAR_ARG5             EQU $C880+$1E5   ; Function argument 5 (2 bytes)
 PSG_MUSIC_PTR_DP   EQU $24  ; DP-relative
 PSG_MUSIC_START_DP EQU $26  ; DP-relative
 PSG_IS_PLAYING_DP  EQU $28  ; DP-relative
@@ -153,18 +153,16 @@ SFX_VOL_DP         EQU $32  ; DP-relative
 ; _CONST_DECL_4:  ; const hook_max_y
 ; VPy_LINE:54
 ; _CONST_DECL_5:  ; const player_y
-; VPy_LINE:59
-; _CONST_DECL_6:  ; const player_anim_speed
-; VPy_LINE:63
-; _CONST_DECL_7:  ; const MAX_ENEMIES
+; VPy_LINE:61
+; _CONST_DECL_6:  ; const MAX_ENEMIES
+; VPy_LINE:70
+; _CONST_DECL_7:  ; const GRAVITY
+; VPy_LINE:71
+; _CONST_DECL_8:  ; const BOUNCE_DAMPING
 ; VPy_LINE:72
-; _CONST_DECL_8:  ; const GRAVITY
+; _CONST_DECL_9:  ; const MIN_BOUNCE_VY
 ; VPy_LINE:73
-; _CONST_DECL_9:  ; const BOUNCE_DAMPING
-; VPy_LINE:74
-; _CONST_DECL_10:  ; const MIN_BOUNCE_VY
-; VPy_LINE:75
-; _CONST_DECL_11:  ; const GROUND_Y
+; _CONST_DECL_10:  ; const GROUND_Y
 
 ; === JOYSTICK BUILTIN SUBROUTINES ===
 ; J1_X() - Read Joystick 1 X axis (INCREMENTAL - with state preservation)
@@ -1458,6 +1456,351 @@ SLR_OBJ_DONE:
     PULS A           ; Clean up stride from stack
     RTS
 
+; CREATE_ANIM_RUNTIME - Find free instance slot and initialize
+; Input: X = animation data pointer (ROM)
+; Output: D = instance ID (0-15), or -1 if pool full
+CREATE_ANIM_RUNTIME:
+    ; Search for inactive slot
+    PSHS X              ; Save animation pointer
+    LDX #ANIM_POOL      ; Start of instance pool
+    CLRA                ; Instance ID counter = 0
+CAR_SEARCH:
+    CMPA #16            ; Checked all 16 instances?
+    BEQ CAR_POOL_FULL   ; Yes, pool full
+    LDB 10,X            ; Load active flag (8-bit offset mode)
+    BEQ CAR_FOUND_SLOT  ; Found inactive slot (B=0)
+    LEAX 12,X           ; Move to next instance (12 bytes each)
+    INCA                ; Increment ID counter
+    BRA CAR_SEARCH
+CAR_FOUND_SLOT:
+    ; Initialize instance
+    PSHS A              ; CRITICAL FIX: Save instance ID (A) before PULS D overwrites it
+    PULS D              ; Get animation pointer to D
+    STD 0,X             ; Store anim_ptr (offset +0)
+    CLR 2,X             ; frame_idx = 0 (offset +2)
+    CLR 3,X             ; counter = 0 (offset +3)
+    CLR 4,X             ; state_idx = 0 (offset +4)
+    CLR 5,X             ; mirror = 0 (offset +5)
+    CLR 6,X             ; x = 0 (offset +6, high byte)
+    CLR 7,X             ; x = 0 (offset +7, low byte)
+    CLR 8,X             ; y = 0 (offset +8, high byte)
+    CLR 9,X             ; y = 0 (offset +9, low byte)
+    LDB #1
+    STB 10,X            ; active = 1 (offset +10)
+    ; Return instance ID in D (restore A from stack)
+    PULS A              ; FIXED: Restore instance ID
+    TFR A,B             ; B = A (make 16-bit: D = A:A)
+    CLRA                ; D = 0:ID (16-bit result)
+    STD RESULT          ; Store in RESULT
+    RTS
+CAR_POOL_FULL:
+    ; No free slots - return -1
+    LDD #$FFFF
+    STD RESULT
+    PULS X              ; Clean up stack
+    RTS
+
+; UPDATE_ANIM_RUNTIME - Update animation position and advance frame
+; Input: D = instance_id, X = x_position, Y = y_position
+UPDATE_ANIM_RUNTIME:
+    ; Validate instance ID (must be 0-15)
+    CMPB #16            ; Check if ID >= 16
+    BHS UAR_INVALID     ; Invalid ID, return
+    
+    ; Calculate instance address: ANIM_POOL + (ID * 12)
+    PSHS D              ; Save ID
+    LDB 1,S             ; Get ID low byte
+    LDA #12             ; Instance size
+    MUL                 ; D = ID * 12
+    ADDD #ANIM_POOL     ; D = instance address
+    TFR D,U             ; U = instance pointer
+    
+    ; Check if instance is active
+    TST 10,U            ; Check active flag (offset +10)
+    BEQ UAR_INACTIVE    ; Inactive, skip
+    
+    ; Store new position
+    STX 6,U             ; Store x (offset +6, 16-bit)
+    STY 8,U             ; Store y (offset +8, 16-bit)
+    
+    ; Advance frame counter
+    INC 3,U             ; counter++ (offset +3)
+    
+    ; Get current frame data
+    LDX 0,U             ; Load anim_ptr (offset +0)
+    LDY 3,X             ; Load frame_table_ptr (offset +3 in anim data)
+    
+    ; Calculate current frame address: frame_table + (frame_idx * 11)
+    LDA 2,U             ; Load frame_idx (offset +2)
+    LDB #11             ; Frame size
+    MUL                 ; D = frame_idx * 11
+    LEAY D,Y            ; Y = frame_table + offset
+    
+    ; Check if counter >= duration
+    LDD 2,Y             ; Load duration from frame data (offset +2)
+    CMPB 3,U            ; Compare with counter (offset +3)
+    BHI UAR_DONE        ; counter < duration, done
+    
+    ; Advance to next frame
+    CLR 3,U             ; Reset counter (offset +3)
+    INC 2,U             ; frame_idx++ (offset +2)
+    
+    ; Check if we reached end of state
+    ; If state_num_frames is set (non-zero), use it for bounds checking
+    LDA 11,U            ; Load state_num_frames (offset +11)
+    BEQ UAR_NO_STATE    ; If 0, no state active - use total frames
+    
+    ; State-based looping
+    CMPA 2,U            ; Compare state_num_frames with frame_idx
+    BHI UAR_DONE        ; frame_idx < state_num_frames, continue
+    
+    ; Reached end of state - loop back to first frame of state
+    ; Get state table and read first frame index
+    LDX 0,U             ; Load anim_ptr
+    LDD 5,X             ; Load state_table_ptr (offset +5 in anim data)
+    BEQ UAR_NO_STATE    ; No state table, fall back to simple loop
+    
+    ; Calculate state entry address
+    TFR D,Y             ; Y = state_table_ptr
+    LDB 4,U             ; Load current state_idx (offset +4)
+    BEQ UAR_STATE_FOUND ; If state 0, already there
+    
+UAR_STATE_SEEK:
+    ; Skip to target state
+    LDA 0,Y             ; Load num_frames_in_state
+    ADDA #2             ; Add header size
+    LEAY A,Y            ; Advance to next state
+    DECB
+    BNE UAR_STATE_SEEK
+    
+UAR_STATE_FOUND:
+    ; Y points to current state entry
+    ; Read first frame index
+    LDA 2,Y             ; Load first frame index
+    STA 2,U             ; Reset frame_idx to state start
+    BRA UAR_DONE
+    
+UAR_NO_STATE:
+    ; No state system - simple loop through all frames
+    LDX 0,U             ; Reload anim_ptr
+    LDA 0,X             ; Load num_frames (offset +0 in anim data)
+    CMPA 2,U            ; Compare with frame_idx
+    BHI UAR_DONE        ; frame_idx < num_frames, done
+    
+    ; Loop back to frame 0
+    CLR 2,U             ; frame_idx = 0
+    
+UAR_DONE:
+    PULS D              ; Clean up stack
+    RTS
+UAR_INVALID:
+    RTS                 ; Invalid ID, do nothing
+UAR_INACTIVE:
+    PULS D              ; Clean up stack
+    RTS
+
+; DRAW_ANIM_RUNTIME - Render current frame of animation
+; Input: D = instance_id
+DRAW_ANIM_RUNTIME:
+    ; Validate instance ID
+    CMPB #16
+    BHS DAR_INVALID
+    
+    ; Calculate instance address: ANIM_POOL + (ID * 12)
+    PSHS D              ; Save ID
+    LDB 1,S             ; Get ID low byte
+    LDA #12
+    MUL                 ; D = ID * 12
+    ADDD #ANIM_POOL
+    TFR D,U             ; U = instance pointer
+    
+    ; Check if active
+    TST 10,U
+    BEQ DAR_INACTIVE
+    
+    ; Get animation data pointer
+    LDX 0,U             ; Load anim_ptr (offset +0)
+    LDY 3,X             ; Load frame_table_ptr (offset +3 in anim data)
+    
+    ; Calculate current frame address: frame_table + (frame_idx * 11)
+    LDA 2,U             ; Load frame_idx (offset +2)
+    LDB #11
+    MUL
+    LEAY D,Y            ; Y = current frame data
+    
+    ; Read frame data for DRAW_VECTOR_EX call
+    LDX 0,Y             ; Load vector_ptr (offset +0 in frame)
+    PSHS X              ; Save vector_ptr for Draw_VLc call
+    
+    ; Calculate final position: instance.x + frame.offset_x
+    LDD 6,U             ; Load instance x (offset +6)
+    ADDD 5,Y            ; Add frame offset_x (offset +5 in frame)
+    PSHS D              ; Save final_x
+    
+    ; Calculate final position: instance.y + frame.offset_y
+    LDD 8,U             ; Load instance y (offset +8)
+    ADDD 7,Y            ; Add frame offset_y (offset +7 in frame)
+    PSHS D              ; Save final_y
+    
+    ; Get mirror mode from frame (override if instance has custom mirror)
+    LDA 9,Y             ; Load frame mirror (offset +9 in frame)
+    LDB 5,U             ; Load instance mirror (offset +5)
+    TSTB
+    BEQ DAR_USE_FRAME_MIRROR
+    TFR B,A             ; Use instance mirror if non-zero
+DAR_USE_FRAME_MIRROR:
+    PSHS A              ; Save mirror
+    
+    ; Get intensity from frame
+    LDA 4,Y             ; Load intensity (offset +4 in frame)
+    PSHS A              ; Save intensity
+    
+    ; Call drawing function (simplified - full implementation would use DRAW_VECTOR_EX)
+    ; For now, just set intensity and draw vector at instance position
+    
+    ; Set intensity
+    LDA ,S              ; Get intensity from stack (don't pop yet)
+    JSR $F2AB           ; BIOS Intensity_a
+    
+    ; Move to position (y, x)
+    LDA 2,S             ; Get y (second word on stack, high byte)
+    LDB 3,S             ; Get x (third word on stack, low byte)
+    JSR $F312           ; BIOS Moveto_d
+    
+    ; Draw vector
+    LDX 5,S             ; Get vector_ptr from bottom of stack
+    JSR $F408           ; BIOS Draw_VLc
+    
+    ; Clean up stack (5 words: intensity, mirror, final_y, final_x, vector_ptr)
+    LEAS 7,S            ; Pop 7 bytes (1+1+2+2+2 = 8 but S points to next)
+    
+DAR_DONE:
+    PULS D              ; Restore ID from stack
+    RTS
+DAR_INVALID:
+    RTS
+DAR_INACTIVE:
+    PULS D
+    RTS
+
+; SET_ANIM_STATE_RUNTIME - Change animation state (Phase 4: State Machines COMPLETE)
+; Input: VAR_ARG0 = instance_id, VAR_ARG1 = state_index
+; Animation Data Structure (offset from anim_ptr):
+;   +0: num_frames (1 byte)
+;   +1: num_states (1 byte)
+;   +2: controller_flags (1 byte)
+;   +3: frame_table_ptr (2 bytes)
+;   +5: state_table_ptr (2 bytes) - can be $0000 if no states
+; State Table Entry Structure:
+;   +0: num_frames_in_state (1 byte)
+;   +1: loop_state (1 byte) - 0=hold, 1=loop
+;   +2+: frame_indices (1 byte each) - indices into frame table
+SET_ANIM_STATE_RUNTIME:
+    ; Validate instance ID
+    LDD VAR_ARG0
+    CMPB #16
+    BHS SASR_INVALID
+    
+    ; Calculate instance address: ANIM_POOL + (ID * 12)
+    LDA #12
+    MUL                 ; D = ID * 12
+    ADDD #ANIM_POOL
+    TFR D,X             ; X = instance pointer
+    
+    ; Check if active
+    TST 10,X            ; Check active flag (offset +10)
+    BEQ SASR_INVALID
+    
+    ; Load animation data pointer
+    LDU 0,X             ; U = anim_ptr (offset +0 in instance)
+    
+    ; Check if animation has states
+    LDD 5,U             ; Load state_table_ptr (offset +5 in anim data)
+    BEQ SASR_NO_STATES  ; If NULL, animation has no states
+    
+    ; Calculate state entry address: state_table_ptr + state calculations
+    ; Each state entry is variable size: 2 + num_frames_in_state bytes
+    ; So we need to iterate through states until we reach target state_index
+    TFR D,Y             ; Y = state_table_ptr (base of state table)
+    LDA VAR_ARG1+1      ; A = target state_index (low byte)
+    BEQ SASR_FOUND_STATE ; If state 0, we're already there
+    
+    ; Iterate through states to find target state
+    PSHS X              ; Save instance pointer
+    LDB A               ; B = remaining states to skip
+    
+SASR_STATE_LOOP:
+    ; Current state entry is at Y
+    ; Size = 2 + num_frames_in_state
+    LDA 0,Y             ; Load num_frames_in_state
+    ADDA #2             ; Add header size (num_frames + loop_state)
+    LEAY A,Y            ; Y += state entry size (advance to next state)
+    DECB                ; remaining--
+    BNE SASR_STATE_LOOP ; Continue until we reach target state
+    
+    PULS X              ; Restore instance pointer
+    
+SASR_FOUND_STATE:
+    ; Y now points to target state entry
+    ; Read state data
+    LDA 0,Y             ; num_frames_in_state
+    LDB 1,Y             ; loop_state flag
+    
+    ; Update instance with state info
+    ; Store state index
+    LDA VAR_ARG1+1      ; Get state_index back
+    STA 4,X             ; Update state_idx (offset +4 in instance)
+    
+    ; Store state's first frame index as current frame
+    LDA 2,Y             ; Load first frame index in state
+    STA 2,X             ; Update frame_idx (offset +2 in instance)
+    
+    ; Store state frame count (for bounds checking in UPDATE_ANIM)
+    LDA 0,Y             ; num_frames_in_state
+    STA 11,X            ; Store in state_num_frames (offset +11)
+    
+    ; Reset frame counter to restart timing
+    CLR 3,X             ; counter = 0 (offset +3)
+    
+    RTS
+    
+SASR_NO_STATES:
+    ; Animation has no states - just reset frame counter
+    CLR 3,X             ; counter = 0
+    RTS
+    
+SASR_INVALID:
+    RTS
+
+; SET_ANIM_MIRROR_RUNTIME - Set mirror flags for animation instance
+; Input: X = instance_id (in X per builtins.rs), D = mirror_value
+SET_ANIM_MIRROR_RUNTIME:
+    ; Validate instance ID (X contains ID as 16-bit)
+    CMPX #16
+    BHS SAMR_INVALID
+    
+    ; Calculate instance address: ANIM_POOL + (ID * 12)
+    PSHS D              ; Save mirror value
+    TFR X,D             ; D = instance ID
+    LDA #12
+    MUL                 ; D = ID * 12
+    ADDD #ANIM_POOL
+    TFR D,X             ; X = instance pointer
+    
+    ; Check if active
+    TST 10,X            ; Check active flag
+    BEQ SAMR_INACTIVE
+    
+    ; Store mirror value
+    PULS D              ; Get mirror value
+    STB 5,X             ; Store mirror (offset +5, low byte only)
+    RTS
+    
+SAMR_INACTIVE:
+    PULS D              ; Clean stack
+SAMR_INVALID:
+    RTS
+
 START:
     LDA #$D0
     TFR A,DP        ; Set Direct Page for BIOS (CRITICAL - do once at startup)
@@ -1473,7 +1816,7 @@ START:
     STD SFX_PTR            ; Clear SFX pointer
 
     ; *** DEBUG *** main() function code inline (initialization)
-    ; VPy_LINE:78
+    ; VPy_LINE:76
     ; VPy_LINE:12
     LDD #0
     STD RESULT
@@ -1559,14 +1902,11 @@ COPY_LOOP_0:
     STD VAR_ABS_JOY
     ; VPy_LINE:57
     LDD #1
-    STD VAR_PLAYER_ANIM_FRAME
-    ; VPy_LINE:58
-    LDD #0
-    STD VAR_PLAYER_ANIM_COUNTER
-    ; VPy_LINE:60
-    LDD #1
     STD VAR_PLAYER_FACING
-    ; VPy_LINE:64
+    ; VPy_LINE:58
+    LDD #-1
+    STD VAR_PLAYER_ANIM_ID
+    ; VPy_LINE:62
     ; Copy array 'enemy_active' from ROM to RAM (8 elements)
     LDX #ARRAY_1       ; Source: ROM array data
     LDU #VAR_ENEMY_ACTIVE_DATA ; Dest: RAM array space
@@ -1576,7 +1916,7 @@ COPY_LOOP_1:
     STY ,U++        ; Store word to RAM, increment dest
     SUBD #1         ; Decrement counter
     BNE COPY_LOOP_1 ; Loop until done
-    ; VPy_LINE:65
+    ; VPy_LINE:63
     ; Copy array 'enemy_x' from ROM to RAM (8 elements)
     LDX #ARRAY_2       ; Source: ROM array data
     LDU #VAR_ENEMY_X_DATA ; Dest: RAM array space
@@ -1586,7 +1926,7 @@ COPY_LOOP_2:
     STY ,U++        ; Store word to RAM, increment dest
     SUBD #1         ; Decrement counter
     BNE COPY_LOOP_2 ; Loop until done
-    ; VPy_LINE:66
+    ; VPy_LINE:64
     ; Copy array 'enemy_y' from ROM to RAM (8 elements)
     LDX #ARRAY_3       ; Source: ROM array data
     LDU #VAR_ENEMY_Y_DATA ; Dest: RAM array space
@@ -1596,7 +1936,7 @@ COPY_LOOP_3:
     STY ,U++        ; Store word to RAM, increment dest
     SUBD #1         ; Decrement counter
     BNE COPY_LOOP_3 ; Loop until done
-    ; VPy_LINE:67
+    ; VPy_LINE:65
     ; Copy array 'enemy_vx' from ROM to RAM (8 elements)
     LDX #ARRAY_4       ; Source: ROM array data
     LDU #VAR_ENEMY_VX_DATA ; Dest: RAM array space
@@ -1606,7 +1946,7 @@ COPY_LOOP_4:
     STY ,U++        ; Store word to RAM, increment dest
     SUBD #1         ; Decrement counter
     BNE COPY_LOOP_4 ; Loop until done
-    ; VPy_LINE:68
+    ; VPy_LINE:66
     ; Copy array 'enemy_vy' from ROM to RAM (8 elements)
     LDX #ARRAY_5       ; Source: ROM array data
     LDU #VAR_ENEMY_VY_DATA ; Dest: RAM array space
@@ -1616,7 +1956,7 @@ COPY_LOOP_5:
     STY ,U++        ; Store word to RAM, increment dest
     SUBD #1         ; Decrement counter
     BNE COPY_LOOP_5 ; Loop until done
-    ; VPy_LINE:69
+    ; VPy_LINE:67
     ; Copy array 'enemy_size' from ROM to RAM (8 elements)
     LDX #ARRAY_6       ; Source: ROM array data
     LDU #VAR_ENEMY_SIZE_DATA ; Dest: RAM array space
@@ -1626,83 +1966,68 @@ COPY_LOOP_6:
     STY ,U++        ; Store word to RAM, increment dest
     SUBD #1         ; Decrement counter
     BNE COPY_LOOP_6 ; Loop until done
+    ; VPy_LINE:80
+    LDD #0
+    STD RESULT
+    LDX RESULT
+    STX VAR_CURRENT_LOCATION
+    ; VPy_LINE:81
+    LDD #0
+    STD RESULT
+    LDX RESULT
+    STX VAR_PREV_JOY_X
     ; VPy_LINE:82
     LDD #0
     STD RESULT
     LDX RESULT
-    LDU #VAR_CURRENT_LOCATION
-    STU TMPPTR
-    STX ,U
+    STX VAR_PREV_JOY_Y
     ; VPy_LINE:83
-    LDD #0
+    LDD #80
     STD RESULT
     LDX RESULT
-    LDU #VAR_PREV_JOY_X
-    STU TMPPTR
-    STX ,U
+    STX VAR_LOCATION_GLOW_INTENSITY
     ; VPy_LINE:84
     LDD #0
     STD RESULT
     LDX RESULT
-    LDU #VAR_PREV_JOY_Y
-    STU TMPPTR
-    STX ,U
+    STX VAR_LOCATION_GLOW_DIRECTION
     ; VPy_LINE:85
-    LDD #80
-    STD RESULT
-    LDX RESULT
-    LDU #VAR_LOCATION_GLOW_INTENSITY
-    STU TMPPTR
-    STX ,U
-    ; VPy_LINE:86
     LDD #0
     STD RESULT
     LDX RESULT
-    LDU #VAR_LOCATION_GLOW_DIRECTION
-    STU TMPPTR
-    STX ,U
-    ; VPy_LINE:87
+    STX VAR_SCREEN
+    ; VPy_LINE:88
     LDD #0
     STD RESULT
     LDX RESULT
-    LDU #VAR_SCREEN
-    STU TMPPTR
-    STX ,U
-    ; VPy_LINE:90
+    STX VAR_COUNTDOWN_TIMER
+    ; VPy_LINE:89
     LDD #0
     STD RESULT
     LDX RESULT
-    LDU #VAR_COUNTDOWN_TIMER
-    STU TMPPTR
-    STX ,U
-    ; VPy_LINE:91
+    STX VAR_COUNTDOWN_ACTIVE
+    ; VPy_LINE:92
     LDD #0
     STD RESULT
     LDX RESULT
-    LDU #VAR_COUNTDOWN_ACTIVE
-    STU TMPPTR
-    STX ,U
+    STX VAR_HOOK_ACTIVE
+    ; VPy_LINE:93
+    LDD #0
+    STD RESULT
+    LDX RESULT
+    STX VAR_HOOK_X
     ; VPy_LINE:94
-    LDD #0
-    STD RESULT
-    LDX RESULT
-    LDU #VAR_HOOK_ACTIVE
-    STU TMPPTR
-    STX ,U
-    ; VPy_LINE:95
-    LDD #0
-    STD RESULT
-    LDX RESULT
-    LDU #VAR_HOOK_X
-    STU TMPPTR
-    STX ,U
-    ; VPy_LINE:96
     LDD #-70
     STD RESULT
     LDX RESULT
-    LDU #VAR_HOOK_Y
-    STU TMPPTR
-    STX ,U
+    STX VAR_HOOK_Y
+    ; VPy_LINE:97
+; CREATE_ANIM("player_anim") - allocate instance from pool
+    LDX #_PLAYER_ANIM        ; Load animation data pointer
+    JSR CREATE_ANIM_RUNTIME  ; Returns instance ID in D
+    STD RESULT               ; Store instance ID (0-15 or -1)
+    LDX RESULT
+    STX VAR_PLAYER_ANIM_ID
 
 MAIN:
     JSR $F1AF    ; DP_to_C8 (required for RAM access)
@@ -1719,6 +2044,16 @@ MAIN:
     STA $C822    ; Vec_Joy_Mux_2_Y (disable joystick 2 - saves cycles)
     ; Mux configured - J1_X()/J1_Y() can now be called
 
+    ; === Initialize Animation Pool (mark all 16 slots as inactive) ===
+    LDX #ANIM_POOL
+    LDA #16          ; 16 animation slots
+ANIM_POOL_INIT_LOOP:
+    CLR 0,X          ; Clear 'active' flag (byte 0 of each 12-byte slot)
+    LEAX 12,X        ; Move to next slot (12 bytes per instance)
+    DECA
+    BNE ANIM_POOL_INIT_LOOP
+    ; Animation pool ready for CREATE_ANIM calls
+
     ; JSR Wait_Recal is now called at start of LOOP_BODY (see auto-inject)
     LDA #$80
     STA VIA_t1_cnt_lo
@@ -1732,23 +2067,22 @@ STATE_GAME EQU 2
 NUM_LOCATIONS EQU 17
 HOOK_MAX_Y EQU 127
 PLAYER_Y EQU 65466
-PLAYER_ANIM_SPEED EQU 5
 MAX_ENEMIES EQU 8
 GRAVITY EQU 1
 BOUNCE_DAMPING EQU 17
 MIN_BOUNCE_VY EQU 10
 GROUND_Y EQU 65466
-    ; VPy_LINE:98
+    ; VPy_LINE:99
 LOOP_BODY:
     JSR Wait_Recal  ; CRITICAL: Sync with CRT refresh (50Hz frame timing)
     JSR $F1AA  ; DP_to_D0: set direct page to $D0 for PSG access
     JSR $F1BA  ; Read_Btns: read PSG register 14, update $C80F (Vec_Btn_State)
     JSR $F1AF  ; DP_to_C8: restore direct page to $C8 for normal RAM access
     ; DEBUG: Statement 0 - Discriminant(8)
-    ; VPy_LINE:100
+    ; VPy_LINE:101
     JSR READ_JOYSTICK1_STATE
     ; DEBUG: Statement 1 - Discriminant(9)
-    ; VPy_LINE:102
+    ; VPy_LINE:103
     LDD VAR_SCREEN
     STD RESULT
     LDD RESULT
@@ -1769,7 +2103,7 @@ CT_2:
 CE_3:
     LDD RESULT
     LBEQ IF_NEXT_1
-    ; VPy_LINE:103
+    ; VPy_LINE:104
     LDD VAR_CURRENT_MUSIC
     STD RESULT
     LDD RESULT
@@ -1790,25 +2124,23 @@ CT_6:
 CE_7:
     LDD RESULT
     LBEQ IF_NEXT_5
-    ; VPy_LINE:104
+    ; VPy_LINE:105
 ; PLAY_MUSIC("pang_theme") - play music asset
     LDX #_PANG_THEME_MUSIC
     JSR PLAY_MUSIC_RUNTIME
     LDD #0
     STD RESULT
-    ; VPy_LINE:105
+    ; VPy_LINE:106
     LDD #0
     STD RESULT
     LDX RESULT
-    LDU #VAR_CURRENT_MUSIC
-    STU TMPPTR
-    STX ,U
+    STX VAR_CURRENT_MUSIC
     LBRA IF_END_4
 IF_NEXT_5:
 IF_END_4:
-    ; VPy_LINE:107
+    ; VPy_LINE:108
     JSR DRAW_TITLE_SCREEN
-    ; VPy_LINE:109
+    ; VPy_LINE:110
     LDD #VAR_JOYSTICK1_STATE_DATA
     STD RESULT
     LDD RESULT
@@ -1960,21 +2292,17 @@ OR_TRUE_10:
 OR_END_11:
     LDD RESULT
     LBEQ IF_NEXT_9
-    ; VPy_LINE:110
+    ; VPy_LINE:111
     LDD #1
     STD RESULT
     LDX RESULT
-    LDU #VAR_SCREEN
-    STU TMPPTR
-    STX ,U
-    ; VPy_LINE:111
+    STX VAR_SCREEN
+    ; VPy_LINE:112
     LDD #-1
     STD RESULT
     LDX RESULT
-    LDU #VAR_CURRENT_MUSIC
-    STU TMPPTR
-    STX ,U
-    ; VPy_LINE:112
+    STX VAR_CURRENT_MUSIC
+    ; VPy_LINE:113
 ; PLAY_SFX("laser") - play sound effect (one-shot)
     LDX #_LASER_SFX
     JSR PLAY_SFX_RUNTIME
@@ -2005,7 +2333,7 @@ CT_25:
 CE_26:
     LDD RESULT
     LBEQ IF_NEXT_24
-    ; VPy_LINE:115
+    ; VPy_LINE:116
     LDD VAR_CURRENT_MUSIC
     STD RESULT
     LDD RESULT
@@ -2026,23 +2354,21 @@ CT_29:
 CE_30:
     LDD RESULT
     LBEQ IF_NEXT_28
-    ; VPy_LINE:116
+    ; VPy_LINE:117
 ; PLAY_MUSIC("map_theme") - play music asset
     LDX #_MAP_THEME_MUSIC
     JSR PLAY_MUSIC_RUNTIME
     LDD #0
     STD RESULT
-    ; VPy_LINE:117
+    ; VPy_LINE:118
     LDD #1
     STD RESULT
     LDX RESULT
-    LDU #VAR_CURRENT_MUSIC
-    STU TMPPTR
-    STX ,U
+    STX VAR_CURRENT_MUSIC
     LBRA IF_END_27
 IF_NEXT_28:
 IF_END_27:
-    ; VPy_LINE:120
+    ; VPy_LINE:121
     LDD VAR_JOYSTICK_POLL_COUNTER
     STD RESULT
     LDD RESULT
@@ -2058,10 +2384,8 @@ IF_END_27:
     ADDD TMPRIGHT
     STD RESULT
     LDX RESULT
-    LDU #VAR_JOYSTICK_POLL_COUNTER
-    STU TMPPTR
-    STX ,U
-    ; VPy_LINE:121
+    STX VAR_JOYSTICK_POLL_COUNTER
+    ; VPy_LINE:122
     LDD VAR_JOYSTICK_POLL_COUNTER
     STD RESULT
     LDD RESULT
@@ -2082,14 +2406,12 @@ CT_33:
 CE_34:
     LDD RESULT
     LBEQ IF_NEXT_32
-    ; VPy_LINE:122
+    ; VPy_LINE:123
     LDD #0
     STD RESULT
     LDX RESULT
-    LDU #VAR_JOYSTICK_POLL_COUNTER
-    STU TMPPTR
-    STX ,U
-    ; VPy_LINE:123
+    STX VAR_JOYSTICK_POLL_COUNTER
+    ; VPy_LINE:124
     LDD #VAR_JOYSTICK1_STATE_DATA
     STD RESULT
     LDD RESULT
@@ -2104,10 +2426,8 @@ CE_34:
     LDD ,X
     STD RESULT
     LDX RESULT
-    LDU #VAR_JOY_X
-    STU TMPPTR
-    STX ,U
-    ; VPy_LINE:124
+    STX VAR_JOY_X
+    ; VPy_LINE:125
     LDD #VAR_JOYSTICK1_STATE_DATA
     STD RESULT
     LDD RESULT
@@ -2122,13 +2442,11 @@ CE_34:
     LDD ,X
     STD RESULT
     LDX RESULT
-    LDU #VAR_JOY_Y
-    STU TMPPTR
-    STX ,U
+    STX VAR_JOY_Y
     LBRA IF_END_31
 IF_NEXT_32:
 IF_END_31:
-    ; VPy_LINE:128
+    ; VPy_LINE:129
     LDD VAR_JOY_X
     STD RESULT
     LDD RESULT
@@ -2178,7 +2496,7 @@ AND_FALSE_39:
 AND_END_40:
     LDD RESULT
     LBEQ IF_NEXT_36
-    ; VPy_LINE:129
+    ; VPy_LINE:130
     LDD VAR_CURRENT_LOCATION
     STD RESULT
     LDD RESULT
@@ -2194,10 +2512,8 @@ AND_END_40:
     ADDD TMPRIGHT
     STD RESULT
     LDX RESULT
-    LDU #VAR_CURRENT_LOCATION
-    STU TMPPTR
-    STX ,U
-    ; VPy_LINE:130
+    STX VAR_CURRENT_LOCATION
+    ; VPy_LINE:131
     LDD VAR_CURRENT_LOCATION
     STD RESULT
     LDD RESULT
@@ -2218,13 +2534,11 @@ CT_45:
 CE_46:
     LDD RESULT
     LBEQ IF_NEXT_44
-    ; VPy_LINE:131
+    ; VPy_LINE:132
     LDD #0
     STD RESULT
     LDX RESULT
-    LDU #VAR_CURRENT_LOCATION
-    STU TMPPTR
-    STX ,U
+    STX VAR_CURRENT_LOCATION
     LBRA IF_END_43
 IF_NEXT_44:
 IF_END_43:
@@ -2279,7 +2593,7 @@ AND_FALSE_50:
 AND_END_51:
     LDD RESULT
     LBEQ IF_NEXT_47
-    ; VPy_LINE:133
+    ; VPy_LINE:134
     LDD VAR_CURRENT_LOCATION
     STD RESULT
     LDD RESULT
@@ -2295,10 +2609,8 @@ AND_END_51:
     SUBD TMPRIGHT
     STD RESULT
     LDX RESULT
-    LDU #VAR_CURRENT_LOCATION
-    STU TMPPTR
-    STX ,U
-    ; VPy_LINE:134
+    STX VAR_CURRENT_LOCATION
+    ; VPy_LINE:135
     LDD VAR_CURRENT_LOCATION
     STD RESULT
     LDD RESULT
@@ -2319,7 +2631,7 @@ CT_56:
 CE_57:
     LDD RESULT
     LBEQ IF_NEXT_55
-    ; VPy_LINE:135
+    ; VPy_LINE:136
     LDD #17
     STD RESULT
     LDD RESULT
@@ -2335,9 +2647,7 @@ CE_57:
     SUBD TMPRIGHT
     STD RESULT
     LDX RESULT
-    LDU #VAR_CURRENT_LOCATION
-    STU TMPPTR
-    STX ,U
+    STX VAR_CURRENT_LOCATION
     LBRA IF_END_54
 IF_NEXT_55:
 IF_END_54:
@@ -2392,7 +2702,7 @@ AND_FALSE_61:
 AND_END_62:
     LDD RESULT
     LBEQ IF_NEXT_58
-    ; VPy_LINE:137
+    ; VPy_LINE:138
     LDD VAR_CURRENT_LOCATION
     STD RESULT
     LDD RESULT
@@ -2408,10 +2718,8 @@ AND_END_62:
     ADDD TMPRIGHT
     STD RESULT
     LDX RESULT
-    LDU #VAR_CURRENT_LOCATION
-    STU TMPPTR
-    STX ,U
-    ; VPy_LINE:138
+    STX VAR_CURRENT_LOCATION
+    ; VPy_LINE:139
     LDD VAR_CURRENT_LOCATION
     STD RESULT
     LDD RESULT
@@ -2432,13 +2740,11 @@ CT_67:
 CE_68:
     LDD RESULT
     LBEQ IF_NEXT_66
-    ; VPy_LINE:139
+    ; VPy_LINE:140
     LDD #0
     STD RESULT
     LDX RESULT
-    LDU #VAR_CURRENT_LOCATION
-    STU TMPPTR
-    STX ,U
+    STX VAR_CURRENT_LOCATION
     LBRA IF_END_65
 IF_NEXT_66:
 IF_END_65:
@@ -2493,7 +2799,7 @@ AND_FALSE_71:
 AND_END_72:
     LDD RESULT
     LBEQ IF_END_35
-    ; VPy_LINE:141
+    ; VPy_LINE:142
     LDD VAR_CURRENT_LOCATION
     STD RESULT
     LDD RESULT
@@ -2509,10 +2815,8 @@ AND_END_72:
     SUBD TMPRIGHT
     STD RESULT
     LDX RESULT
-    LDU #VAR_CURRENT_LOCATION
-    STU TMPPTR
-    STX ,U
-    ; VPy_LINE:142
+    STX VAR_CURRENT_LOCATION
+    ; VPy_LINE:143
     LDD VAR_CURRENT_LOCATION
     STD RESULT
     LDD RESULT
@@ -2533,7 +2837,7 @@ CT_77:
 CE_78:
     LDD RESULT
     LBEQ IF_NEXT_76
-    ; VPy_LINE:143
+    ; VPy_LINE:144
     LDD #17
     STD RESULT
     LDD RESULT
@@ -2549,29 +2853,23 @@ CE_78:
     SUBD TMPRIGHT
     STD RESULT
     LDX RESULT
-    LDU #VAR_CURRENT_LOCATION
-    STU TMPPTR
-    STX ,U
+    STX VAR_CURRENT_LOCATION
     LBRA IF_END_75
 IF_NEXT_76:
 IF_END_75:
     LBRA IF_END_35
 IF_END_35:
-    ; VPy_LINE:145
+    ; VPy_LINE:146
     LDD VAR_JOY_X
     STD RESULT
     LDX RESULT
-    LDU #VAR_PREV_JOY_X
-    STU TMPPTR
-    STX ,U
-    ; VPy_LINE:146
+    STX VAR_PREV_JOY_X
+    ; VPy_LINE:147
     LDD VAR_JOY_Y
     STD RESULT
     LDX RESULT
-    LDU #VAR_PREV_JOY_Y
-    STU TMPPTR
-    STX ,U
-    ; VPy_LINE:148
+    STX VAR_PREV_JOY_Y
+    ; VPy_LINE:149
     LDD #VAR_JOYSTICK1_STATE_DATA
     STD RESULT
     LDD RESULT
@@ -2723,13 +3021,13 @@ OR_TRUE_81:
 OR_END_82:
     LDD RESULT
     LBEQ IF_NEXT_80
-    ; VPy_LINE:150
+    ; VPy_LINE:151
 ; PLAY_SFX("laser") - play sound effect (one-shot)
     LDX #_LASER_SFX
     JSR PLAY_SFX_RUNTIME
     LDD #0
     STD RESULT
-    ; VPy_LINE:153
+    ; VPy_LINE:154
     LDD VAR_CURRENT_LOCATION
     STD RESULT
     LDD RESULT
@@ -2750,15 +3048,13 @@ CT_97:
 CE_98:
     LDD RESULT
     LBEQ IF_NEXT_96
-    ; VPy_LINE:154
+    ; VPy_LINE:155
 ; LOAD_LEVEL("01_mount_fuji") - load level data
     LDX #_01_MOUNT_FUJI_LEVEL
     JSR LOAD_LEVEL_RUNTIME
     LDD RESULT  ; Returns level pointer
     LDX RESULT
-    LDU #VAR_CURRENT_LEVEL_PTR
-    STU TMPPTR
-    STX ,U
+    STX VAR_CURRENT_LEVEL_PTR
     LBRA IF_END_95
 IF_NEXT_96:
     LDD VAR_CURRENT_LOCATION
@@ -2781,15 +3077,13 @@ CT_100:
 CE_101:
     LDD RESULT
     LBEQ IF_NEXT_99
-    ; VPy_LINE:156
+    ; VPy_LINE:157
 ; LOAD_LEVEL("02_mount_keirin") - load level data
     LDX #_02_MOUNT_KEIRIN_LEVEL
     JSR LOAD_LEVEL_RUNTIME
     LDD RESULT  ; Returns level pointer
     LDX RESULT
-    LDU #VAR_CURRENT_LEVEL_PTR
-    STU TMPPTR
-    STX ,U
+    STX VAR_CURRENT_LEVEL_PTR
     LBRA IF_END_95
 IF_NEXT_99:
     LDD VAR_CURRENT_LOCATION
@@ -2812,15 +3106,13 @@ CT_103:
 CE_104:
     LDD RESULT
     LBEQ IF_NEXT_102
-    ; VPy_LINE:158
+    ; VPy_LINE:159
 ; LOAD_LEVEL("03_emerald_buddha") - load level data
     LDX #_03_EMERALD_BUDDHA_LEVEL
     JSR LOAD_LEVEL_RUNTIME
     LDD RESULT  ; Returns level pointer
     LDX RESULT
-    LDU #VAR_CURRENT_LEVEL_PTR
-    STU TMPPTR
-    STX ,U
+    STX VAR_CURRENT_LEVEL_PTR
     LBRA IF_END_95
 IF_NEXT_102:
     LDD VAR_CURRENT_LOCATION
@@ -2843,15 +3135,13 @@ CT_106:
 CE_107:
     LDD RESULT
     LBEQ IF_NEXT_105
-    ; VPy_LINE:160
+    ; VPy_LINE:161
 ; LOAD_LEVEL("04_angkor_wat") - load level data
     LDX #_04_ANGKOR_WAT_LEVEL
     JSR LOAD_LEVEL_RUNTIME
     LDD RESULT  ; Returns level pointer
     LDX RESULT
-    LDU #VAR_CURRENT_LEVEL_PTR
-    STU TMPPTR
-    STX ,U
+    STX VAR_CURRENT_LEVEL_PTR
     LBRA IF_END_95
 IF_NEXT_105:
     LDD VAR_CURRENT_LOCATION
@@ -2874,15 +3164,13 @@ CT_109:
 CE_110:
     LDD RESULT
     LBEQ IF_NEXT_108
-    ; VPy_LINE:162
+    ; VPy_LINE:163
 ; LOAD_LEVEL("05_ayers_rock") - load level data
     LDX #_05_AYERS_ROCK_LEVEL
     JSR LOAD_LEVEL_RUNTIME
     LDD RESULT  ; Returns level pointer
     LDX RESULT
-    LDU #VAR_CURRENT_LEVEL_PTR
-    STU TMPPTR
-    STX ,U
+    STX VAR_CURRENT_LEVEL_PTR
     LBRA IF_END_95
 IF_NEXT_108:
     LDD VAR_CURRENT_LOCATION
@@ -2905,15 +3193,13 @@ CT_112:
 CE_113:
     LDD RESULT
     LBEQ IF_NEXT_111
-    ; VPy_LINE:164
+    ; VPy_LINE:165
 ; LOAD_LEVEL("06_taj_mahal") - load level data
     LDX #_06_TAJ_MAHAL_LEVEL
     JSR LOAD_LEVEL_RUNTIME
     LDD RESULT  ; Returns level pointer
     LDX RESULT
-    LDU #VAR_CURRENT_LEVEL_PTR
-    STU TMPPTR
-    STX ,U
+    STX VAR_CURRENT_LEVEL_PTR
     LBRA IF_END_95
 IF_NEXT_111:
     LDD VAR_CURRENT_LOCATION
@@ -2936,15 +3222,13 @@ CT_115:
 CE_116:
     LDD RESULT
     LBEQ IF_NEXT_114
-    ; VPy_LINE:166
+    ; VPy_LINE:167
 ; LOAD_LEVEL("07_leningrad") - load level data
     LDX #_07_LENINGRAD_LEVEL
     JSR LOAD_LEVEL_RUNTIME
     LDD RESULT  ; Returns level pointer
     LDX RESULT
-    LDU #VAR_CURRENT_LEVEL_PTR
-    STU TMPPTR
-    STX ,U
+    STX VAR_CURRENT_LEVEL_PTR
     LBRA IF_END_95
 IF_NEXT_114:
     LDD VAR_CURRENT_LOCATION
@@ -2967,15 +3251,13 @@ CT_118:
 CE_119:
     LDD RESULT
     LBEQ IF_NEXT_117
-    ; VPy_LINE:168
+    ; VPy_LINE:169
 ; LOAD_LEVEL("08_paris") - load level data
     LDX #_08_PARIS_LEVEL
     JSR LOAD_LEVEL_RUNTIME
     LDD RESULT  ; Returns level pointer
     LDX RESULT
-    LDU #VAR_CURRENT_LEVEL_PTR
-    STU TMPPTR
-    STX ,U
+    STX VAR_CURRENT_LEVEL_PTR
     LBRA IF_END_95
 IF_NEXT_117:
     LDD VAR_CURRENT_LOCATION
@@ -2998,15 +3280,13 @@ CT_121:
 CE_122:
     LDD RESULT
     LBEQ IF_NEXT_120
-    ; VPy_LINE:170
+    ; VPy_LINE:171
 ; LOAD_LEVEL("09_london") - load level data
     LDX #_09_LONDON_LEVEL
     JSR LOAD_LEVEL_RUNTIME
     LDD RESULT  ; Returns level pointer
     LDX RESULT
-    LDU #VAR_CURRENT_LEVEL_PTR
-    STU TMPPTR
-    STX ,U
+    STX VAR_CURRENT_LEVEL_PTR
     LBRA IF_END_95
 IF_NEXT_120:
     LDD VAR_CURRENT_LOCATION
@@ -3029,15 +3309,13 @@ CT_124:
 CE_125:
     LDD RESULT
     LBEQ IF_NEXT_123
-    ; VPy_LINE:172
+    ; VPy_LINE:173
 ; LOAD_LEVEL("10_barcelona") - load level data
     LDX #_10_BARCELONA_LEVEL
     JSR LOAD_LEVEL_RUNTIME
     LDD RESULT  ; Returns level pointer
     LDX RESULT
-    LDU #VAR_CURRENT_LEVEL_PTR
-    STU TMPPTR
-    STX ,U
+    STX VAR_CURRENT_LEVEL_PTR
     LBRA IF_END_95
 IF_NEXT_123:
     LDD VAR_CURRENT_LOCATION
@@ -3060,15 +3338,13 @@ CT_127:
 CE_128:
     LDD RESULT
     LBEQ IF_NEXT_126
-    ; VPy_LINE:174
+    ; VPy_LINE:175
 ; LOAD_LEVEL("11_athens") - load level data
     LDX #_11_ATHENS_LEVEL
     JSR LOAD_LEVEL_RUNTIME
     LDD RESULT  ; Returns level pointer
     LDX RESULT
-    LDU #VAR_CURRENT_LEVEL_PTR
-    STU TMPPTR
-    STX ,U
+    STX VAR_CURRENT_LEVEL_PTR
     LBRA IF_END_95
 IF_NEXT_126:
     LDD VAR_CURRENT_LOCATION
@@ -3091,15 +3367,13 @@ CT_130:
 CE_131:
     LDD RESULT
     LBEQ IF_NEXT_129
-    ; VPy_LINE:176
+    ; VPy_LINE:177
 ; LOAD_LEVEL("12_pyramids") - load level data
     LDX #_12_PYRAMIDS_LEVEL
     JSR LOAD_LEVEL_RUNTIME
     LDD RESULT  ; Returns level pointer
     LDX RESULT
-    LDU #VAR_CURRENT_LEVEL_PTR
-    STU TMPPTR
-    STX ,U
+    STX VAR_CURRENT_LEVEL_PTR
     LBRA IF_END_95
 IF_NEXT_129:
     LDD VAR_CURRENT_LOCATION
@@ -3122,15 +3396,13 @@ CT_133:
 CE_134:
     LDD RESULT
     LBEQ IF_NEXT_132
-    ; VPy_LINE:178
+    ; VPy_LINE:179
 ; LOAD_LEVEL("13_kilimanjaro") - load level data
     LDX #_13_KILIMANJARO_LEVEL
     JSR LOAD_LEVEL_RUNTIME
     LDD RESULT  ; Returns level pointer
     LDX RESULT
-    LDU #VAR_CURRENT_LEVEL_PTR
-    STU TMPPTR
-    STX ,U
+    STX VAR_CURRENT_LEVEL_PTR
     LBRA IF_END_95
 IF_NEXT_132:
     LDD VAR_CURRENT_LOCATION
@@ -3153,15 +3425,13 @@ CT_136:
 CE_137:
     LDD RESULT
     LBEQ IF_NEXT_135
-    ; VPy_LINE:180
+    ; VPy_LINE:181
 ; LOAD_LEVEL("14_new_york") - load level data
     LDX #_14_NEW_YORK_LEVEL
     JSR LOAD_LEVEL_RUNTIME
     LDD RESULT  ; Returns level pointer
     LDX RESULT
-    LDU #VAR_CURRENT_LEVEL_PTR
-    STU TMPPTR
-    STX ,U
+    STX VAR_CURRENT_LEVEL_PTR
     LBRA IF_END_95
 IF_NEXT_135:
     LDD VAR_CURRENT_LOCATION
@@ -3184,15 +3454,13 @@ CT_139:
 CE_140:
     LDD RESULT
     LBEQ IF_NEXT_138
-    ; VPy_LINE:182
+    ; VPy_LINE:183
 ; LOAD_LEVEL("15_mayan_ruins") - load level data
     LDX #_15_MAYAN_RUINS_LEVEL
     JSR LOAD_LEVEL_RUNTIME
     LDD RESULT  ; Returns level pointer
     LDX RESULT
-    LDU #VAR_CURRENT_LEVEL_PTR
-    STU TMPPTR
-    STX ,U
+    STX VAR_CURRENT_LEVEL_PTR
     LBRA IF_END_95
 IF_NEXT_138:
     LDD VAR_CURRENT_LOCATION
@@ -3215,52 +3483,42 @@ CT_142:
 CE_143:
     LDD RESULT
     LBEQ IF_NEXT_141
-    ; VPy_LINE:184
+    ; VPy_LINE:185
 ; LOAD_LEVEL("16_antarctica") - load level data
     LDX #_16_ANTARCTICA_LEVEL
     JSR LOAD_LEVEL_RUNTIME
     LDD RESULT  ; Returns level pointer
     LDX RESULT
-    LDU #VAR_CURRENT_LEVEL_PTR
-    STU TMPPTR
-    STX ,U
+    STX VAR_CURRENT_LEVEL_PTR
     LBRA IF_END_95
 IF_NEXT_141:
-    ; VPy_LINE:186
+    ; VPy_LINE:187
 ; LOAD_LEVEL("17_easter_island") - load level data
     LDX #_17_EASTER_ISLAND_LEVEL
     JSR LOAD_LEVEL_RUNTIME
     LDD RESULT  ; Returns level pointer
     LDX RESULT
-    LDU #VAR_CURRENT_LEVEL_PTR
-    STU TMPPTR
-    STX ,U
+    STX VAR_CURRENT_LEVEL_PTR
 IF_END_95:
-    ; VPy_LINE:188
+    ; VPy_LINE:189
     LDD #2
     STD RESULT
     LDX RESULT
-    LDU #VAR_SCREEN
-    STU TMPPTR
-    STX ,U
-    ; VPy_LINE:189
+    STX VAR_SCREEN
+    ; VPy_LINE:190
     LDD #1
     STD RESULT
     LDX RESULT
-    LDU #VAR_COUNTDOWN_ACTIVE
-    STU TMPPTR
-    STX ,U
-    ; VPy_LINE:190
+    STX VAR_COUNTDOWN_ACTIVE
+    ; VPy_LINE:191
     LDD #180
     STD RESULT
     LDX RESULT
-    LDU #VAR_COUNTDOWN_TIMER
-    STU TMPPTR
-    STX ,U
+    STX VAR_COUNTDOWN_TIMER
     LBRA IF_END_79
 IF_NEXT_80:
 IF_END_79:
-    ; VPy_LINE:192
+    ; VPy_LINE:193
     JSR DRAW_MAP_SCREEN
     LBRA IF_END_0
 IF_NEXT_24:
@@ -3284,7 +3542,7 @@ CT_144:
 CE_145:
     LDD RESULT
     LBEQ IF_END_0
-    ; VPy_LINE:196
+    ; VPy_LINE:197
     LDD VAR_COUNTDOWN_ACTIVE
     STD RESULT
     LDD RESULT
@@ -3305,19 +3563,19 @@ CT_148:
 CE_149:
     LDD RESULT
     LBEQ IF_NEXT_147
-    ; VPy_LINE:198
+    ; VPy_LINE:199
     JSR DRAW_LEVEL_BACKGROUND
-    ; VPy_LINE:200
+    ; VPy_LINE:201
     LDD #127
     STD RESULT
     LDD RESULT
     STD VAR_ARG0
-; NATIVE_CALL: VECTREX_SET_INTENSITY at line 200
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 201
     JSR VECTREX_SET_INTENSITY
     CLRA
     CLRB
     STD RESULT
-    ; VPy_LINE:201
+    ; VPy_LINE:202
 ; PRINT_TEXT(x, y, text) - uses BIOS defaults
     LDD #-50
     STD RESULT
@@ -3331,22 +3589,22 @@ CE_149:
     STX RESULT
     LDD RESULT
     STD VAR_ARG2
-; NATIVE_CALL: VECTREX_PRINT_TEXT at line 201
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 202
     JSR VECTREX_PRINT_TEXT
     CLRA
     CLRB
     STD RESULT
-    ; VPy_LINE:204
+    ; VPy_LINE:205
     LDD #127
     STD RESULT
     LDD RESULT
     STD VAR_ARG0
-; NATIVE_CALL: VECTREX_SET_INTENSITY at line 204
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 205
     JSR VECTREX_SET_INTENSITY
     CLRA
     CLRB
     STD RESULT
-    ; VPy_LINE:205
+    ; VPy_LINE:206
 ; PRINT_TEXT(x, y, text) - uses BIOS defaults
     LDD #-85
     STD RESULT
@@ -3371,12 +3629,12 @@ CE_149:
     STD RESULT
     LDD RESULT
     STD VAR_ARG2
-; NATIVE_CALL: VECTREX_PRINT_TEXT at line 205
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 206
     JSR VECTREX_PRINT_TEXT
     CLRA
     CLRB
     STD RESULT
-    ; VPy_LINE:208
+    ; VPy_LINE:209
     LDD VAR_COUNTDOWN_TIMER
     STD RESULT
     LDD RESULT
@@ -3392,10 +3650,8 @@ CE_149:
     SUBD TMPRIGHT
     STD RESULT
     LDX RESULT
-    LDU #VAR_COUNTDOWN_TIMER
-    STU TMPPTR
-    STX ,U
-    ; VPy_LINE:211
+    STX VAR_COUNTDOWN_TIMER
+    ; VPy_LINE:212
     LDD VAR_COUNTDOWN_TIMER
     STD RESULT
     LDD RESULT
@@ -3416,21 +3672,19 @@ CT_152:
 CE_153:
     LDD RESULT
     LBEQ IF_NEXT_151
-    ; VPy_LINE:212
+    ; VPy_LINE:213
     LDD #0
     STD RESULT
     LDX RESULT
-    LDU #VAR_COUNTDOWN_ACTIVE
-    STU TMPPTR
-    STX ,U
-    ; VPy_LINE:213
+    STX VAR_COUNTDOWN_ACTIVE
+    ; VPy_LINE:214
     JSR SPAWN_ENEMIES
     LBRA IF_END_150
 IF_NEXT_151:
 IF_END_150:
     LBRA IF_END_146
 IF_NEXT_147:
-    ; VPy_LINE:218
+    ; VPy_LINE:219
     LDD VAR_HOOK_ACTIVE
     STD RESULT
     LDD RESULT
@@ -3451,7 +3705,7 @@ CT_156:
 CE_157:
     LDD RESULT
     LBEQ IF_NEXT_155
-    ; VPy_LINE:219
+    ; VPy_LINE:220
     LDD #VAR_JOYSTICK1_STATE_DATA
     STD RESULT
     LDD RESULT
@@ -3603,34 +3857,28 @@ OR_TRUE_160:
 OR_END_161:
     LDD RESULT
     LBEQ IF_NEXT_159
-    ; VPy_LINE:220
+    ; VPy_LINE:221
     LDD #1
     STD RESULT
     LDX RESULT
-    LDU #VAR_HOOK_ACTIVE
-    STU TMPPTR
-    STX ,U
-    ; VPy_LINE:221
+    STX VAR_HOOK_ACTIVE
+    ; VPy_LINE:222
     LDD #-70
     STD RESULT
     LDX RESULT
-    LDU #VAR_HOOK_Y
-    STU TMPPTR
-    STX ,U
-    ; VPy_LINE:222
+    STX VAR_HOOK_Y
+    ; VPy_LINE:223
 ; PLAY_SFX("hit") - play sound effect (one-shot)
     LDX #_HIT_SFX
     JSR PLAY_SFX_RUNTIME
     LDD #0
     STD RESULT
-    ; VPy_LINE:225
+    ; VPy_LINE:226
     LDD VAR_PLAYER_X
     STD RESULT
     LDX RESULT
-    LDU #VAR_HOOK_GUN_X
-    STU TMPPTR
-    STX ,U
-    ; VPy_LINE:226
+    STX VAR_HOOK_GUN_X
+    ; VPy_LINE:227
     LDD VAR_PLAYER_FACING
     STD RESULT
     LDD RESULT
@@ -3651,7 +3899,7 @@ CT_176:
 CE_177:
     LDD RESULT
     LBEQ IF_NEXT_175
-    ; VPy_LINE:227
+    ; VPy_LINE:228
     LDD VAR_PLAYER_X
     STD RESULT
     LDD RESULT
@@ -3667,12 +3915,10 @@ CE_177:
     ADDD TMPRIGHT
     STD RESULT
     LDX RESULT
-    LDU #VAR_HOOK_GUN_X
-    STU TMPPTR
-    STX ,U
+    STX VAR_HOOK_GUN_X
     LBRA IF_END_174
 IF_NEXT_175:
-    ; VPy_LINE:229
+    ; VPy_LINE:230
     LDD VAR_PLAYER_X
     STD RESULT
     LDD RESULT
@@ -3688,11 +3934,9 @@ IF_NEXT_175:
     SUBD TMPRIGHT
     STD RESULT
     LDX RESULT
-    LDU #VAR_HOOK_GUN_X
-    STU TMPPTR
-    STX ,U
+    STX VAR_HOOK_GUN_X
 IF_END_174:
-    ; VPy_LINE:230
+    ; VPy_LINE:231
     LDD #-70
     STD RESULT
     LDD RESULT
@@ -3708,30 +3952,24 @@ IF_END_174:
     ADDD TMPRIGHT
     STD RESULT
     LDX RESULT
-    LDU #VAR_HOOK_GUN_Y
-    STU TMPPTR
-    STX ,U
-    ; VPy_LINE:231
+    STX VAR_HOOK_GUN_Y
+    ; VPy_LINE:232
     LDD VAR_HOOK_GUN_Y
     STD RESULT
     LDX RESULT
-    LDU #VAR_HOOK_INIT_Y
-    STU TMPPTR
-    STX ,U
-    ; VPy_LINE:234
+    STX VAR_HOOK_INIT_Y
+    ; VPy_LINE:235
     LDD VAR_HOOK_GUN_X
     STD RESULT
     LDX RESULT
-    LDU #VAR_HOOK_X
-    STU TMPPTR
-    STX ,U
+    STX VAR_HOOK_X
     LBRA IF_END_158
 IF_NEXT_159:
 IF_END_158:
     LBRA IF_END_154
 IF_NEXT_155:
 IF_END_154:
-    ; VPy_LINE:237
+    ; VPy_LINE:238
     LDD VAR_HOOK_ACTIVE
     STD RESULT
     LDD RESULT
@@ -3752,7 +3990,7 @@ CT_180:
 CE_181:
     LDD RESULT
     LBEQ IF_NEXT_179
-    ; VPy_LINE:238
+    ; VPy_LINE:239
     LDD VAR_HOOK_Y
     STD RESULT
     LDD RESULT
@@ -3768,10 +4006,8 @@ CE_181:
     ADDD TMPRIGHT
     STD RESULT
     LDX RESULT
-    LDU #VAR_HOOK_Y
-    STU TMPPTR
-    STX ,U
-    ; VPy_LINE:241
+    STX VAR_HOOK_Y
+    ; VPy_LINE:242
     LDD VAR_HOOK_Y
     STD RESULT
     LDD RESULT
@@ -3792,27 +4028,23 @@ CT_184:
 CE_185:
     LDD RESULT
     LBEQ IF_NEXT_183
-    ; VPy_LINE:242
+    ; VPy_LINE:243
     LDD #0
     STD RESULT
     LDX RESULT
-    LDU #VAR_HOOK_ACTIVE
-    STU TMPPTR
-    STX ,U
-    ; VPy_LINE:243
+    STX VAR_HOOK_ACTIVE
+    ; VPy_LINE:244
     LDD #-70
     STD RESULT
     LDX RESULT
-    LDU #VAR_HOOK_Y
-    STU TMPPTR
-    STX ,U
+    STX VAR_HOOK_Y
     LBRA IF_END_182
 IF_NEXT_183:
 IF_END_182:
     LBRA IF_END_178
 IF_NEXT_179:
 IF_END_178:
-    ; VPy_LINE:245
+    ; VPy_LINE:246
     JSR DRAW_GAME_LEVEL
 IF_END_146:
     LBRA IF_END_0
@@ -3820,21 +4052,21 @@ IF_END_0:
     JSR AUDIO_UPDATE  ; Auto-injected: update music + SFX (after all game logic)
     RTS
 
-    ; VPy_LINE:247
+    ; VPy_LINE:248
 DRAW_MAP_SCREEN: ; function
 ; --- function draw_map_screen ---
     LEAS -4,S ; allocate locals
-    ; VPy_LINE:249
+    ; VPy_LINE:250
     LDD #80
     STD RESULT
     LDD RESULT
     STD VAR_ARG0
-; NATIVE_CALL: VECTREX_SET_INTENSITY at line 249
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 250
     JSR VECTREX_SET_INTENSITY
     CLRA
     CLRB
     STD RESULT
-    ; VPy_LINE:250
+    ; VPy_LINE:251
 ; DRAW_VECTOR_EX("map", x, y, mirror) - 15 path(s), width=242, center_x=-6
     LDD #0
     STD RESULT
@@ -3906,7 +4138,7 @@ DSVEX_CALL_188:
     CLR DRAW_VEC_INTENSITY  ; Clear intensity override for next draw
     LDD #0
     STD RESULT
-    ; VPy_LINE:253
+    ; VPy_LINE:254
     LDD VAR_LOCATION_GLOW_DIRECTION
     STD RESULT
     LDD RESULT
@@ -3927,7 +4159,7 @@ CT_191:
 CE_192:
     LDD RESULT
     LBEQ IF_NEXT_190
-    ; VPy_LINE:254
+    ; VPy_LINE:255
     LDD VAR_LOCATION_GLOW_INTENSITY
     STD RESULT
     LDD RESULT
@@ -3943,10 +4175,8 @@ CE_192:
     ADDD TMPRIGHT
     STD RESULT
     LDX RESULT
-    LDU #VAR_LOCATION_GLOW_INTENSITY
-    STU TMPPTR
-    STX ,U
-    ; VPy_LINE:255
+    STX VAR_LOCATION_GLOW_INTENSITY
+    ; VPy_LINE:256
     LDD VAR_LOCATION_GLOW_INTENSITY
     STD RESULT
     LDD RESULT
@@ -3967,19 +4197,17 @@ CT_195:
 CE_196:
     LDD RESULT
     LBEQ IF_NEXT_194
-    ; VPy_LINE:256
+    ; VPy_LINE:257
     LDD #1
     STD RESULT
     LDX RESULT
-    LDU #VAR_LOCATION_GLOW_DIRECTION
-    STU TMPPTR
-    STX ,U
+    STX VAR_LOCATION_GLOW_DIRECTION
     LBRA IF_END_193
 IF_NEXT_194:
 IF_END_193:
     LBRA IF_END_189
 IF_NEXT_190:
-    ; VPy_LINE:258
+    ; VPy_LINE:259
     LDD VAR_LOCATION_GLOW_INTENSITY
     STD RESULT
     LDD RESULT
@@ -3995,10 +4223,8 @@ IF_NEXT_190:
     SUBD TMPRIGHT
     STD RESULT
     LDX RESULT
-    LDU #VAR_LOCATION_GLOW_INTENSITY
-    STU TMPPTR
-    STX ,U
-    ; VPy_LINE:259
+    STX VAR_LOCATION_GLOW_INTENSITY
+    ; VPy_LINE:260
     LDD VAR_LOCATION_GLOW_INTENSITY
     STD RESULT
     LDD RESULT
@@ -4019,18 +4245,16 @@ CT_199:
 CE_200:
     LDD RESULT
     LBEQ IF_NEXT_198
-    ; VPy_LINE:260
+    ; VPy_LINE:261
     LDD #0
     STD RESULT
     LDX RESULT
-    LDU #VAR_LOCATION_GLOW_DIRECTION
-    STU TMPPTR
-    STX ,U
+    STX VAR_LOCATION_GLOW_DIRECTION
     LBRA IF_END_197
 IF_NEXT_198:
 IF_END_197:
 IF_END_189:
-    ; VPy_LINE:262
+    ; VPy_LINE:263
 ; PRINT_TEXT(x, y, text) - uses BIOS defaults
     LDD #-120
     STD RESULT
@@ -4055,12 +4279,12 @@ IF_END_189:
     STD RESULT
     LDD RESULT
     STD VAR_ARG2
-; NATIVE_CALL: VECTREX_PRINT_TEXT at line 262
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 263
     JSR VECTREX_PRINT_TEXT
     CLRA
     CLRB
     STD RESULT
-    ; VPy_LINE:265
+    ; VPy_LINE:266
     ; ===== Const array indexing: location_x_coords =====
     LDD VAR_CURRENT_LOCATION
     STD RESULT
@@ -4075,7 +4299,7 @@ IF_END_189:
     STD RESULT
     LDX RESULT
     STX 0 ,S
-    ; VPy_LINE:266
+    ; VPy_LINE:267
     ; ===== Const array indexing: location_y_coords =====
     LDD VAR_CURRENT_LOCATION
     STD RESULT
@@ -4090,7 +4314,7 @@ IF_END_189:
     STD RESULT
     LDX RESULT
     STX 2 ,S
-    ; VPy_LINE:268
+    ; VPy_LINE:269
 ; DRAW_VECTOR_EX("location_marker", x, y, mirror) - 1 path(s), width=22, center_x=0
     LDD 2 ,S
     STD RESULT
@@ -4137,20 +4361,20 @@ DSVEX_CALL_203:
     LEAS 4,S ; free locals
     RTS
 
-    ; VPy_LINE:271
+    ; VPy_LINE:272
 DRAW_TITLE_SCREEN: ; function
 ; --- function draw_title_screen ---
-    ; VPy_LINE:273
+    ; VPy_LINE:274
     LDD #80
     STD RESULT
     LDD RESULT
     STD VAR_ARG0
-; NATIVE_CALL: VECTREX_SET_INTENSITY at line 273
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 274
     JSR VECTREX_SET_INTENSITY
     CLRA
     CLRB
     STD RESULT
-    ; VPy_LINE:274
+    ; VPy_LINE:275
 ; DRAW_VECTOR("logo", x, y) - 7 path(s) at position
     LDD #0
     STD RESULT
@@ -4185,17 +4409,17 @@ DRAW_TITLE_SCREEN: ; function
     JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
-    ; VPy_LINE:276
+    ; VPy_LINE:277
     LDD VAR_TITLE_INTENSITY
     STD RESULT
     LDD RESULT
     STD VAR_ARG0
-; NATIVE_CALL: VECTREX_SET_INTENSITY at line 276
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 277
     JSR VECTREX_SET_INTENSITY
     CLRA
     CLRB
     STD RESULT
-    ; VPy_LINE:277
+    ; VPy_LINE:278
 ; PRINT_TEXT(x, y, text) - uses BIOS defaults
     LDD #-90
     STD RESULT
@@ -4209,12 +4433,12 @@ DRAW_TITLE_SCREEN: ; function
     STX RESULT
     LDD RESULT
     STD VAR_ARG2
-; NATIVE_CALL: VECTREX_PRINT_TEXT at line 277
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 278
     JSR VECTREX_PRINT_TEXT
     CLRA
     CLRB
     STD RESULT
-    ; VPy_LINE:278
+    ; VPy_LINE:279
 ; PRINT_TEXT(x, y, text) - uses BIOS defaults
     LDD #-50
     STD RESULT
@@ -4228,12 +4452,12 @@ DRAW_TITLE_SCREEN: ; function
     STX RESULT
     LDD RESULT
     STD VAR_ARG2
-; NATIVE_CALL: VECTREX_PRINT_TEXT at line 278
+; NATIVE_CALL: VECTREX_PRINT_TEXT at line 279
     JSR VECTREX_PRINT_TEXT
     CLRA
     CLRB
     STD RESULT
-    ; VPy_LINE:280
+    ; VPy_LINE:281
     LDD VAR_TITLE_STATE
     STD RESULT
     LDD RESULT
@@ -4254,7 +4478,7 @@ CT_206:
 CE_207:
     LDD RESULT
     LBEQ IF_NEXT_205
-    ; VPy_LINE:281
+    ; VPy_LINE:282
     LDD VAR_TITLE_INTENSITY
     STD RESULT
     LDD RESULT
@@ -4270,13 +4494,11 @@ CE_207:
     ADDD TMPRIGHT
     STD RESULT
     LDX RESULT
-    LDU #VAR_TITLE_INTENSITY
-    STU TMPPTR
-    STX ,U
+    STX VAR_TITLE_INTENSITY
     LBRA IF_END_204
 IF_NEXT_205:
 IF_END_204:
-    ; VPy_LINE:283
+    ; VPy_LINE:284
     LDD VAR_TITLE_STATE
     STD RESULT
     LDD RESULT
@@ -4297,7 +4519,7 @@ CT_210:
 CE_211:
     LDD RESULT
     LBEQ IF_NEXT_209
-    ; VPy_LINE:284
+    ; VPy_LINE:285
     LDD VAR_TITLE_INTENSITY
     STD RESULT
     LDD RESULT
@@ -4313,13 +4535,11 @@ CE_211:
     SUBD TMPRIGHT
     STD RESULT
     LDX RESULT
-    LDU #VAR_TITLE_INTENSITY
-    STU TMPPTR
-    STX ,U
+    STX VAR_TITLE_INTENSITY
     LBRA IF_END_208
 IF_NEXT_209:
 IF_END_208:
-    ; VPy_LINE:286
+    ; VPy_LINE:287
     LDD VAR_TITLE_INTENSITY
     STD RESULT
     LDD RESULT
@@ -4340,17 +4560,15 @@ CT_214:
 CE_215:
     LDD RESULT
     LBEQ IF_NEXT_213
-    ; VPy_LINE:287
+    ; VPy_LINE:288
     LDD #1
     STD RESULT
     LDX RESULT
-    LDU #VAR_TITLE_STATE
-    STU TMPPTR
-    STX ,U
+    STX VAR_TITLE_STATE
     LBRA IF_END_212
 IF_NEXT_213:
 IF_END_212:
-    ; VPy_LINE:289
+    ; VPy_LINE:290
     LDD VAR_TITLE_INTENSITY
     STD RESULT
     LDD RESULT
@@ -4371,22 +4589,20 @@ CT_218:
 CE_219:
     LDD RESULT
     LBEQ IF_NEXT_217
-    ; VPy_LINE:290
+    ; VPy_LINE:291
     LDD #0
     STD RESULT
     LDX RESULT
-    LDU #VAR_TITLE_STATE
-    STU TMPPTR
-    STX ,U
+    STX VAR_TITLE_STATE
     LBRA IF_END_216
 IF_NEXT_217:
 IF_END_216:
     RTS
 
-    ; VPy_LINE:292
+    ; VPy_LINE:293
 DRAW_LEVEL_BACKGROUND: ; function
 ; --- function draw_level_background ---
-    ; VPy_LINE:294
+    ; VPy_LINE:295
     LDD VAR_CURRENT_LEVEL_PTR
     STD RESULT
     LDD RESULT
@@ -4407,7 +4623,7 @@ CT_222:
 CE_223:
     LDD RESULT
     LBEQ IF_NEXT_221
-    ; VPy_LINE:295
+    ; VPy_LINE:296
 ; SHOW_LEVEL() - draw all level objects
     JSR SHOW_LEVEL_RUNTIME
     LDD #0
@@ -4417,13 +4633,13 @@ IF_NEXT_221:
 IF_END_220:
     RTS
 
-    ; VPy_LINE:297
+    ; VPy_LINE:298
 DRAW_GAME_LEVEL: ; function
 ; --- function draw_game_level ---
-    LEAS -8,S ; allocate locals
-    ; VPy_LINE:299
+    LEAS -6,S ; allocate locals
+    ; VPy_LINE:300
     JSR DRAW_LEVEL_BACKGROUND
-    ; VPy_LINE:302
+    ; VPy_LINE:303
     LDD #VAR_JOYSTICK1_STATE_DATA
     STD RESULT
     LDD RESULT
@@ -4438,10 +4654,8 @@ DRAW_GAME_LEVEL: ; function
     LDD ,X
     STD RESULT
     LDX RESULT
-    LDU #VAR_JOY_X
-    STU TMPPTR
-    STX ,U
-    ; VPy_LINE:306
+    STX VAR_JOY_X
+    ; VPy_LINE:307
     LDD VAR_JOY_X
     STD RESULT
     LDD RESULT
@@ -4491,14 +4705,12 @@ OR_TRUE_226:
 OR_END_227:
     LDD RESULT
     LBEQ IF_NEXT_225
-    ; VPy_LINE:309
+    ; VPy_LINE:310
     LDD VAR_JOY_X
     STD RESULT
     LDX RESULT
-    LDU #VAR_ABS_JOY
-    STU TMPPTR
-    STX ,U
-    ; VPy_LINE:310
+    STX VAR_ABS_JOY
+    ; VPy_LINE:311
     LDD VAR_ABS_JOY
     STD RESULT
     LDD RESULT
@@ -4519,7 +4731,7 @@ CT_234:
 CE_235:
     LDD RESULT
     LBEQ IF_NEXT_233
-    ; VPy_LINE:311
+    ; VPy_LINE:312
     LDD #0
     STD RESULT
     LDD RESULT
@@ -4535,13 +4747,11 @@ CE_235:
     SUBD TMPRIGHT
     STD RESULT
     LDX RESULT
-    LDU #VAR_ABS_JOY
-    STU TMPPTR
-    STX ,U
+    STX VAR_ABS_JOY
     LBRA IF_END_232
 IF_NEXT_233:
 IF_END_232:
-    ; VPy_LINE:316
+    ; VPy_LINE:317
     LDD VAR_ABS_JOY
     STD RESULT
     LDD RESULT
@@ -4562,13 +4772,11 @@ CT_238:
 CE_239:
     LDD RESULT
     LBEQ IF_NEXT_237
-    ; VPy_LINE:317
+    ; VPy_LINE:318
     LDD #1
     STD RESULT
     LDX RESULT
-    LDU #VAR_MOVE_SPEED
-    STU TMPPTR
-    STX ,U
+    STX VAR_MOVE_SPEED
     LBRA IF_END_236
 IF_NEXT_237:
     LDD VAR_ABS_JOY
@@ -4591,13 +4799,11 @@ CT_241:
 CE_242:
     LDD RESULT
     LBEQ IF_NEXT_240
-    ; VPy_LINE:319
+    ; VPy_LINE:320
     LDD #2
     STD RESULT
     LDX RESULT
-    LDU #VAR_MOVE_SPEED
-    STU TMPPTR
-    STX ,U
+    STX VAR_MOVE_SPEED
     LBRA IF_END_236
 IF_NEXT_240:
     LDD VAR_ABS_JOY
@@ -4620,24 +4826,20 @@ CT_244:
 CE_245:
     LDD RESULT
     LBEQ IF_NEXT_243
-    ; VPy_LINE:321
+    ; VPy_LINE:322
     LDD #3
     STD RESULT
     LDX RESULT
-    LDU #VAR_MOVE_SPEED
-    STU TMPPTR
-    STX ,U
+    STX VAR_MOVE_SPEED
     LBRA IF_END_236
 IF_NEXT_243:
-    ; VPy_LINE:323
+    ; VPy_LINE:324
     LDD #4
     STD RESULT
     LDX RESULT
-    LDU #VAR_MOVE_SPEED
-    STU TMPPTR
-    STX ,U
+    STX VAR_MOVE_SPEED
 IF_END_236:
-    ; VPy_LINE:326
+    ; VPy_LINE:327
     LDD VAR_JOY_X
     STD RESULT
     LDD RESULT
@@ -4658,7 +4860,7 @@ CT_248:
 CE_249:
     LDD RESULT
     LBEQ IF_NEXT_247
-    ; VPy_LINE:327
+    ; VPy_LINE:328
     LDD #0
     STD RESULT
     LDD RESULT
@@ -4674,13 +4876,11 @@ CE_249:
     SUBD TMPRIGHT
     STD RESULT
     LDX RESULT
-    LDU #VAR_MOVE_SPEED
-    STU TMPPTR
-    STX ,U
+    STX VAR_MOVE_SPEED
     LBRA IF_END_246
 IF_NEXT_247:
 IF_END_246:
-    ; VPy_LINE:329
+    ; VPy_LINE:330
     LDD VAR_PLAYER_X
     STD RESULT
     LDD RESULT
@@ -4696,10 +4896,8 @@ IF_END_246:
     ADDD TMPRIGHT
     STD RESULT
     LDX RESULT
-    LDU #VAR_PLAYER_X
-    STU TMPPTR
-    STX ,U
-    ; VPy_LINE:332
+    STX VAR_PLAYER_X
+    ; VPy_LINE:333
     LDD VAR_PLAYER_X
     STD RESULT
     LDD RESULT
@@ -4720,17 +4918,15 @@ CT_252:
 CE_253:
     LDD RESULT
     LBEQ IF_NEXT_251
-    ; VPy_LINE:333
+    ; VPy_LINE:334
     LDD #-110
     STD RESULT
     LDX RESULT
-    LDU #VAR_PLAYER_X
-    STU TMPPTR
-    STX ,U
+    STX VAR_PLAYER_X
     LBRA IF_END_250
 IF_NEXT_251:
 IF_END_250:
-    ; VPy_LINE:334
+    ; VPy_LINE:335
     LDD VAR_PLAYER_X
     STD RESULT
     LDD RESULT
@@ -4751,17 +4947,15 @@ CT_256:
 CE_257:
     LDD RESULT
     LBEQ IF_NEXT_255
-    ; VPy_LINE:335
+    ; VPy_LINE:336
     LDD #110
     STD RESULT
     LDX RESULT
-    LDU #VAR_PLAYER_X
-    STU TMPPTR
-    STX ,U
+    STX VAR_PLAYER_X
     LBRA IF_END_254
 IF_NEXT_255:
 IF_END_254:
-    ; VPy_LINE:338
+    ; VPy_LINE:339
     LDD VAR_JOY_X
     STD RESULT
     LDD RESULT
@@ -4782,213 +4976,54 @@ CT_260:
 CE_261:
     LDD RESULT
     LBEQ IF_NEXT_259
-    ; VPy_LINE:339
+    ; VPy_LINE:340
     LDD #-1
     STD RESULT
     LDX RESULT
-    LDU #VAR_PLAYER_FACING
-    STU TMPPTR
-    STX ,U
+    STX VAR_PLAYER_FACING
     LBRA IF_END_258
 IF_NEXT_259:
-    ; VPy_LINE:341
+    ; VPy_LINE:342
     LDD #1
     STD RESULT
     LDX RESULT
-    LDU #VAR_PLAYER_FACING
-    STU TMPPTR
-    STX ,U
+    STX VAR_PLAYER_FACING
 IF_END_258:
-    ; VPy_LINE:344
-    LDD VAR_PLAYER_ANIM_COUNTER
+    ; VPy_LINE:345
+; SET_ANIM_STATE(instance_id, state_index) - change state
+    LDD VAR_PLAYER_ANIM_ID
     STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    PSHS D
+    LDD RESULT               ; Instance ID
+    STD VAR_ARG0
     LDD #1
     STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    PULS D
-    STD TMPLEFT
-    LDD TMPLEFT
-    ADDD TMPRIGHT
-    STD RESULT
-    LDX RESULT
-    LDU #VAR_PLAYER_ANIM_COUNTER
-    STU TMPPTR
-    STX ,U
-    ; VPy_LINE:346
-    LDD #5
-    STD RESULT
-    LDX RESULT
-    STX 2 ,S
-    ; VPy_LINE:347
-    LDD VAR_JOY_X
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #-80
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BLT CT_266
+    LDD RESULT               ; State index
+    STD VAR_ARG1
+    JSR SET_ANIM_STATE_RUNTIME
     LDD #0
     STD RESULT
-    BRA CE_267
-CT_266:
-    LDD #1
-    STD RESULT
-CE_267:
-    LDD RESULT
-    BNE OR_TRUE_264
-    LDD VAR_JOY_X
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #80
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BGT CT_268
-    LDD #0
-    STD RESULT
-    BRA CE_269
-CT_268:
-    LDD #1
-    STD RESULT
-CE_269:
-    LDD RESULT
-    BNE OR_TRUE_264
-    LDD #0
-    STD RESULT
-    BRA OR_END_265
-OR_TRUE_264:
-    LDD #1
-    STD RESULT
-OR_END_265:
-    LDD RESULT
-    LBEQ IF_NEXT_263
+    LBRA IF_END_224
+IF_NEXT_225:
     ; VPy_LINE:348
-    LDD #5
+; SET_ANIM_STATE(instance_id, state_index) - change state
+    LDD VAR_PLAYER_ANIM_ID
     STD RESULT
-    LDD RESULT
-    LSRA
-    RORB
-    STD RESULT
-    LDX RESULT
-    STX 2 ,S
-    LBRA IF_END_262
-IF_NEXT_263:
-IF_END_262:
-    ; VPy_LINE:350
-    LDD VAR_PLAYER_ANIM_COUNTER
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD 2 ,S
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BGE CT_272
+    LDD RESULT               ; Instance ID
+    STD VAR_ARG0
     LDD #0
     STD RESULT
-    BRA CE_273
-CT_272:
-    LDD #1
+    LDD RESULT               ; State index
+    STD VAR_ARG1
+    JSR SET_ANIM_STATE_RUNTIME
+    LDD #0
     STD RESULT
-CE_273:
-    LDD RESULT
-    LBEQ IF_NEXT_271
+IF_END_224:
     ; VPy_LINE:351
     LDD #0
     STD RESULT
     LDX RESULT
-    LDU #VAR_PLAYER_ANIM_COUNTER
-    STU TMPPTR
-    STX ,U
+    STX 4 ,S
     ; VPy_LINE:352
-    LDD VAR_PLAYER_ANIM_FRAME
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    PSHS D
-    LDD #1
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    PULS D
-    STD TMPLEFT
-    LDD TMPLEFT
-    ADDD TMPRIGHT
-    STD RESULT
-    LDX RESULT
-    LDU #VAR_PLAYER_ANIM_FRAME
-    STU TMPPTR
-    STX ,U
-    ; VPy_LINE:353
-    LDD VAR_PLAYER_ANIM_FRAME
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #5
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BGT CT_276
-    LDD #0
-    STD RESULT
-    BRA CE_277
-CT_276:
-    LDD #1
-    STD RESULT
-CE_277:
-    LDD RESULT
-    LBEQ IF_NEXT_275
-    ; VPy_LINE:354
-    LDD #1
-    STD RESULT
-    LDX RESULT
-    LDU #VAR_PLAYER_ANIM_FRAME
-    STU TMPPTR
-    STX ,U
-    LBRA IF_END_274
-IF_NEXT_275:
-IF_END_274:
-    LBRA IF_END_270
-IF_NEXT_271:
-IF_END_270:
-    LBRA IF_END_224
-IF_NEXT_225:
-    ; VPy_LINE:357
-    LDD #1
-    STD RESULT
-    LDX RESULT
-    LDU #VAR_PLAYER_ANIM_FRAME
-    STU TMPPTR
-    STX ,U
-    ; VPy_LINE:358
-    LDD #0
-    STD RESULT
-    LDX RESULT
-    LDU #VAR_PLAYER_ANIM_COUNTER
-    STU TMPPTR
-    STX ,U
-IF_END_224:
-    ; VPy_LINE:361
-    LDD #0
-    STD RESULT
-    LDX RESULT
-    STX 6 ,S
-    ; VPy_LINE:362
     LDD VAR_PLAYER_FACING
     STD RESULT
     LDD RESULT
@@ -4999,499 +5034,70 @@ IF_END_224:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BEQ CT_280
+    BEQ CT_264
     LDD #0
     STD RESULT
-    BRA CE_281
-CT_280:
+    BRA CE_265
+CT_264:
     LDD #1
     STD RESULT
-CE_281:
+CE_265:
     LDD RESULT
-    LBEQ IF_NEXT_279
-    ; VPy_LINE:363
+    LBEQ IF_NEXT_263
+    ; VPy_LINE:353
     LDD #1
     STD RESULT
     LDX RESULT
-    STX 6 ,S
-    LBRA IF_END_278
-IF_NEXT_279:
-IF_END_278:
-    ; VPy_LINE:366
-    LDD VAR_PLAYER_ANIM_FRAME
+    STX 4 ,S
+    LBRA IF_END_262
+IF_NEXT_263:
+IF_END_262:
+    ; VPy_LINE:354
+; SET_ANIM_MIRROR(instance_id, mirror) - set mirror flags
+    LDD VAR_PLAYER_ANIM_ID
     STD RESULT
     LDD RESULT
-    STD TMPLEFT
-    LDD #1
+    STD TMPPTR               ; Save instance_id
+    LDD 4 ,S
     STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BEQ CT_284
+    LDD RESULT               ; Mirror value (0-3)
+    LDX TMPPTR               ; Instance ID
+    JSR SET_ANIM_MIRROR_RUNTIME
     LDD #0
     STD RESULT
-    BRA CE_285
-CT_284:
-    LDD #1
+    ; VPy_LINE:357
+; UPDATE_ANIM(instance_id, x, y) - update position + advance frame
+    LDD VAR_PLAYER_ANIM_ID
     STD RESULT
-CE_285:
     LDD RESULT
-    LBEQ IF_NEXT_283
-    ; VPy_LINE:367
-; DRAW_VECTOR_EX("player_walk_1", x, y, mirror) - 17 path(s), width=19, center_x=1
+    STD TMPPTR               ; Save instance_id
     LDD VAR_PLAYER_X
     STD RESULT
-    LDA RESULT+1  ; X position (low byte)
-    STA DRAW_VEC_X
+    LDD RESULT
+    STD TMPPTR+2             ; Save X position
     LDD #-70
     STD RESULT
-    LDA RESULT+1  ; Y position (low byte)
-    STA DRAW_VEC_Y
-    LDD 6 ,S
-    STD RESULT
-    LDB RESULT+1  ; Mirror mode (0=normal, 1=X, 2=Y, 3=both)
-    ; Decode mirror mode into separate flags:
-    CLR MIRROR_X  ; Clear X flag
-    CLR MIRROR_Y  ; Clear Y flag
-    CMPB #1       ; Check if X-mirror (mode 1)
-    BNE DSVEX_CHK_Y_286
-    LDA #1
-    STA MIRROR_X
-DSVEX_CHK_Y_286:
-    CMPB #2       ; Check if Y-mirror (mode 2)
-    BNE DSVEX_CHK_XY_287
-    LDA #1
-    STA MIRROR_Y
-DSVEX_CHK_XY_287:
-    CMPB #3       ; Check if both-mirror (mode 3)
-    BNE DSVEX_CALL_288
-    LDA #1
-    STA MIRROR_X
-    STA MIRROR_Y
-DSVEX_CALL_288:
-    ; Set intensity override for drawing
-    LDD #80
-    STD RESULT
-    LDA RESULT+1  ; Intensity (0-127)
-    STA DRAW_VEC_INTENSITY  ; Store intensity override (function will use this)
-    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
-    LDX #_PLAYER_WALK_1_PATH0  ; Path 0
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_1_PATH1  ; Path 1
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_1_PATH2  ; Path 2
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_1_PATH3  ; Path 3
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_1_PATH4  ; Path 4
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_1_PATH5  ; Path 5
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_1_PATH6  ; Path 6
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_1_PATH7  ; Path 7
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_1_PATH8  ; Path 8
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_1_PATH9  ; Path 9
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_1_PATH10  ; Path 10
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_1_PATH11  ; Path 11
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_1_PATH12  ; Path 12
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_1_PATH13  ; Path 13
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_1_PATH14  ; Path 14
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_1_PATH15  ; Path 15
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_1_PATH16  ; Path 16
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
-    CLR DRAW_VEC_INTENSITY  ; Clear intensity override for next draw
+    LDD RESULT
+    STD TMPPTR+4             ; Save Y position
+    LDD TMPPTR               ; Instance ID
+    LDX TMPPTR+2             ; X position
+    LDY TMPPTR+4             ; Y position
+    JSR UPDATE_ANIM_RUNTIME  ; Update instance
     LDD #0
     STD RESULT
-    LBRA IF_END_282
-IF_NEXT_283:
-    LDD VAR_PLAYER_ANIM_FRAME
+    ; VPy_LINE:358
+; DRAW_ANIM(instance_id) - render current frame
+    LDD VAR_PLAYER_ANIM_ID
     STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #2
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BEQ CT_290
+    LDD RESULT               ; Instance ID
+    JSR DRAW_ANIM_RUNTIME    ; Draw at stored position
     LDD #0
     STD RESULT
-    BRA CE_291
-CT_290:
-    LDD #1
-    STD RESULT
-CE_291:
-    LDD RESULT
-    LBEQ IF_NEXT_289
-    ; VPy_LINE:369
-; DRAW_VECTOR_EX("player_walk_2", x, y, mirror) - 17 path(s), width=21, center_x=0
-    LDD VAR_PLAYER_X
-    STD RESULT
-    LDA RESULT+1  ; X position (low byte)
-    STA DRAW_VEC_X
-    LDD #-70
-    STD RESULT
-    LDA RESULT+1  ; Y position (low byte)
-    STA DRAW_VEC_Y
-    LDD 6 ,S
-    STD RESULT
-    LDB RESULT+1  ; Mirror mode (0=normal, 1=X, 2=Y, 3=both)
-    ; Decode mirror mode into separate flags:
-    CLR MIRROR_X  ; Clear X flag
-    CLR MIRROR_Y  ; Clear Y flag
-    CMPB #1       ; Check if X-mirror (mode 1)
-    BNE DSVEX_CHK_Y_292
-    LDA #1
-    STA MIRROR_X
-DSVEX_CHK_Y_292:
-    CMPB #2       ; Check if Y-mirror (mode 2)
-    BNE DSVEX_CHK_XY_293
-    LDA #1
-    STA MIRROR_Y
-DSVEX_CHK_XY_293:
-    CMPB #3       ; Check if both-mirror (mode 3)
-    BNE DSVEX_CALL_294
-    LDA #1
-    STA MIRROR_X
-    STA MIRROR_Y
-DSVEX_CALL_294:
-    ; Set intensity override for drawing
-    LDD #80
-    STD RESULT
-    LDA RESULT+1  ; Intensity (0-127)
-    STA DRAW_VEC_INTENSITY  ; Store intensity override (function will use this)
-    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
-    LDX #_PLAYER_WALK_2_PATH0  ; Path 0
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_2_PATH1  ; Path 1
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_2_PATH2  ; Path 2
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_2_PATH3  ; Path 3
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_2_PATH4  ; Path 4
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_2_PATH5  ; Path 5
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_2_PATH6  ; Path 6
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_2_PATH7  ; Path 7
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_2_PATH8  ; Path 8
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_2_PATH9  ; Path 9
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_2_PATH10  ; Path 10
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_2_PATH11  ; Path 11
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_2_PATH12  ; Path 12
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_2_PATH13  ; Path 13
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_2_PATH14  ; Path 14
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_2_PATH15  ; Path 15
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_2_PATH16  ; Path 16
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
-    CLR DRAW_VEC_INTENSITY  ; Clear intensity override for next draw
-    LDD #0
-    STD RESULT
-    LBRA IF_END_282
-IF_NEXT_289:
-    LDD VAR_PLAYER_ANIM_FRAME
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #3
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BEQ CT_296
-    LDD #0
-    STD RESULT
-    BRA CE_297
-CT_296:
-    LDD #1
-    STD RESULT
-CE_297:
-    LDD RESULT
-    LBEQ IF_NEXT_295
-    ; VPy_LINE:371
-; DRAW_VECTOR_EX("player_walk_3", x, y, mirror) - 17 path(s), width=20, center_x=1
-    LDD VAR_PLAYER_X
-    STD RESULT
-    LDA RESULT+1  ; X position (low byte)
-    STA DRAW_VEC_X
-    LDD #-70
-    STD RESULT
-    LDA RESULT+1  ; Y position (low byte)
-    STA DRAW_VEC_Y
-    LDD 6 ,S
-    STD RESULT
-    LDB RESULT+1  ; Mirror mode (0=normal, 1=X, 2=Y, 3=both)
-    ; Decode mirror mode into separate flags:
-    CLR MIRROR_X  ; Clear X flag
-    CLR MIRROR_Y  ; Clear Y flag
-    CMPB #1       ; Check if X-mirror (mode 1)
-    BNE DSVEX_CHK_Y_298
-    LDA #1
-    STA MIRROR_X
-DSVEX_CHK_Y_298:
-    CMPB #2       ; Check if Y-mirror (mode 2)
-    BNE DSVEX_CHK_XY_299
-    LDA #1
-    STA MIRROR_Y
-DSVEX_CHK_XY_299:
-    CMPB #3       ; Check if both-mirror (mode 3)
-    BNE DSVEX_CALL_300
-    LDA #1
-    STA MIRROR_X
-    STA MIRROR_Y
-DSVEX_CALL_300:
-    ; Set intensity override for drawing
-    LDD #80
-    STD RESULT
-    LDA RESULT+1  ; Intensity (0-127)
-    STA DRAW_VEC_INTENSITY  ; Store intensity override (function will use this)
-    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
-    LDX #_PLAYER_WALK_3_PATH0  ; Path 0
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_3_PATH1  ; Path 1
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_3_PATH2  ; Path 2
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_3_PATH3  ; Path 3
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_3_PATH4  ; Path 4
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_3_PATH5  ; Path 5
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_3_PATH6  ; Path 6
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_3_PATH7  ; Path 7
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_3_PATH8  ; Path 8
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_3_PATH9  ; Path 9
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_3_PATH10  ; Path 10
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_3_PATH11  ; Path 11
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_3_PATH12  ; Path 12
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_3_PATH13  ; Path 13
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_3_PATH14  ; Path 14
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_3_PATH15  ; Path 15
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_3_PATH16  ; Path 16
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
-    CLR DRAW_VEC_INTENSITY  ; Clear intensity override for next draw
-    LDD #0
-    STD RESULT
-    LBRA IF_END_282
-IF_NEXT_295:
-    LDD VAR_PLAYER_ANIM_FRAME
-    STD RESULT
-    LDD RESULT
-    STD TMPLEFT
-    LDD #4
-    STD RESULT
-    LDD RESULT
-    STD TMPRIGHT
-    LDD TMPLEFT
-    SUBD TMPRIGHT
-    BEQ CT_302
-    LDD #0
-    STD RESULT
-    BRA CE_303
-CT_302:
-    LDD #1
-    STD RESULT
-CE_303:
-    LDD RESULT
-    LBEQ IF_NEXT_301
-    ; VPy_LINE:373
-; DRAW_VECTOR_EX("player_walk_4", x, y, mirror) - 17 path(s), width=19, center_x=1
-    LDD VAR_PLAYER_X
-    STD RESULT
-    LDA RESULT+1  ; X position (low byte)
-    STA DRAW_VEC_X
-    LDD #-70
-    STD RESULT
-    LDA RESULT+1  ; Y position (low byte)
-    STA DRAW_VEC_Y
-    LDD 6 ,S
-    STD RESULT
-    LDB RESULT+1  ; Mirror mode (0=normal, 1=X, 2=Y, 3=both)
-    ; Decode mirror mode into separate flags:
-    CLR MIRROR_X  ; Clear X flag
-    CLR MIRROR_Y  ; Clear Y flag
-    CMPB #1       ; Check if X-mirror (mode 1)
-    BNE DSVEX_CHK_Y_304
-    LDA #1
-    STA MIRROR_X
-DSVEX_CHK_Y_304:
-    CMPB #2       ; Check if Y-mirror (mode 2)
-    BNE DSVEX_CHK_XY_305
-    LDA #1
-    STA MIRROR_Y
-DSVEX_CHK_XY_305:
-    CMPB #3       ; Check if both-mirror (mode 3)
-    BNE DSVEX_CALL_306
-    LDA #1
-    STA MIRROR_X
-    STA MIRROR_Y
-DSVEX_CALL_306:
-    ; Set intensity override for drawing
-    LDD #80
-    STD RESULT
-    LDA RESULT+1  ; Intensity (0-127)
-    STA DRAW_VEC_INTENSITY  ; Store intensity override (function will use this)
-    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
-    LDX #_PLAYER_WALK_4_PATH0  ; Path 0
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_4_PATH1  ; Path 1
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_4_PATH2  ; Path 2
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_4_PATH3  ; Path 3
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_4_PATH4  ; Path 4
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_4_PATH5  ; Path 5
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_4_PATH6  ; Path 6
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_4_PATH7  ; Path 7
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_4_PATH8  ; Path 8
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_4_PATH9  ; Path 9
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_4_PATH10  ; Path 10
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_4_PATH11  ; Path 11
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_4_PATH12  ; Path 12
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_4_PATH13  ; Path 13
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_4_PATH14  ; Path 14
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_4_PATH15  ; Path 15
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_4_PATH16  ; Path 16
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
-    CLR DRAW_VEC_INTENSITY  ; Clear intensity override for next draw
-    LDD #0
-    STD RESULT
-    LBRA IF_END_282
-IF_NEXT_301:
-    ; VPy_LINE:375
-; DRAW_VECTOR_EX("player_walk_5", x, y, mirror) - 17 path(s), width=19, center_x=1
-    LDD VAR_PLAYER_X
-    STD RESULT
-    LDA RESULT+1  ; X position (low byte)
-    STA DRAW_VEC_X
-    LDD #-70
-    STD RESULT
-    LDA RESULT+1  ; Y position (low byte)
-    STA DRAW_VEC_Y
-    LDD 6 ,S
-    STD RESULT
-    LDB RESULT+1  ; Mirror mode (0=normal, 1=X, 2=Y, 3=both)
-    ; Decode mirror mode into separate flags:
-    CLR MIRROR_X  ; Clear X flag
-    CLR MIRROR_Y  ; Clear Y flag
-    CMPB #1       ; Check if X-mirror (mode 1)
-    BNE DSVEX_CHK_Y_307
-    LDA #1
-    STA MIRROR_X
-DSVEX_CHK_Y_307:
-    CMPB #2       ; Check if Y-mirror (mode 2)
-    BNE DSVEX_CHK_XY_308
-    LDA #1
-    STA MIRROR_Y
-DSVEX_CHK_XY_308:
-    CMPB #3       ; Check if both-mirror (mode 3)
-    BNE DSVEX_CALL_309
-    LDA #1
-    STA MIRROR_X
-    STA MIRROR_Y
-DSVEX_CALL_309:
-    ; Set intensity override for drawing
-    LDD #80
-    STD RESULT
-    LDA RESULT+1  ; Intensity (0-127)
-    STA DRAW_VEC_INTENSITY  ; Store intensity override (function will use this)
-    JSR $F1AA        ; DP_to_D0 (set DP=$D0 for VIA access)
-    LDX #_PLAYER_WALK_5_PATH0  ; Path 0
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_5_PATH1  ; Path 1
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_5_PATH2  ; Path 2
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_5_PATH3  ; Path 3
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_5_PATH4  ; Path 4
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_5_PATH5  ; Path 5
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_5_PATH6  ; Path 6
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_5_PATH7  ; Path 7
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_5_PATH8  ; Path 8
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_5_PATH9  ; Path 9
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_5_PATH10  ; Path 10
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_5_PATH11  ; Path 11
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_5_PATH12  ; Path 12
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_5_PATH13  ; Path 13
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_5_PATH14  ; Path 14
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_5_PATH15  ; Path 15
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    LDX #_PLAYER_WALK_5_PATH16  ; Path 16
-    JSR Draw_Sync_List_At_With_Mirrors  ; Uses MIRROR_X, MIRROR_Y, and DRAW_VEC_INTENSITY
-    JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
-    CLR DRAW_VEC_INTENSITY  ; Clear intensity override for next draw
-    LDD #0
-    STD RESULT
-IF_END_282:
-    ; VPy_LINE:378
+    ; VPy_LINE:361
     JSR UPDATE_ENEMIES
-    ; VPy_LINE:379
+    ; VPy_LINE:362
     JSR DRAW_ENEMIES
-    ; VPy_LINE:382
+    ; VPy_LINE:365
     LDD VAR_HOOK_ACTIVE
     STD RESULT
     LDD RESULT
@@ -5502,17 +5108,17 @@ IF_END_282:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BEQ CT_312
+    BEQ CT_268
     LDD #0
     STD RESULT
-    BRA CE_313
-CT_312:
+    BRA CE_269
+CT_268:
     LDD #1
     STD RESULT
-CE_313:
+CE_269:
     LDD RESULT
-    LBEQ IF_NEXT_311
-    ; VPy_LINE:385
+    LBEQ IF_NEXT_267
+    ; VPy_LINE:368
     LDD VAR_HOOK_GUN_X
     STD RESULT
     LDD RESULT
@@ -5530,17 +5136,17 @@ CE_313:
     LDD RESULT
     STD VAR_ARG3
     JSR DRAW_HOOK_ROPE
-    ; VPy_LINE:387
+    ; VPy_LINE:370
     LDD #100
     STD RESULT
     LDD RESULT
     STD VAR_ARG0
-; NATIVE_CALL: VECTREX_SET_INTENSITY at line 387
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 370
     JSR VECTREX_SET_INTENSITY
     CLRA
     CLRB
     STD RESULT
-    ; VPy_LINE:389
+    ; VPy_LINE:372
 ; DRAW_VECTOR_EX("hook", x, y, mirror) - 1 path(s), width=12, center_x=0
     LDD VAR_HOOK_X
     STD RESULT
@@ -5557,21 +5163,21 @@ CE_313:
     CLR MIRROR_X  ; Clear X flag
     CLR MIRROR_Y  ; Clear Y flag
     CMPB #1       ; Check if X-mirror (mode 1)
-    BNE DSVEX_CHK_Y_314
+    BNE DSVEX_CHK_Y_270
     LDA #1
     STA MIRROR_X
-DSVEX_CHK_Y_314:
+DSVEX_CHK_Y_270:
     CMPB #2       ; Check if Y-mirror (mode 2)
-    BNE DSVEX_CHK_XY_315
+    BNE DSVEX_CHK_XY_271
     LDA #1
     STA MIRROR_Y
-DSVEX_CHK_XY_315:
+DSVEX_CHK_XY_271:
     CMPB #3       ; Check if both-mirror (mode 3)
-    BNE DSVEX_CALL_316
+    BNE DSVEX_CALL_272
     LDA #1
     STA MIRROR_X
     STA MIRROR_Y
-DSVEX_CALL_316:
+DSVEX_CALL_272:
     ; Set intensity override for drawing
     LDD #100
     STD RESULT
@@ -5584,22 +5190,22 @@ DSVEX_CALL_316:
     CLR DRAW_VEC_INTENSITY  ; Clear intensity override for next draw
     LDD #0
     STD RESULT
-    LBRA IF_END_310
-IF_NEXT_311:
-IF_END_310:
-    ; VPy_LINE:392
+    LBRA IF_END_266
+IF_NEXT_267:
+IF_END_266:
+    ; VPy_LINE:375
     LDD #0
     STD RESULT
     LDX RESULT
     STX 0 ,S
-    ; VPy_LINE:393
+    ; VPy_LINE:376
     LDD #0
     STD RESULT
     LDX RESULT
-    STX 4 ,S
-    ; VPy_LINE:394
-WH_317: ; while start
-    LDD 4 ,S
+    STX 2 ,S
+    ; VPy_LINE:377
+WH_273: ; while start
+    LDD 2 ,S
     STD RESULT
     LDD RESULT
     STD TMPLEFT
@@ -5609,22 +5215,22 @@ WH_317: ; while start
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BLT CT_319
+    BLT CT_275
     LDD #0
     STD RESULT
-    BRA CE_320
-CT_319:
+    BRA CE_276
+CT_275:
     LDD #1
     STD RESULT
-CE_320:
+CE_276:
     LDD RESULT
-    LBEQ WH_END_318
-    ; VPy_LINE:395
+    LBEQ WH_END_274
+    ; VPy_LINE:378
     LDD #VAR_ENEMY_ACTIVE_DATA
     STD RESULT
     LDD RESULT
     STD TMPPTR
-    LDD 4 ,S
+    LDD 2 ,S
     STD RESULT
     LDD RESULT
     ASLB
@@ -5641,17 +5247,17 @@ CE_320:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BEQ CT_323
+    BEQ CT_279
     LDD #0
     STD RESULT
-    BRA CE_324
-CT_323:
+    BRA CE_280
+CT_279:
     LDD #1
     STD RESULT
-CE_324:
+CE_280:
     LDD RESULT
-    LBEQ IF_NEXT_322
-    ; VPy_LINE:396
+    LBEQ IF_NEXT_278
+    ; VPy_LINE:379
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -5668,11 +5274,11 @@ CE_324:
     STD RESULT
     LDX RESULT
     STX 0 ,S
-    LBRA IF_END_321
-IF_NEXT_322:
-IF_END_321:
-    ; VPy_LINE:397
-    LDD 4 ,S
+    LBRA IF_END_277
+IF_NEXT_278:
+IF_END_277:
+    ; VPy_LINE:380
+    LDD 2 ,S
     STD RESULT
     LDD RESULT
     STD TMPLEFT
@@ -5687,33 +5293,33 @@ IF_END_321:
     ADDD TMPRIGHT
     STD RESULT
     LDX RESULT
-    STX 4 ,S
-    LBRA WH_317
-WH_END_318: ; while end
-    LEAS 8,S ; free locals
+    STX 2 ,S
+    LBRA WH_273
+WH_END_274: ; while end
+    LEAS 6,S ; free locals
     RTS
 
-    ; VPy_LINE:401
+    ; VPy_LINE:384
 SPAWN_ENEMIES: ; function
 ; --- function spawn_enemies ---
     LEAS -6,S ; allocate locals
-    ; VPy_LINE:404
+    ; VPy_LINE:387
     LDD #1
     STD RESULT
     LDX RESULT
     STX 0 ,S
-    ; VPy_LINE:405
+    ; VPy_LINE:388
     LDD #1
     STD RESULT
     LDX RESULT
     STX 4 ,S
-    ; VPy_LINE:407
+    ; VPy_LINE:390
     LDD #0
     STD RESULT
     LDX RESULT
     STX 2 ,S
-    ; VPy_LINE:408
-WH_325: ; while start
+    ; VPy_LINE:391
+WH_281: ; while start
     LDD 2 ,S
     STD RESULT
     LDD RESULT
@@ -5724,17 +5330,17 @@ WH_325: ; while start
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BLT CT_327
+    BLT CT_283
     LDD #0
     STD RESULT
-    BRA CE_328
-CT_327:
+    BRA CE_284
+CT_283:
     LDD #1
     STD RESULT
-CE_328:
+CE_284:
     LDD RESULT
-    LBEQ WH_END_326
-    ; VPy_LINE:409
+    LBEQ WH_END_282
+    ; VPy_LINE:392
     LDD 2 ,S
     STD RESULT
     LDD RESULT
@@ -5751,7 +5357,7 @@ CE_328:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:410
+    ; VPy_LINE:393
     LDD 2 ,S
     STD RESULT
     LDD RESULT
@@ -5768,7 +5374,7 @@ CE_328:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:411
+    ; VPy_LINE:394
     LDD 2 ,S
     STD RESULT
     LDD RESULT
@@ -5811,7 +5417,7 @@ CE_328:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:412
+    ; VPy_LINE:395
     LDD 2 ,S
     STD RESULT
     LDD RESULT
@@ -5828,7 +5434,7 @@ CE_328:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:413
+    ; VPy_LINE:396
     LDD 2 ,S
     STD RESULT
     LDD RESULT
@@ -5845,7 +5451,7 @@ CE_328:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:414
+    ; VPy_LINE:397
     LDD 2 ,S
     STD RESULT
     LDD RESULT
@@ -5882,17 +5488,17 @@ CE_328:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BEQ CT_331
+    BEQ CT_287
     LDD #0
     STD RESULT
-    BRA CE_332
-CT_331:
+    BRA CE_288
+CT_287:
     LDD #1
     STD RESULT
-CE_332:
+CE_288:
     LDD RESULT
-    LBEQ IF_NEXT_330
-    ; VPy_LINE:415
+    LBEQ IF_NEXT_286
+    ; VPy_LINE:398
     LDD 2 ,S
     STD RESULT
     LDD RESULT
@@ -5921,10 +5527,10 @@ CE_332:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    LBRA IF_END_329
-IF_NEXT_330:
-IF_END_329:
-    ; VPy_LINE:416
+    LBRA IF_END_285
+IF_NEXT_286:
+IF_END_285:
+    ; VPy_LINE:399
     LDD 2 ,S
     STD RESULT
     LDD RESULT
@@ -5941,7 +5547,7 @@ IF_END_329:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:417
+    ; VPy_LINE:400
     LDD 2 ,S
     STD RESULT
     LDD RESULT
@@ -5958,22 +5564,22 @@ IF_END_329:
     STD RESULT
     LDX RESULT
     STX 2 ,S
-    LBRA WH_325
-WH_END_326: ; while end
+    LBRA WH_281
+WH_END_282: ; while end
     LEAS 6,S ; free locals
     RTS
 
-    ; VPy_LINE:419
+    ; VPy_LINE:402
 UPDATE_ENEMIES: ; function
 ; --- function update_enemies ---
     LEAS -2,S ; allocate locals
-    ; VPy_LINE:421
+    ; VPy_LINE:404
     LDD #0
     STD RESULT
     LDX RESULT
     STX 0 ,S
-    ; VPy_LINE:422
-WH_333: ; while start
+    ; VPy_LINE:405
+WH_289: ; while start
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -5984,17 +5590,17 @@ WH_333: ; while start
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BLT CT_335
+    BLT CT_291
     LDD #0
     STD RESULT
-    BRA CE_336
-CT_335:
+    BRA CE_292
+CT_291:
     LDD #1
     STD RESULT
-CE_336:
+CE_292:
     LDD RESULT
-    LBEQ WH_END_334
-    ; VPy_LINE:423
+    LBEQ WH_END_290
+    ; VPy_LINE:406
     LDD #VAR_ENEMY_ACTIVE_DATA
     STD RESULT
     LDD RESULT
@@ -6016,17 +5622,17 @@ CE_336:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BEQ CT_339
+    BEQ CT_295
     LDD #0
     STD RESULT
-    BRA CE_340
-CT_339:
+    BRA CE_296
+CT_295:
     LDD #1
     STD RESULT
-CE_340:
+CE_296:
     LDD RESULT
-    LBEQ IF_NEXT_338
-    ; VPy_LINE:425
+    LBEQ IF_NEXT_294
+    ; VPy_LINE:408
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -6066,7 +5672,7 @@ CE_340:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:428
+    ; VPy_LINE:411
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -6117,7 +5723,7 @@ CE_340:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:429
+    ; VPy_LINE:412
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -6168,7 +5774,7 @@ CE_340:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:432
+    ; VPy_LINE:415
     LDD #VAR_ENEMY_Y_DATA
     STD RESULT
     LDD RESULT
@@ -6190,17 +5796,17 @@ CE_340:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BLE CT_343
+    BLE CT_299
     LDD #0
     STD RESULT
-    BRA CE_344
-CT_343:
+    BRA CE_300
+CT_299:
     LDD #1
     STD RESULT
-CE_344:
+CE_300:
     LDD RESULT
-    LBEQ IF_NEXT_342
-    ; VPy_LINE:433
+    LBEQ IF_NEXT_298
+    ; VPy_LINE:416
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -6217,7 +5823,7 @@ CE_344:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:434
+    ; VPy_LINE:417
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -6257,7 +5863,7 @@ CE_344:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:435
+    ; VPy_LINE:418
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -6313,7 +5919,7 @@ CE_344:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:437
+    ; VPy_LINE:420
     LDD #VAR_ENEMY_VY_DATA
     STD RESULT
     LDD RESULT
@@ -6335,17 +5941,17 @@ CE_344:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BLT CT_347
+    BLT CT_303
     LDD #0
     STD RESULT
-    BRA CE_348
-CT_347:
+    BRA CE_304
+CT_303:
     LDD #1
     STD RESULT
-CE_348:
+CE_304:
     LDD RESULT
-    LBEQ IF_NEXT_346
-    ; VPy_LINE:438
+    LBEQ IF_NEXT_302
+    ; VPy_LINE:421
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -6362,13 +5968,13 @@ CE_348:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    LBRA IF_END_345
-IF_NEXT_346:
-IF_END_345:
-    LBRA IF_END_341
-IF_NEXT_342:
-IF_END_341:
-    ; VPy_LINE:441
+    LBRA IF_END_301
+IF_NEXT_302:
+IF_END_301:
+    LBRA IF_END_297
+IF_NEXT_298:
+IF_END_297:
+    ; VPy_LINE:424
     LDD #VAR_ENEMY_X_DATA
     STD RESULT
     LDD RESULT
@@ -6390,17 +5996,17 @@ IF_END_341:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BLE CT_351
+    BLE CT_307
     LDD #0
     STD RESULT
-    BRA CE_352
-CT_351:
+    BRA CE_308
+CT_307:
     LDD #1
     STD RESULT
-CE_352:
+CE_308:
     LDD RESULT
-    LBEQ IF_NEXT_350
-    ; VPy_LINE:442
+    LBEQ IF_NEXT_306
+    ; VPy_LINE:425
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -6417,7 +6023,7 @@ CE_352:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:443
+    ; VPy_LINE:426
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -6457,10 +6063,10 @@ CE_352:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    LBRA IF_END_349
-IF_NEXT_350:
-IF_END_349:
-    ; VPy_LINE:444
+    LBRA IF_END_305
+IF_NEXT_306:
+IF_END_305:
+    ; VPy_LINE:427
     LDD #VAR_ENEMY_X_DATA
     STD RESULT
     LDD RESULT
@@ -6482,17 +6088,17 @@ IF_END_349:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BGE CT_355
+    BGE CT_311
     LDD #0
     STD RESULT
-    BRA CE_356
-CT_355:
+    BRA CE_312
+CT_311:
     LDD #1
     STD RESULT
-CE_356:
+CE_312:
     LDD RESULT
-    LBEQ IF_NEXT_354
-    ; VPy_LINE:445
+    LBEQ IF_NEXT_310
+    ; VPy_LINE:428
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -6509,7 +6115,7 @@ CE_356:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:446
+    ; VPy_LINE:429
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -6549,13 +6155,13 @@ CE_356:
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    LBRA IF_END_353
-IF_NEXT_354:
-IF_END_353:
-    LBRA IF_END_337
-IF_NEXT_338:
-IF_END_337:
-    ; VPy_LINE:448
+    LBRA IF_END_309
+IF_NEXT_310:
+IF_END_309:
+    LBRA IF_END_293
+IF_NEXT_294:
+IF_END_293:
+    ; VPy_LINE:431
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -6572,22 +6178,22 @@ IF_END_337:
     STD RESULT
     LDX RESULT
     STX 0 ,S
-    LBRA WH_333
-WH_END_334: ; while end
+    LBRA WH_289
+WH_END_290: ; while end
     LEAS 2,S ; free locals
     RTS
 
-    ; VPy_LINE:452
+    ; VPy_LINE:435
 DRAW_ENEMIES: ; function
 ; --- function draw_enemies ---
     LEAS -2,S ; allocate locals
-    ; VPy_LINE:454
+    ; VPy_LINE:437
     LDD #0
     STD RESULT
     LDX RESULT
     STX 0 ,S
-    ; VPy_LINE:455
-WH_357: ; while start
+    ; VPy_LINE:438
+WH_313: ; while start
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -6598,17 +6204,17 @@ WH_357: ; while start
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BLT CT_359
+    BLT CT_315
     LDD #0
     STD RESULT
-    BRA CE_360
-CT_359:
+    BRA CE_316
+CT_315:
     LDD #1
     STD RESULT
-CE_360:
+CE_316:
     LDD RESULT
-    LBEQ WH_END_358
-    ; VPy_LINE:456
+    LBEQ WH_END_314
+    ; VPy_LINE:439
     LDD #VAR_ENEMY_ACTIVE_DATA
     STD RESULT
     LDD RESULT
@@ -6630,27 +6236,27 @@ CE_360:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BEQ CT_363
+    BEQ CT_319
     LDD #0
     STD RESULT
-    BRA CE_364
-CT_363:
+    BRA CE_320
+CT_319:
     LDD #1
     STD RESULT
-CE_364:
+CE_320:
     LDD RESULT
-    LBEQ IF_NEXT_362
-    ; VPy_LINE:457
+    LBEQ IF_NEXT_318
+    ; VPy_LINE:440
     LDD #80
     STD RESULT
     LDD RESULT
     STD VAR_ARG0
-; NATIVE_CALL: VECTREX_SET_INTENSITY at line 457
+; NATIVE_CALL: VECTREX_SET_INTENSITY at line 440
     JSR VECTREX_SET_INTENSITY
     CLRA
     CLRB
     STD RESULT
-    ; VPy_LINE:458
+    ; VPy_LINE:441
     LDD #VAR_ENEMY_SIZE_DATA
     STD RESULT
     LDD RESULT
@@ -6672,17 +6278,17 @@ CE_364:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BEQ CT_367
+    BEQ CT_323
     LDD #0
     STD RESULT
-    BRA CE_368
-CT_367:
+    BRA CE_324
+CT_323:
     LDD #1
     STD RESULT
-CE_368:
+CE_324:
     LDD RESULT
-    LBEQ IF_NEXT_366
-    ; VPy_LINE:459
+    LBEQ IF_NEXT_322
+    ; VPy_LINE:442
 ; DRAW_VECTOR("bubble_huge", x, y) - 1 path(s) at position
     LDD #VAR_ENEMY_X_DATA
     STD RESULT
@@ -6727,8 +6333,8 @@ CE_368:
     JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
-    LBRA IF_END_365
-IF_NEXT_366:
+    LBRA IF_END_321
+IF_NEXT_322:
     LDD #VAR_ENEMY_SIZE_DATA
     STD RESULT
     LDD RESULT
@@ -6750,17 +6356,17 @@ IF_NEXT_366:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BEQ CT_370
+    BEQ CT_326
     LDD #0
     STD RESULT
-    BRA CE_371
-CT_370:
+    BRA CE_327
+CT_326:
     LDD #1
     STD RESULT
-CE_371:
+CE_327:
     LDD RESULT
-    LBEQ IF_NEXT_369
-    ; VPy_LINE:461
+    LBEQ IF_NEXT_325
+    ; VPy_LINE:444
 ; DRAW_VECTOR("bubble_large", x, y) - 1 path(s) at position
     LDD #VAR_ENEMY_X_DATA
     STD RESULT
@@ -6805,8 +6411,8 @@ CE_371:
     JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
-    LBRA IF_END_365
-IF_NEXT_369:
+    LBRA IF_END_321
+IF_NEXT_325:
     LDD #VAR_ENEMY_SIZE_DATA
     STD RESULT
     LDD RESULT
@@ -6828,17 +6434,17 @@ IF_NEXT_369:
     STD TMPRIGHT
     LDD TMPLEFT
     SUBD TMPRIGHT
-    BEQ CT_373
+    BEQ CT_329
     LDD #0
     STD RESULT
-    BRA CE_374
-CT_373:
+    BRA CE_330
+CT_329:
     LDD #1
     STD RESULT
-CE_374:
+CE_330:
     LDD RESULT
-    LBEQ IF_NEXT_372
-    ; VPy_LINE:463
+    LBEQ IF_NEXT_328
+    ; VPy_LINE:446
 ; DRAW_VECTOR("bubble_medium", x, y) - 1 path(s) at position
     LDD #VAR_ENEMY_X_DATA
     STD RESULT
@@ -6883,9 +6489,9 @@ CE_374:
     JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
-    LBRA IF_END_365
-IF_NEXT_372:
-    ; VPy_LINE:465
+    LBRA IF_END_321
+IF_NEXT_328:
+    ; VPy_LINE:448
 ; DRAW_VECTOR("bubble_small", x, y) - 1 path(s) at position
     LDD #VAR_ENEMY_X_DATA
     STD RESULT
@@ -6930,11 +6536,11 @@ IF_NEXT_372:
     JSR $F1AF        ; DP_to_C8 (restore DP for RAM access)
     LDD #0
     STD RESULT
-IF_END_365:
-    LBRA IF_END_361
-IF_NEXT_362:
-IF_END_361:
-    ; VPy_LINE:466
+IF_END_321:
+    LBRA IF_END_317
+IF_NEXT_318:
+IF_END_317:
+    ; VPy_LINE:449
     LDD 0 ,S
     STD RESULT
     LDD RESULT
@@ -6951,12 +6557,12 @@ IF_END_361:
     STD RESULT
     LDX RESULT
     STX 0 ,S
-    LBRA WH_357
-WH_END_358: ; while end
+    LBRA WH_313
+WH_END_314: ; while end
     LEAS 2,S ; free locals
     RTS
 
-    ; VPy_LINE:470
+    ; VPy_LINE:453
 DRAW_HOOK_ROPE: ; function
 ; --- function draw_hook_rope ---
     LEAS -8,S ; allocate locals
@@ -6968,7 +6574,7 @@ DRAW_HOOK_ROPE: ; function
     STD 4,S ; param 2
     LDD VAR_ARG3
     STD 6,S ; param 3
-    ; VPy_LINE:472
+    ; VPy_LINE:455
     LDD 0 ,S
     STD RESULT
     STD TMPPTR+0
@@ -6999,10 +6605,10 @@ DRAW_HOOK_ROPE: ; function
     LEAS 8,S ; free locals
     RTS
 
-    ; VPy_LINE:474
+    ; VPy_LINE:457
 READ_JOYSTICK1_STATE: ; function
 ; --- function read_joystick1_state ---
-    ; VPy_LINE:479
+    ; VPy_LINE:462
     LDD #0
     STD RESULT
     LDD RESULT
@@ -7014,13 +6620,13 @@ READ_JOYSTICK1_STATE: ; function
     LDD TMPPTR
     LEAX D,X
     STX TMPPTR2
-; NATIVE_CALL: J1_X at line 479
+; NATIVE_CALL: J1_X at line 462
     JSR J1X_BUILTIN
     STD RESULT
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:480
+    ; VPy_LINE:463
     LDD #1
     STD RESULT
     LDD RESULT
@@ -7032,13 +6638,13 @@ READ_JOYSTICK1_STATE: ; function
     LDD TMPPTR
     LEAX D,X
     STX TMPPTR2
-; NATIVE_CALL: J1_Y at line 480
+; NATIVE_CALL: J1_Y at line 463
     JSR J1Y_BUILTIN
     STD RESULT
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:483
+    ; VPy_LINE:466
     LDD #2
     STD RESULT
     LDD RESULT
@@ -7050,13 +6656,13 @@ READ_JOYSTICK1_STATE: ; function
     LDD TMPPTR
     LEAX D,X
     STX TMPPTR2
-; NATIVE_CALL: J1_BUTTON_1 at line 483
+; NATIVE_CALL: J1_BUTTON_1 at line 466
     JSR J1B1_BUILTIN
     STD RESULT
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:484
+    ; VPy_LINE:467
     LDD #3
     STD RESULT
     LDD RESULT
@@ -7068,13 +6674,13 @@ READ_JOYSTICK1_STATE: ; function
     LDD TMPPTR
     LEAX D,X
     STX TMPPTR2
-; NATIVE_CALL: J1_BUTTON_2 at line 484
+; NATIVE_CALL: J1_BUTTON_2 at line 467
     JSR J1B2_BUILTIN
     STD RESULT
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:485
+    ; VPy_LINE:468
     LDD #4
     STD RESULT
     LDD RESULT
@@ -7086,13 +6692,13 @@ READ_JOYSTICK1_STATE: ; function
     LDD TMPPTR
     LEAX D,X
     STX TMPPTR2
-; NATIVE_CALL: J1_BUTTON_3 at line 485
+; NATIVE_CALL: J1_BUTTON_3 at line 468
     JSR J1B3_BUILTIN
     STD RESULT
     LDX TMPPTR2
     LDD RESULT
     STD ,X
-    ; VPy_LINE:486
+    ; VPy_LINE:469
     LDD #5
     STD RESULT
     LDD RESULT
@@ -7104,7 +6710,7 @@ READ_JOYSTICK1_STATE: ; function
     LDD TMPPTR
     LEAX D,X
     STX TMPPTR2
-; NATIVE_CALL: J1_BUTTON_4 at line 486
+; NATIVE_CALL: J1_BUTTON_4 at line 469
     JSR J1B4_BUILTIN
     STD RESULT
     LDX TMPPTR2
@@ -7170,7 +6776,7 @@ DIV16_DONE:
 
 ; ========================================
 ; ASSET DATA SECTION
-; Embedded 51 of 69 assets (unused assets excluded)
+; Embedded 52 of 71 assets (unused assets excluded)
 ; ========================================
 
 ; Vector asset: player_walk_1
@@ -13827,7 +13433,7 @@ _10_BARCELONA_FG_OBJECTS:
 
 ; Level Asset: 05_ayers_rock (from /Users/daniel/projects/vectrex-pseudo-python/examples/pang/assets/levels/05_ayers_rock.vplay)
 ; ==== Level: 05_AYERS_ROCK ====
-; Author: Pang Team
+; Author: 
 ; Difficulty: medium
 
 _05_AYERS_ROCK_LEVEL:
@@ -13849,7 +13455,7 @@ _05_AYERS_ROCK_BG_OBJECTS:
     FCB 4  ; type
     FDB 0  ; x
     FDB 0  ; y
-    FDB 256  ; scale (8.8 fixed)
+    FDB 179  ; scale (8.8 fixed)
     FCB 0  ; rotation
     FCB 0  ; intensity (0=use vec, >0=override)
     FCB 0  ; velocity_x
@@ -14243,6 +13849,89 @@ _17_EASTER_ISLAND_BG_OBJECTS:
 _17_EASTER_ISLAND_GAMEPLAY_OBJECTS:
 
 _17_EASTER_ISLAND_FG_OBJECTS:
+
+
+; Animation Asset: player_anim (from /Users/daniel/projects/vectrex-pseudo-python/examples/pang/assets/animations/player_anim.vanim)
+; 6 frame(s), 2 state(s)
+; ===== ANIMATION: player_anim =====
+; Version: 1.0
+; Frames: 6
+; States: 2
+
+_PLAYER_ANIM:
+    FCB 6          ; num_frames
+    FCB 2          ; num_states
+    FCB $00        ; controller_flags (bit 0: mirror_on_left)
+    FDB _PLAYER_ANIM_FRAMES    ; Pointer to frame table
+    FDB _PLAYER_ANIM_STATES    ; Pointer to state table
+
+; Frame table for player_anim
+_PLAYER_ANIM_FRAMES:
+    ; Frame 0: idle (duration=30)
+_PLAYER_ANIM_IDLE_FRAME:
+    FDB _PLAYER_WALK_1_VECTORS     ; Pointer to vector asset
+    FDB 30          ; Duration (ticks)
+    FCB 80          ; Intensity
+    FDB 0          ; Offset X
+    FDB 0          ; Offset Y
+    FCB 0          ; Mirror mode
+    ; Frame 1: walk_1 (duration=5)
+_PLAYER_ANIM_WALK_1_FRAME:
+    FDB _PLAYER_WALK_1_VECTORS     ; Pointer to vector asset
+    FDB 5          ; Duration (ticks)
+    FCB 80          ; Intensity
+    FDB 0          ; Offset X
+    FDB 0          ; Offset Y
+    FCB 0          ; Mirror mode
+    ; Frame 2: walk_2 (duration=5)
+_PLAYER_ANIM_WALK_2_FRAME:
+    FDB _PLAYER_WALK_2_VECTORS     ; Pointer to vector asset
+    FDB 5          ; Duration (ticks)
+    FCB 80          ; Intensity
+    FDB 0          ; Offset X
+    FDB 0          ; Offset Y
+    FCB 0          ; Mirror mode
+    ; Frame 3: walk_3 (duration=5)
+_PLAYER_ANIM_WALK_3_FRAME:
+    FDB _PLAYER_WALK_3_VECTORS     ; Pointer to vector asset
+    FDB 5          ; Duration (ticks)
+    FCB 80          ; Intensity
+    FDB 0          ; Offset X
+    FDB 0          ; Offset Y
+    FCB 0          ; Mirror mode
+    ; Frame 4: walk_4 (duration=5)
+_PLAYER_ANIM_WALK_4_FRAME:
+    FDB _PLAYER_WALK_4_VECTORS     ; Pointer to vector asset
+    FDB 5          ; Duration (ticks)
+    FCB 80          ; Intensity
+    FDB 0          ; Offset X
+    FDB 0          ; Offset Y
+    FCB 0          ; Mirror mode
+    ; Frame 5: walk_5 (duration=5)
+_PLAYER_ANIM_WALK_5_FRAME:
+    FDB _PLAYER_WALK_5_VECTORS     ; Pointer to vector asset
+    FDB 5          ; Duration (ticks)
+    FCB 80          ; Intensity
+    FDB 0          ; Offset X
+    FDB 0          ; Offset Y
+    FCB 0          ; Mirror mode
+
+; State table for player_anim
+_PLAYER_ANIM_STATES:
+    ; State: idle
+_PLAYER_ANIM_IDLE_STATE:
+    FCB 1          ; num_frames in state
+    FCB 1          ; loop_state (0=no, 1=yes)
+    FCB 0          ; Frame index: idle
+    ; State: walking
+_PLAYER_ANIM_WALKING_STATE:
+    FCB 5          ; num_frames in state
+    FCB 1          ; loop_state (0=no, 1=yes)
+    FCB 1          ; Frame index: walk_1
+    FCB 2          ; Frame index: walk_2
+    FCB 3          ; Frame index: walk_3
+    FCB 4          ; Frame index: walk_4
+    FCB 5          ; Frame index: walk_5
 
 
 ; Array literal for variable 'joystick1_state' (6 elements)

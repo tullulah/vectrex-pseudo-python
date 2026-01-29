@@ -1,0 +1,65 @@
+{
+  "version": "1.0",
+  "name": "player",
+  "author": "VPy Compiler Test",
+  "created": "2026-01-26",
+  "frames": [
+    {
+      "id": "idle1",
+      "vectorName": "player_idle_1",
+      "duration": 30,
+      "intensity": 127,
+      "offsetX": 0,
+      "offsetY": 0,
+      "mirror": 0
+    },
+    {
+      "id": "idle2",
+      "vectorName": "player_idle_2",
+      "duration": 30,
+      "intensity": 127,
+      "offsetX": 0,
+      "offsetY": 0,
+      "mirror": 0
+    },
+    {
+      "id": "walk1",
+      "vectorName": "player_walk_1",
+      "duration": 8,
+      "intensity": 127,
+      "offsetX": 0,
+      "offsetY": 0,
+      "mirror": 0
+    },
+    {
+      "id": "walk2",
+      "vectorName": "player_walk_2",
+      "duration": 8,
+      "intensity": 127,
+      "offsetX": 0,
+      "offsetY": 0,
+      "mirror": 0
+    },
+    {
+      "id": "walk3",
+      "vectorName": "player_walk_3",
+      "duration": 8,
+      "intensity": 127,
+      "offsetX": 0,
+      "offsetY": 0,
+      "mirror": 0
+    }
+  ],
+  "states": {
+    "idle": {
+      "name": "idle",
+      "frames": ["idle1", "idle2"],
+      "loop_state": true
+    },
+    "walking": {
+      "name": "walking",
+      "frames": ["walk1", "walk2", "walk3"],
+      "loop_state": true
+    }
+  }
+}
