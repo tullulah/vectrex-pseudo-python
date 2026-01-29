@@ -64,11 +64,9 @@ interface VectorEditorProps {
   width?: number;
   /** Height of the editor */
   height?: number;
-  /** List of available animation names from project */
-  availableAnimations?: string[];
 }
 
-type Tool = 'select' | 'pen' | 'line' | 'polygon' | 'circle' | 'arc' | 'pan' | 'background' | 'animation' | 'path';
+type Tool = 'select' | 'pen' | 'line' | 'polygon' | 'circle' | 'arc' | 'pan' | 'background';
 type ViewMode = 'xy' | 'xz' | 'yz' | '3d';
 
 interface AnimationInstance {
@@ -552,7 +550,6 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
   onChange,
   width = 480,
   height = 640,
-  availableAnimations = [],
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -632,11 +629,6 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
   const [isDrawing, setIsDrawing] = useState(false);
   const [tempPoints, setTempPoints] = useState<Point[]>([]);
   
-  // Animation tool state
-  const [animationInstances, setAnimationInstances] = useState<AnimationInstance[]>([]);
-  const [selectedAnimationId, setSelectedAnimationId] = useState<string | null>(null);
-  const [currentAnimationName, setCurrentAnimationName] = useState<string>(availableAnimations[0] || ''); // For placing new animations
-  
   // Circle/Arc tool settings
   const [circleSegments, setCircleSegments] = useState(16);
   const [arcStartAngle, setArcStartAngle] = useState(0);
@@ -706,24 +698,6 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
     setResource(withCenter);
     onChange?.(withCenter);
   }, [onChange, historyIndex]);
-  
-  // Sync animation instances with resource
-  useEffect(() => {
-    if (animationInstances.length > 0) {
-      const newResource = { ...resource, animations: animationInstances };
-      // Don't trigger full history update, just update the resource silently
-      isInternalChange.current = true;
-      setResource(newResource);
-      onChange?.(newResource);
-    }
-  }, [animationInstances]);
-  
-  // Load animation instances from resource on init
-  useEffect(() => {
-    if (resource.animations && Array.isArray(resource.animations) && resource.animations.length > 0) {
-      setAnimationInstances(resource.animations as AnimationInstance[]);
-    }
-  }, []);
 
   // Undo: go back one step in history
   const handleUndo = useCallback(() => {
@@ -1299,60 +1273,7 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
       ctx.setLineDash([]);
       ctx.globalAlpha = 1;
     }
-    
-    // Draw animation instances
-    for (const instance of animationInstances) {
-      const pos = resourceToCanvas(instance.position);
-      
-      // Draw animation icon
-      ctx.fillStyle = instance.id === selectedAnimationId ? '#00ff00' : '#00ccff';
-      ctx.strokeStyle = instance.id === selectedAnimationId ? '#00ff00' : '#00ccff';
-      ctx.lineWidth = 2;
-      
-      // Draw a film reel icon (circle with inner lines)
-      ctx.beginPath();
-      ctx.arc(pos.x, pos.y, 10, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(pos.x - 5, pos.y);
-      ctx.lineTo(pos.x + 5, pos.y);
-      ctx.moveTo(pos.x, pos.y - 5);
-      ctx.lineTo(pos.x, pos.y + 5);
-      ctx.stroke();
-      
-      // Draw animation name
-      ctx.font = '10px monospace';
-      ctx.fillText(instance.animationName, pos.x + 15, pos.y + 5);
-      
-      // Draw movement path if it exists
-      if (instance.path && instance.path.length > 0) {
-        ctx.strokeStyle = '#ff00ff';
-        ctx.lineWidth = 2;
-        ctx.setLineDash([4, 4]);
-        
-        ctx.beginPath();
-        const startPath = resourceToCanvas(instance.position);
-        ctx.moveTo(startPath.x, startPath.y);
-        
-        for (const pathPoint of instance.path) {
-          const pp = resourceToCanvas(pathPoint);
-          ctx.lineTo(pp.x, pp.y);
-        }
-        
-        ctx.stroke();
-        ctx.setLineDash([]);
-        
-        // Draw path points
-        for (const pathPoint of instance.path) {
-          const pp = resourceToCanvas(pathPoint);
-          ctx.fillStyle = '#ff00ff';
-          ctx.beginPath();
-          ctx.arc(pp.x, pp.y, 4, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      }
-    }
-  }, [resource, currentLayerIndex, currentPathIndex, selectedPointIndex, selectedPoints, tempPoints, pan, zoom, width, height, resourceToCanvas, backgroundImage, backgroundOpacity, showBackground, isBoxSelecting, boxStart, boxEnd, showPreview, previewPaths, showEdgeSettings, isBackgroundSelected, backgroundOffset, animationInstances, selectedAnimationId]);
+  }, [resource, currentLayerIndex, currentPathIndex, selectedPointIndex, selectedPoints, tempPoints, pan, zoom, width, height, resourceToCanvas, backgroundImage, backgroundOpacity, showBackground, isBoxSelecting, boxStart, boxEnd, showPreview, previewPaths, showEdgeSettings, isBackgroundSelected, backgroundOffset]);
 
   useEffect(() => {
     draw();
@@ -1463,39 +1384,6 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
     
     const point = canvasToResource(canvasX, canvasY);
 
-    // Animation tool - place animation instance
-    if (currentTool === 'animation') {
-      if (!currentAnimationName) {
-        alert('Please select an animation first');
-        return;
-      }
-      const newInstance: AnimationInstance = {
-        id: `anim_${Date.now()}`,
-        animationName: currentAnimationName,
-        position: point,
-      };
-      setAnimationInstances([...animationInstances, newInstance]);
-      return;
-    }
-
-    // Path tool - draw movement path for selected animation
-    if (currentTool === 'path') {
-      if (!selectedAnimationId) {
-        alert('Please select an animation instance first (use Select tool)');
-        return;
-      }
-      // Add point to path of selected animation
-      const instances = animationInstances.map(inst => {
-        if (inst.id === selectedAnimationId) {
-          const path = inst.path || [];
-          return { ...inst, path: [...path, point] };
-        }
-        return inst;
-      });
-      setAnimationInstances(instances);
-      return;
-    }
-
     if (currentTool === 'pen') {
       setTempPoints([...tempPoints, point]);
       setIsDrawing(true);
@@ -1505,19 +1393,6 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
       setCircleRadius(0);
       setIsDrawing(true);
     } else if (currentTool === 'select') {
-      // First check if clicking on an animation instance
-      for (const instance of animationInstances) {
-        const pos = resourceToCanvas(instance.position);
-        const dist = Math.sqrt((pos.x - canvasX) ** 2 + (pos.y - canvasY) ** 2);
-        if (dist < 15) { // 15px click radius for animations
-          setSelectedAnimationId(instance.id);
-          setCurrentPathIndex(-1);
-          setSelectedPointIndex(-1);
-          setSelectedPoints(new Set());
-          return;
-        }
-      }
-      
       // Check if clicking on a point or near a path line
       let closestDist = Infinity;
       let closestPath = -1;
@@ -2008,34 +1883,6 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
       >
         ◔ Arc
       </button>
-      <button
-        onClick={() => setCurrentTool('animation')}
-        style={{
-          padding: '8px 12px',
-          background: currentTool === 'animation' ? '#4a8a4a' : '#3a5a3a',
-          color: 'white',
-          border: 'none',
-          borderRadius: '4px',
-          cursor: 'pointer',
-        }}
-        title="Animation - click to place animation instance"
-      >
-        🎬 Animation
-      </button>
-      <button
-        onClick={() => setCurrentTool('path')}
-        style={{
-          padding: '8px 12px',
-          background: currentTool === 'path' ? '#8a4a8a' : '#5a3a5a',
-          color: 'white',
-          border: 'none',
-          borderRadius: '4px',
-          cursor: 'pointer',
-        }}
-        title="Path - draw movement path for animations (patrol routes)"
-      >
-        🛤️ Path
-      </button>
       {backgroundImage && (
         <button
           onClick={() => setCurrentTool('background')}
@@ -2051,63 +1898,6 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
         >
           🖼️ Move BG
         </button>
-      )}
-      
-      <div style={{ width: '1px', background: '#4a4a6e', margin: '0 8px' }} />
-      
-      {/* Animation name selector */}
-      {(currentTool === 'animation') && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <label style={{ color: '#cccccc', fontSize: '12px' }}>Animation:</label>
-          {availableAnimations.length > 0 ? (
-            <select
-              value={currentAnimationName}
-              onChange={(e) => setCurrentAnimationName(e.target.value)}
-              style={{
-                padding: '4px 8px',
-                background: '#2a2a4e',
-                color: 'white',
-                border: '1px solid #4a4a8e',
-                borderRadius: '4px',
-                fontSize: '12px',
-                minWidth: '150px',
-              }}
-            >
-              {availableAnimations.map(anim => (
-                <option key={anim} value={anim}>{anim}</option>
-              ))}
-            </select>
-          ) : (
-            <span style={{ color: '#888', fontSize: '11px' }}>No animations in project</span>
-          )}
-        </div>
-      )}
-      
-      {/* Selected animation info */}
-      {selectedAnimationId && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <span style={{ color: '#00ff00', fontSize: '12px' }}>
-            Selected: {animationInstances.find(a => a.id === selectedAnimationId)?.animationName || 'Unknown'}
-          </span>
-          <button
-            onClick={() => {
-              setAnimationInstances(animationInstances.filter(a => a.id !== selectedAnimationId));
-              setSelectedAnimationId(null);
-            }}
-            style={{
-              padding: '4px 8px',
-              background: '#8a3a3a',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '11px',
-            }}
-            title="Delete selected animation"
-          >
-            🗑️ Delete
-          </button>
-        </div>
       )}
       
       <div style={{ width: '1px', background: '#4a4a6e', margin: '0 8px' }} />

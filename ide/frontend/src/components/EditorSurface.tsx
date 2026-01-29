@@ -190,7 +190,6 @@ export const EditorSurface: React.FC = () => {
               onChange={handleVectorChange}
               width={600}
               height={600}
-              availableAnimations={availableAnimations}
             />
           </div>
         ) : (
