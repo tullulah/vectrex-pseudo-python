@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo } from 'react';
 import { useEditorStore } from '../state/editorStore';
 import { useProjectStore } from '../state/projectStore';
+import type { FileNode } from '../types/models';
 import { WelcomeView } from './WelcomeView';
 import { MonacoEditorWrapper } from './MonacoEditorWrapper';
 import { VectorEditor } from './VectorEditor';
@@ -17,7 +18,26 @@ export const EditorSurface: React.FC = () => {
   const setActive = useEditorStore(s=>s.setActive);
   const closeDocument = useEditorStore(s=>s.closeDocument);
   const hasWorkspace = useProjectStore(s=>s.hasWorkspace());
+  const project = useProjectStore(s=>s.project);
   const visibleDocs = documents; // all docs now visible (no hide/pin)
+  
+  // Get available animations from project
+  const availableAnimations = useMemo(() => {
+    if (!hasWorkspace || !project) return [];
+    const animFiles: string[] = [];
+    
+    const findAnimFiles = (node: FileNode) => {
+      if (!node.isDir && node.name.endsWith('.vanim')) {
+        // Extract just the filename without extension
+        animFiles.push(node.name.replace('.vanim', ''));
+      } else if (node.isDir && node.children) {
+        node.children.forEach(findAnimFiles);
+      }
+    };
+    
+    project.files.forEach(findAnimFiles);
+    return animFiles;
+  }, [hasWorkspace, project, documents]); // Re-compute when documents change
 
   const onClose = useCallback((e: React.MouseEvent, uri: string) => {
     e.stopPropagation();
@@ -170,6 +190,7 @@ export const EditorSurface: React.FC = () => {
               onChange={handleVectorChange}
               width={600}
               height={600}
+              availableAnimations={availableAnimations}
             />
           </div>
         ) : (

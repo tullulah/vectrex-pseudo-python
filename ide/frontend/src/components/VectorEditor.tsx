@@ -64,6 +64,8 @@ interface VectorEditorProps {
   width?: number;
   /** Height of the editor */
   height?: number;
+  /** List of available animation names from project */
+  availableAnimations?: string[];
 }
 
 type Tool = 'select' | 'pen' | 'line' | 'polygon' | 'circle' | 'arc' | 'pan' | 'background' | 'animation' | 'path';
@@ -550,6 +552,7 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
   onChange,
   width = 480,
   height = 640,
+  availableAnimations = [],
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -632,8 +635,7 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
   // Animation tool state
   const [animationInstances, setAnimationInstances] = useState<AnimationInstance[]>([]);
   const [selectedAnimationId, setSelectedAnimationId] = useState<string | null>(null);
-  const [availableAnimations, setAvailableAnimations] = useState<string[]>([]); // List of .vanim files
-  const [currentAnimationName, setCurrentAnimationName] = useState<string>(''); // For placing new animations
+  const [currentAnimationName, setCurrentAnimationName] = useState<string>(availableAnimations[0] || ''); // For placing new animations
   
   // Circle/Arc tool settings
   const [circleSegments, setCircleSegments] = useState(16);
@@ -2053,25 +2055,31 @@ export const VectorEditor: React.FC<VectorEditorProps> = ({
       
       <div style={{ width: '1px', background: '#4a4a6e', margin: '0 8px' }} />
       
-      {/* Animation name input */}
+      {/* Animation name selector */}
       {(currentTool === 'animation') && (
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
           <label style={{ color: '#cccccc', fontSize: '12px' }}>Animation:</label>
-          <input
-            type="text"
-            value={currentAnimationName}
-            onChange={(e) => setCurrentAnimationName(e.target.value)}
-            placeholder="Enter animation name"
-            style={{
-              padding: '4px 8px',
-              background: '#2a2a4e',
-              color: 'white',
-              border: '1px solid #4a4a8e',
-              borderRadius: '4px',
-              fontSize: '12px',
-              width: '150px',
-            }}
-          />
+          {availableAnimations.length > 0 ? (
+            <select
+              value={currentAnimationName}
+              onChange={(e) => setCurrentAnimationName(e.target.value)}
+              style={{
+                padding: '4px 8px',
+                background: '#2a2a4e',
+                color: 'white',
+                border: '1px solid #4a4a8e',
+                borderRadius: '4px',
+                fontSize: '12px',
+                minWidth: '150px',
+              }}
+            >
+              {availableAnimations.map(anim => (
+                <option key={anim} value={anim}>{anim}</option>
+              ))}
+            </select>
+          ) : (
+            <span style={{ color: '#888', fontSize: '11px' }}>No animations in project</span>
+          )}
         </div>
       )}
       
