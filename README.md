@@ -1,83 +1,83 @@
 # Vectrex Pseudo Python (VPy)
 
-**Lenguaje de programación y entorno de desarrollo completo para Vectrex**
+**Programming language and complete development environment for Vectrex**
 
 [![Rust](https://img.shields.io/badge/rust-1.70%2B-orange.svg)](https://www.rust-lang.org/)
 [![Node](https://img.shields.io/badge/node-22.x-green.svg)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-> Sistema completo de desarrollo para Vectrex con compilador modular, ensamblador nativo M6809, emulador JSVecX integrado y editores visuales para gráficos y niveles.
+> Complete development system for Vectrex with modular compiler, native M6809 assembler, integrated JSVecX emulator and visual editors for graphics and levels.
 
-## 🎯 Características Principales
+## 🎯 Key Features
 
-- **Lenguaje VPy**: Sintaxis Python-like optimizada para Vectrex
-- **Compilador Modular**: Pipeline de 9 fases con ensamblador M6809 nativo (buildtools)
-- **Sin dependencias externas**: No requiere lwasm ni herramientas externas
-- **Emulador JSVecX**: Port JavaScript de VecX integrado en el IDE
-- **Editores Visuales**: Herramientas gráficas para vectores (.vec), animaciones (.vanim) y niveles (.vplay)
-- **Sistema de Módulos**: Imports, tree shaking automático, símbolos unificados
-- **Multibank ROM**: Soporte para cartuchos de hasta 4MB (256 banks × 16KB)
+- **VPy Language**: Python-like syntax optimized for Vectrex
+- **Modular Compiler**: 9-phase pipeline with native M6809 assembler (buildtools)
+- **No external dependencies**: No lwasm or external tools required
+- **JSVecX Emulator**: JavaScript port of VecX integrated in the IDE
+- **Visual Editors**: Graphical tools for vectors (.vec), animations (.vanim) and levels (.vplay)
+- **Module System**: Imports, automatic tree shaking, unified symbols
+- **Multibank ROM**: Support for cartridges up to 4MB (256 banks × 16KB)
 
-## 🏗️ Arquitectura del Compilador
+## 🏗️ Compiler Architecture
 
-El nuevo compilador modular (`buildtools/`) reemplaza al antiguo monolítico (`core/`):
+The new modular compiler (`buildtools/`) replaces the old monolithic one (`core/`):
 
 ```
-Pipeline de 9 Fases:
-1. vpy_loader       → Lee .vpyproj, descubre archivos y assets
-2. vpy_parser       → Lexer + Parser → AST por módulo
-3. vpy_unifier      → Resuelve imports, une módulos, tree shaking
-4. vpy_bank_allocator → Asigna funciones a banks (multibank)
-5. vpy_codegen      → Genera ASM M6809 por bank
-6. vpy_assembler    → Ensambla a object files (.vo) con relocaciones
-7. vpy_linker       → Linker real (source of truth para direcciones)
-8. vpy_binary_writer → Escribe .bin final
-9. vpy_debug_gen    → Genera .pdb para debugging
+9-Phase Pipeline:
+1. vpy_loader       → Reads .vpyproj, discovers files and assets
+2. vpy_parser       → Lexer + Parser → AST per module
+3. vpy_unifier      → Resolves imports, merges modules, tree shaking
+4. vpy_bank_allocator → Assigns functions to banks (multibank)
+5. vpy_codegen      → Generates M6809 ASM per bank
+6. vpy_assembler    → Assembles to object files (.vo) with relocations
+7. vpy_linker       → Real linker (source of truth for addresses)
+8. vpy_binary_writer → Writes final .bin
+9. vpy_debug_gen    → Generates .pdb for debugging
 ```
 
-**Ventajas sobre el compilador antiguo**:
-- ✅ Ensamblador M6809 nativo (no lwasm)
-- ✅ Linker real con relocaciones y symbol table
-- ✅ Single source of truth para direcciones
-- ✅ PDB generado correctamente desde linker
-- ✅ Tests comprehensivos por fase
-- ✅ Fácil de extender y mantener
+**Advantages over the old compiler**:
+- ✅ Native M6809 assembler (no lwasm)
+- ✅ Real linker with relocations and symbol table
+- ✅ Single source of truth for addresses
+- ✅ PDB generated correctly from linker
+- ✅ Comprehensive tests per phase
+- ✅ Easy to extend and maintain
 
 ## 🚀 Quick Start
 
-### Requisitos
-- **Rust** 1.70+ ([instalar](https://rustup.rs/))
-- **Node.js** 22+ ([instalar](https://nodejs.org/))
-- **BIOS Vectrex**: 8KB (`bios.bin`)
+### Requirements
+- **Rust** 1.70+ ([install](https://rustup.rs/))
+- **Node.js** 22+ ([install](https://nodejs.org/))
+- **Vectrex BIOS**: 8KB (`bios.bin`)
 
-### Instalación
+### Installation
 
 ```bash
-# 1. Clonar repositorio
+# 1. Clone repository
 git clone https://github.com/tullulah/vectrex-pseudo-python.git
 cd vectrex-pseudo-python
 
-# 2. Compilar el compilador (buildtools)
+# 2. Build the compiler (buildtools)
 cd buildtools
 cargo build --release --bin vpy_cli
 cd ..
 
-# 3. Instalar dependencias del IDE
+# 3. Install IDE dependencies
 cd ide/frontend && npm install
 cd ../electron && npm install
 cd ../..
 
-# 4. Iniciar el IDE
+# 4. Start the IDE
 ./run-ide.sh          # macOS/Linux
-# o
+# or
 run-ide.ps1           # Windows (PowerShell)
 ```
 
-### Tu Primer Programa
+### Your First Program
 
 ```python
 # game.vpy
-META TITLE = "Mi Primer Juego"
+META TITLE = "My First Game"
 
 player_x = 0
 player_y = 0
@@ -88,46 +88,46 @@ def main():
 def loop():
     WAIT_RECAL()
     
-    # Leer joystick
+    # Read joystick
     player_x = player_x + J1_X()
     player_y = player_y + J1_Y()
     
-    # Dibujar jugador
+    # Draw player
     DRAW_LINE(player_x-10, player_y, player_x+10, player_y, 127)
     DRAW_LINE(player_x, player_y-10, player_x, player_y+10, 127)
 ```
 
-**Compilar desde terminal:**
+**Compile from terminal:**
 ```bash
-# Con el nuevo compilador modular (recomendado)
+# With the new modular compiler (recommended)
 cd buildtools
 cargo run --release --bin vpy_cli -- build ../game.vpy -o game.bin
 
-# O desde el IDE: botón "Run" (compila + carga en emulador)
+# Or from the IDE: "Run" button (compile + load in emulator)
 ```
 
-## 📚 Documentación
+## 📚 Documentation
 
-### Compilador (Buildtools)
-- **[buildtools/README.md](buildtools/README.md)** - Arquitectura del pipeline modular
-- **[buildtools/STATUS.md](buildtools/STATUS.md)** - Estado actual de cada fase
-- **Estado por fase**: Loader ✅, Parser ✅, Unifier ✅, Allocator ✅, Codegen ✅, Assembler ✅
+### Compiler (Buildtools)
+- **[buildtools/README.md](buildtools/README.md)** - Modular pipeline architecture
+- **[buildtools/STATUS.md](buildtools/STATUS.md)** - Current status of each phase
+- **Status per phase**: Loader ✅, Parser ✅, Unifier ✅, Allocator ✅, Codegen ✅, Assembler ✅
 
-### Lenguaje VPy
-- **[docs/COMPILER_STATUS.md](docs/COMPILER_STATUS.md)** - Referencia de sintaxis y builtins
-- **[docs/PHASE6_SUMMARY.md](docs/PHASE6_SUMMARY.md)** - Sistema de módulos e imports
-- **Ejemplos**: Ver carpeta `examples/` (pang, animations, multi-module)
+### VPy Language
+- **[docs/COMPILER_STATUS.md](docs/COMPILER_STATUS.md)** - Syntax and builtins reference
+- **[docs/PHASE6_SUMMARY.md](docs/PHASE6_SUMMARY.md)** - Module system and imports
+- **Examples**: See `examples/` folder (pang, animations, multi-module)
 
-### Multibank y Assets
-- **[docs/MULTIBANK_DEBUG_GUIDE.md](docs/MULTIBANK_DEBUG_GUIDE.md)** - ROMs multibank (hasta 4MB)
-- **Assets**: Vectores (.vec), música (.vmus), sonidos (.vsfx), niveles (.vplay)
+### Multibank and Assets
+- **[docs/MULTIBANK_DEBUG_GUIDE.md](docs/MULTIBANK_DEBUG_GUIDE.md)** - Multibank ROMs (up to 4MB)
+- **Assets**: Vectors (.vec), music (.vmus), sounds (.vsfx), levels (.vplay)
 
 ### IDE
-- **Emulador**: JSVecX integrado (puerto JavaScript de VecX)
-- **Editor de Vectores**: Herramientas de dibujo para gráficos .vec
-- **Editor de Animaciones**: Secuencias de frames con .vec
-- **Editor de Niveles (Playground)**: Composición visual de objetos y animaciones
-- **Debugging**: Breakpoints, step-by-step, inspección de memoria
+- **Emulator**: Integrated JSVecX (JavaScript port of VecX)
+- **Vector Editor**: Drawing tools for .vec graphics
+- **Animation Editor**: Frame sequences with .vec
+- **Level Editor (Playground)**: Visual composition of objects and animations
+- **Debugging**: Breakpoints, step-by-step, memory inspection
 
 ## 🏗️ Arquitectura del Proyecto
 
@@ -157,23 +157,23 @@ vectrex-pseudo-python/
 └── docs/              # Documentación técnica
 ```
 
-## 🎮 Características del Lenguaje
+## 🎮 Language Features
 
-### Tipos de Datos
+### Data Types
 ```python
 # Variables
 x = 10
 name = "VECTREX"
 colors = [255, 200, 150]
 
-# Constantes (ROM-only)
+# Constants (ROM-only)
 const ENEMIES = 5
 const LEVEL_DATA = [1, 2, 3, 4]
 ```
 
-### Funciones Builtin
+### Builtin Functions
 ```python
-# Gráficos
+# Graphics
 SET_INTENSITY(brightness)
 DRAW_LINE(x0, y0, x1, y1, intensity)
 DRAW_VECTOR("sprite_name")
@@ -182,25 +182,25 @@ PRINT_TEXT(x, y, "HELLO")
 # Input
 joy_x = J1_X()              # -1, 0, 1
 joy_y = J1_Y()
-btn = J1_BUTTON_1()         # 0 o 1
+btn = J1_BUTTON_1()         # 0 or 1
 
 # Audio
 PLAY_MUSIC("theme")
 PLAY_SFX("explosion", 0)    # channel 0-2
 ```
 
-### Sistema de Assets
+### Asset System
 ```python
-# Los assets se descubren automáticamente:
+# Assets are automatically discovered:
 # - assets/vectors/*.vec
 # - assets/music/*.vmus
 
 def loop():
-    DRAW_VECTOR("player")      # Usa player.vec
-    PLAY_MUSIC("theme")        # Usa theme.vmus
+    DRAW_VECTOR("player")      # Uses player.vec
+    PLAY_MUSIC("theme")        # Uses theme.vmus
 ```
 
-### Módulos
+### Modules
 ```python
 # input.vpy
 def get_input():
@@ -209,37 +209,43 @@ def get_input():
 # main.vpy
 import input
 
-def loop():el Nuevo Compilador (Buildtools)
+def loop():
+    x, y = input.get_input()
+```
+
+## 🔧 Development
+
+### Build the New Compiler (Buildtools)
 ```bash
 cd buildtools
 cargo build --release --bin vpy_cli
 ```
 
-### Ejecutar el Compilador
+### Run the Compiler
 ```bash
-# Compilar archivo VPy
+# Compile VPy file
 cd buildtools
 cargo run --release --bin vpy_cli -- build ../examples/pang/src/main.vpy -o pang.bin
 
-# Ver ayuda
+# See help
 cargo run --release --bin vpy_cli -- --help
 ```
 
-### Tests del Compilador
+### Compiler Tests
 ```bash
 cd buildtools
 
-# Tests por crate
+# Tests per crate
 cargo test -p vpy_parser
 cargo test -p vpy_unifier
 cargo test -p vpy_codegen
 # ... etc
 
-# Tests de todo el workspace
+# All workspace tests
 cargo test --all
 ```
 
-### Build del IDE
+### IDE Build
 ```bash
 cd ide/frontend
 npm run build        # Build frontend (React + Vite)
@@ -248,15 +254,15 @@ cd ../electron
 npm run build        # Build Electron app
 ```
 
-### Desarrollo del IDE
+### IDE Development
 ```bash
 # Terminal 1: Frontend dev server
 cd ide/frontend
-npm run dev          # Vite dev server en puerto 5173
+npm run dev          # Vite dev server on port 5173
 
 # Terminal 2: Electron
 cd ide/electron
-npm start            # Electron apuntando a localhost:5173
+npm start            # Electron pointing to localhost:5173
 ```
 
 ## 📦 Formato de Archivos
@@ -280,7 +286,7 @@ npm start            # Electron apuntando a localhost:5173
 }
 ```
 
-### .vanim - Animaciones
+### .vanim - Animations
 ```json
 {
   "name": "explosion",
@@ -292,81 +298,97 @@ npm start            # Electron apuntando a localhost:5173
 }
 ```
 
-### .vplay - Niveles
+### .vplay - Levels
 ```json
 {
-  "namBuildtools (Compilador Modular)
-- ✅ **9 fases completadas**: Loader → Parser → Unifier → Allocator → Codegen → Assembler → Linker → Writer → Debug
-- ✅ **Ensamblador M6809 nativo**: No requiere lwasm ni herramientas externas
-- ✅ **Linker real**: Relocaciones, symbol table, single source of truth
-- ✅ **Tree shaking**: Elimina código no usado automáticamente
-- ✅ **Multibank**: Soporte para ROMs hasta 4MB (256 banks × 16KB)
-- ✅ **Tests comprehensivos**: 100+ tests cubriendo todas las fases
+  "name": "level_1",
+  "background": {"r": 0, "g": 0, "b": 0},
+  "objects": [
+    {
+      "type": "player",
+      "animation": "player_idle",
+      "x": 0,
+      "y": -50
+    },
+    {
+      "type": "enemy",
+      "animation": "enemy_walk",
+      "x": 50,
+      "y": 30
+    }
+  ]
+}
+```
 
-### ✅ IDE y Herramientas
-- ✅ **Emulador JSVecX**: Puerto JavaScript de VecX integrado
-- ✅ **Editor de Vectores**: Herramientas de dibujo con preview en tiempo real
-- ✅ **Editor de Animaciones**: Timeline visual para secuencias
-- ✅ **Editor de Niveles (Playground)**: Composición visual de objetos y animaciones
+## 🎯 Project Status (February 2026)
+
+### ✅ Buildtools (Modular Compiler)
+- ✅ **9 phases completed**: Loader → Parser → Unifier → Allocator → Codegen → Assembler → Linker → Writer → Debug
+- ✅ **Native M6809 assembler**: No lwasm or external tools required
+- ✅ **Real linker**: Relocations, symbol table, single source of truth
+- ✅ **Tree shaking**: Automatically eliminates unused code
+- ✅ **Multibank**: Support for ROMs up to 4MB (256 banks × 16KB)
+- ✅ **Comprehensive tests**: 100+ tests covering all phases
+
+### ✅ IDE and Tools
+- ✅ **JSVecX Emulator**: Integrated JavaScript port of VecX
+- ✅ **Vector Editor**: Drawing tools with real-time preview
+- ✅ **Animation Editor**: Visual timeline for sequences
+- ✅ **Level Editor (Playground)**: Visual composition of objects and animations
 - ✅ **Debugging**: Breakpoints, step execution, memory inspector
-- ✅ **Monaco Editor**: Syntax highlighting para VPy
-- ✅ **Sistema de proyectos**: .vpyproj con metadata y configuración
+- ✅ **Monaco Editor**: Syntax highlighting for VPy
+- ✅ **Project system**: .vpyproj with metadata and configuration
 
-### ✅ Lenguaje VPy
-- ✅ **Sistema de módulos**: Imports con resolución automática
-- ✅ **Structs y arrays**: Tipos compuestos con layout automático
-- ✅ **Const arrays**: Datos ROM-only con indexación eficiente
-- ✅ **Assets integrados**: Vectores, música, sonidos, niveles
-- ✅ **Builtins**: 40+ funciones (gráficos, input, audio, colisiones)
+### ✅ VPy Language
+- ✅ **Module system**: Imports with automatic resolution
+- ✅ **Structs and arrays**: Composite types with automatic layout
+- ✅ **Const arrays**: ROM-only data with efficient indexing
+- ✅ **Integrated assets**: Vectors, music, sounds, levels
+- ✅ **Builtins**: 40+ functions (graphics, input, audio, collisions)
 
-### 🚧 En Desarrollo
-- 🚧 **Migración core → buildtools**: Integrar CLI nuevo en IDE
-- 🚧 **LSP actualizado**: Usar parser del nuevo compilador
-- 🚧 **Optimizaciones**: Dead code elimination, constant propagation
-
-### 📋 Roadmap
-- [ ] Generador de sprites desde imágenes PNG
-- [ ] Sistema de física 2D (colisiones, gravedad)
-- [ ] Herramientas de profiling (CPU, memoria)
-- [ ] Export a cartuchos físicos (.vec format)
-### 🚧 En Desarrollo
-- 🚧 Compilación incremental
-- 🚧 Debugger con breakpoints
-- 🚧 Optimizaciones del compilador
+### 🚧 In Development
+- 🚧 **core → buildtools migration**: Integrate new CLI into IDE
+- 🚧 **Updated LSP**: Use new compiler parser
+- 🚧 **Optimizations**: Dead code elimination, constant propagation
 
 ### 📋 Roadmap
-- [ ] LSP mejorado (autocomplete contextual)
-- [ ] Generador de sprites desde imágenes
-- [ ] Sistema de física 2D
-- [ ] Networking para multi-cart
+- [ ] Sprite generator from PNG images
+- [ ] 2D physics system (collisions, gravity)
+- [ ] Profiling tools (CPU, memory)
+- [ ] Export to physical cartridges (.vec format)
+- [ ] Networking for multi-cart
 
-## 🤝 Contribuir
+## 🤝 Contributing
 
-Las contribuciones son bienvenidas:
+Contributions are welcome:
 
-1. Fork el proyecto
-2. Crea una rama feature (`git checkout -b feature/AmazingFeature`)
-3. Commit tus cambios (`git commit -m 'Add AmazingFeature'`)
-4. Push a la rama (`git push origin feature/AmazingFeature`)
-5. Abre un Pull Request
+1. Fork the project
+2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
 
-## 📝 Licencia
+## 📝 License
 
-Este proyecto está bajo licencia MIT. Ver [LICENSE](LICENSE) para más detalles.
+This project is under MIT license. See [LICENSE](LICENSE) for details.
 
-## 🙏 Agradecimientos
+## 🙏 Acknowledgments
 
-- **JSVecX** por raz0red - Puerto JavaScript de VecX usado como emulador
-- **VecX** por Valavan Manohararajah - Emulador original de referencia
-- **Comunidad Vectrex** por documentación de hardware y BIOS
-- **BIOS Vectrex** (liberada públicamente) para desarrollo
+- **JSVecX** by raz0red - JavaScript port of VecX used as emulator
+- **VecX** by Valavan Manohararajah - Original reference emulator
+- **Malban** - For extensive documentation and Vide (Vectrex Integrated Development Environment)
+- **Technobly** - For his help and the Discord community
+- **Jason Kopp** - For being an inspiration to the community
+- **Vectrex Fans Unite!** community - For continued support and enthusiasm
+- **Vectrex Community** for hardware and BIOS documentation
+- **Vectrex BIOS** (publicly released) for development
 
-## 📞 Soporte
+## 📞 Support
 
 - **Issues**: [GitHub Issues](https://github.com/tuusuario/vectrex-pseudo-python/issues)
-- **Documentación**: Carpeta [docs/](docs/)
-- **Ejemplos**: Carpeta [examples/](examples/)
+- **Documentation**: [docs/](docs/) folder
+- **Examples**: [examples/](examples/) folder
 
 ---
 
-**Hecho con ❤️ para la comunidad Vectrex**
+**Made with ❤️ for the Vectrex community**
