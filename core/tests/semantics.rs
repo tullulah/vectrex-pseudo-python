@@ -31,6 +31,8 @@ fn semantics_valid_decl_and_use() {
         mutable_arrays: std::collections::BTreeSet::new(),
         structs: std::collections::HashMap::new(),
         type_context: std::collections::HashMap::new(),
+        output_name: None,
+        buffer_requirements: None,
     });
     // El módulo requiere loop() pero no lo tiene, así que debe contener ERROR
     assert!(asm.contains("ERROR") || asm.contains("MAIN") || asm.to_uppercase().contains("MAIN"));
@@ -51,6 +53,8 @@ fn semantics_undefined_use_reports_error() {
         mutable_arrays: std::collections::BTreeSet::new(),
         structs: std::collections::HashMap::new(),
         type_context: std::collections::HashMap::new(),
+        output_name: None,
+        buffer_requirements: None,
     });
     assert!(diags.iter().any(|d| matches!(d.code, DiagnosticCode::UndeclaredVar)), "expected undeclared variable error, got: {:?}", diags);
 }
@@ -72,6 +76,8 @@ fn semantics_valid_builtin_arity() {
         mutable_arrays: std::collections::BTreeSet::new(),
         structs: std::collections::HashMap::new(),
         type_context: std::collections::HashMap::new(),
+        output_name: None,
+        buffer_requirements: None,
     });
 }
 
@@ -91,6 +97,8 @@ fn semantics_bad_builtin_arity_reports_error() {
         mutable_arrays: std::collections::BTreeSet::new(),
         structs: std::collections::HashMap::new(),
         type_context: std::collections::HashMap::new(),
+        output_name: None,
+        buffer_requirements: None,
     });
     assert!(diags.iter().any(|d| matches!(d.code, DiagnosticCode::ArityMismatch)), "expected arity error, got: {:?}", diags);
 }
@@ -111,6 +119,8 @@ fn semantics_unused_var_warning() {
         mutable_arrays: std::collections::BTreeSet::new(),
         structs: std::collections::HashMap::new(),
         type_context: std::collections::HashMap::new(),
+        output_name: None,
+        buffer_requirements: None,
     });
     assert!(diags.iter().any(|d| matches!(d.code, DiagnosticCode::UnusedVar)), "expected unused var warning, got: {:?}", diags);
 }

@@ -37,6 +37,8 @@ def loop():
         mutable_arrays: std::collections::BTreeSet::new(),
         structs: std::collections::HashMap::new(),
         type_context: std::collections::HashMap::new(),
+        output_name: None,
+        buffer_requirements: None,
     };
     let asm = vectrex_lang::codegen::emit_asm(&module, Target::Vectrex, &opts);
     // The main loop is generated with label "MAIN:" when auto_loop is enabled

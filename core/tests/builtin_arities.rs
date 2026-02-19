@@ -38,6 +38,8 @@ fn builtin_arities_stable() {
             mutable_arrays: std::collections::BTreeSet::new(),
             structs: std::collections::HashMap::new(),
             type_context: std::collections::HashMap::new(),
+            output_name: None,
+            buffer_requirements: None,
         });
         assert!(diags.iter().all(|d| d.code != DiagnosticCode::ArityMismatch), "{} deberia aceptar {} args: {:?}", c.name, c.ok_arity, diags);
 
@@ -53,6 +55,8 @@ fn builtin_arities_stable() {
             mutable_arrays: std::collections::BTreeSet::new(),
             structs: std::collections::HashMap::new(),
             type_context: std::collections::HashMap::new(),
+            output_name: None,
+            buffer_requirements: None,
         });
         assert!(diags_bad.iter().any(|d| d.code == DiagnosticCode::ArityMismatch), "{} deberia rechazar {} args (tabla espera {}): {:?}", c.name, c.bad_arity, c.ok_arity, diags_bad);
     }

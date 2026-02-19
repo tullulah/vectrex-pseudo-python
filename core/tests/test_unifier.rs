@@ -30,7 +30,6 @@ fn test_opts() -> CodegenOptions {
         blink_intensity: false,
         exclude_ram_org: false,
         fast_wait: false,
-        emit_sections: false,
         source_path: None,
         output_name: None,
         assets: vec![],
@@ -40,11 +39,7 @@ fn test_opts() -> CodegenOptions {
         mutable_arrays: BTreeSet::new(),
         structs: HashMap::new(),
         type_context: HashMap::new(),
-        bank_config: None,
         buffer_requirements: None,
-        function_bank_map: HashMap::new(),
-            inline_arrays: vec![],
-            skip_builtins: false,
     }
 }
 
