@@ -1,103 +1,296 @@
-# vectrex-pseudo-python
+# Vectrex Pseudo Python (VPy)
 
-**Lenguaje DSL y entorno de desarrollo para Vectrex (Motorola 6809)**
+**Lenguaje de programación y entorno de desarrollo completo para Vectrex**
 
 [![Rust](https://img.shields.io/badge/rust-1.70%2B-orange.svg)](https://www.rust-lang.org/)
-[![Node](https://img.shields.io/badge/node-18.x-green.svg)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-> **Nota:** Para configuración completa desde cero, ver [SETUP.md](SETUP.md)
+> Sistema completo de desarrollo para Vectrex: compilador VPy → M6809 ASM → binario, emulador integrado, IDE con editor visual de vectores y niveles.
 
-## Quick Start
+## 🎯 Características Principales
 
-### Requisitos Previos
-- Rust 1.70+ ([instalar](https://rustup.rs/))
-- Node.js 18+ ([instalar](https://nodejs.org/))
-- BIOS Vectrex (8KB) en `ide/frontend/dist/bios.bin`
+- **Lenguaje VPy**: Sintaxis Python-like para programar Vectrex
+- **Compilador completo**: VPy → ASM M6809 → binario ejecutable
+- **Emulador integrado**: Ejecución directa en el IDE con debugging
+- **Editor Visual**: Diseño de gráficos vectoriales (.vec), animaciones (.vanim) y niveles (.vplay)
+- **Sistema de módulos**: Importa y reutiliza código entre proyectos
+- **Multibank ROM**: Soporte para cartuchos de hasta 512KB
 
-### Compilar y Ejecutar
+## 🚀 Quick Start
+
+### Requisitos
+- **Rust** 1.70+ ([instalar](https://rustup.rs/))
+- **Node.js** 18+ ([instalar](https://nodejs.org/))
+- **BIOS Vectrex**: 8KB en `ide/frontend/dist/bios.bin`
+
+### Instalación
 
 ```bash
-# 1. Compilar compilador VPy
+# 1. Clonar repositorio
+git clone https://github.com/tuusuario/vectrex-pseudo-python.git
+cd vectrex-pseudo-python
+
+# 2. Compilar el compilador
 cargo build --bin vectrexc --release
 
-# 2. Instalar dependencias IDE
+# 3. Instalar dependencias del IDE
 cd ide/frontend && npm install
 cd ../electron && npm install
 cd ../..
 
-# 3. Iniciar IDE
-./run-ide.ps1  # Windows
-# O manualmente: cd ide/frontend && npm run dev, luego cd ../electron && npm start
+# 4. Iniciar el IDE
+./run-ide.sh          # macOS/Linux
+# o
+./run-ide.ps1         # Windows
 ```
 
-**Ver [SETUP.md](SETUP.md) para instrucciones completas paso a paso.**
+### Tu Primer Programa
 
----
+```python
+# game.vpy
+META TITLE = "Mi Primer Juego"
+
+player_x = 0
+player_y = 0
+
+def main():
+    SET_INTENSITY(127)
+
+def loop():
+    WAIT_RECAL()
+    
+    # Leer joystick
+    player_x = player_x + J1_X()
+    player_y = player_y + J1_Y()
+    
+    # Dibujar jugador
+    DRAW_LINE(player_x-10, player_y, player_x+10, player_y, 127)
+    DRAW_LINE(player_x, player_y-10, player_x, player_y+10, 127)
+```
+
+**Compilar:**
+```bash
+cargo run --bin vectrexc -- build game.vpy --bin
+```
 
 ## 📚 Documentación
 
-### Para Empezar
-- 📦 **[SETUP.md](SETUP.md)** - Setup completo desde cero
-- 🔄 **[MIGRATION_CHECKLIST.md](MIGRATION_CHECKLIST.md)** - Migración a nueva máquina
-- 📑 **[INDEX.md](INDEX.md)** - Índice completo de documentación
+### Empezando
+- **[docs/QUICK_TEST_GUIDE.md](docs/QUICK_TEST_GUIDE.md)** - Guía rápida de prueba
+- **[docs/COMPILER_STATUS.md](docs/COMPILER_STATUS.md)** - Referencia del lenguaje VPy
+- **Ejemplos**: Ver carpeta `examples/` para proyectos de ejemplo
 
-### Desarrollo
-- 🔧 **[COMPILER_STATUS.md](COMPILER_STATUS.md)** - Estado del compilador e instrucciones
-- 📚 **[SUPER_SUMMARY.md](SUPER_SUMMARY.md)** - Documentación técnica detallada
-- 📝 **[CHANGELOG.md](CHANGELOG.md)** - Historial de cambios
+### Arquitectura
+- **[docs/PHASE6_SUMMARY.md](docs/PHASE6_SUMMARY.md)** - Sistema de módulos
+- **[docs/MULTIBANK_DEBUG_GUIDE.md](docs/MULTIBANK_DEBUG_GUIDE.md)** - Cartuchos multibank
+- **[docs/TIMING.md](docs/TIMING.md)** - Modelo de timing y frames
+- **[docs/VECTOR_MODEL.md](docs/VECTOR_MODEL.md)** - Sistema de vectores
 
-**¿Primera vez?** → Empieza por [SETUP.md](SETUP.md)  
-**¿Cambio de máquina?** → Sigue [MIGRATION_CHECKLIST.md](MIGRATION_CHECKLIST.md)  
-**¿Buscas algo específico?** → Consulta [INDEX.md](INDEX.md)
+### IDE
+- **Editor de Vectores**: Crea gráficos .vec con herramientas de dibujo
+- **Editor de Animaciones**: Agrupa vectores en animaciones .vanim
+- **Editor de Niveles**: Compone niveles .vplay con objetos y animaciones
+- **Emulador Integrado**: Botón "Run" compila y ejecuta directamente
+
+## 🏗️ Arquitectura
+
+```
+vectrex-pseudo-python/
+├── core/               # Compilador VPy (Rust)
+│   ├── src/
+│   │   ├── lexer.rs
+│   │   ├── parser.rs
+│   │   ├── codegen.rs
+│   │   └── backend/    # Backend M6809
+├── emulator/          # Emulador 6809 (Rust → WASM)
+├── ide/
+│   ├── frontend/      # React + Monaco + Vite
+│   └── electron/      # Electron shell
+├── examples/          # Proyectos de ejemplo
+└── docs/              # Documentación técnica
+```
+
+## 🎮 Características del Lenguaje
+
+### Tipos de Datos
+```python
+# Variables
+x = 10
+name = "VECTREX"
+colors = [255, 200, 150]
+
+# Constantes (ROM-only)
+const ENEMIES = 5
+const LEVEL_DATA = [1, 2, 3, 4]
+```
+
+### Funciones Builtin
+```python
+# Gráficos
+SET_INTENSITY(brightness)
+DRAW_LINE(x0, y0, x1, y1, intensity)
+DRAW_VECTOR("sprite_name")
+PRINT_TEXT(x, y, "HELLO")
+
+# Input
+joy_x = J1_X()              # -1, 0, 1
+joy_y = J1_Y()
+btn = J1_BUTTON_1()         # 0 o 1
+
+# Audio
+PLAY_MUSIC("theme")
+PLAY_SFX("explosion", 0)    # channel 0-2
+```
+
+### Sistema de Assets
+```python
+# Los assets se descubren automáticamente:
+# - assets/vectors/*.vec
+# - assets/music/*.vmus
+
+def loop():
+    DRAW_VECTOR("player")      # Usa player.vec
+    PLAY_MUSIC("theme")        # Usa theme.vmus
+```
+
+### Módulos
+```python
+# input.vpy
+def get_input():
+    return J1_X(), J1_Y()
+
+# main.vpy
+import input
+
+def loop():
+    dx, dy = input.get_input()
+```
+
+## 🔧 Desarrollo
+
+### Compilar Solo el Compilador
+```bash
+cargo build -p vectrex_lang --bin vectrexc
+```
+
+### Ejecutar Tests
+```bash
+# Tests del compilador
+cargo test -p vectrex_lang
+
+# Tests del emulador
+cargo test -p vectrex_emulator
+```
+
+### Build del IDE
+```bash
+cd ide/frontend
+npm run build
+
+cd ../electron
+npm run build
+```
+
+## 📦 Formato de Archivos
+
+### .vec - Vector Graphics
+```json
+{
+  "name": "player",
+  "canvas": {"width": 256, "height": 256, "origin": "center"},
+  "layers": [{
+    "paths": [{
+      "intensity": 127,
+      "closed": true,
+      "points": [
+        {"x": 0, "y": 20},
+        {"x": -15, "y": -10},
+        {"x": 15, "y": -10}
+      ]
+    }]
+  }]
+}
+```
+
+### .vanim - Animaciones
+```json
+{
+  "name": "explosion",
+  "frames": [
+    {"vector": "explosion_01", "duration": 2},
+    {"vector": "explosion_02", "duration": 2},
+    {"vector": "explosion_03", "duration": 2}
+  ]
+}
+```
+
+### .vplay - Niveles
+```json
+{
+  "name": "level_1",
+  "objects": [
+    {"vectorName": "wall", "x": 0, "y": 50},
+    {"animationName": "enemy_patrol", "x": 30, "y": -30}
+  ]
+}
+```
+
+## 🎯 Estado del Proyecto (Febrero 2026)
+
+### ✅ Completado
+- ✅ Compilador VPy completo con backend M6809
+- ✅ Ensamblador nativo (no requiere lwasm)
+- ✅ Emulador 6809 en Rust/WASM
+- ✅ IDE completa (Electron + React)
+- ✅ Sistema de módulos (imports)
+- ✅ Multibank ROM (hasta 512KB)
+- ✅ Editor visual de vectores
+- ✅ Editor de animaciones
+- ✅ Editor de niveles (Playground)
+- ✅ Sistema de assets (vectors, music)
+- ✅ Input (joystick + 4 botones)
+- ✅ Audio (PSG 3 canales + ruido)
+
+### 🚧 En Desarrollo
+- 🚧 Compilación incremental
+- 🚧 Debugger con breakpoints
+- 🚧 Optimizaciones del compilador
+
+### 📋 Roadmap
+- [ ] LSP mejorado (autocomplete contextual)
+- [ ] Generador de sprites desde imágenes
+- [ ] Sistema de física 2D
+- [ ] Networking para multi-cart
+
+## 🤝 Contribuir
+
+Las contribuciones son bienvenidas:
+
+1. Fork el proyecto
+2. Crea una rama feature (`git checkout -b feature/AmazingFeature`)
+3. Commit tus cambios (`git commit -m 'Add AmazingFeature'`)
+4. Push a la rama (`git push origin feature/AmazingFeature`)
+5. Abre un Pull Request
+
+## 📝 Licencia
+
+Este proyecto está bajo licencia MIT. Ver [LICENSE](LICENSE) para más detalles.
+
+## 🙏 Agradecimientos
+
+- Comunidad Vectrex por documentación de hardware
+- BIOS Vectrex (liberada públicamente)
+- JSVecx como referencia de emulación
+
+## 📞 Soporte
+
+- **Issues**: [GitHub Issues](https://github.com/tuusuario/vectrex-pseudo-python/issues)
+- **Documentación**: Carpeta `docs/`
+- **Ejemplos**: Carpeta `examples/`
 
 ---
 
-## Estado del Proyecto (Noviembre 2025)
-
-### ✅ Completado
-- **Compilador VPy completo** con lexer, parser y backend M6809
-- **Ensamblador nativo M6809** con 63+ instrucciones implementadas
-- **Emulador 6809** en Rust/WASM con ciclo-precisión
-- **IDE completa** (Electron + React + Monaco)
-- **Sistema de vectores** con integrador analógico simplificado
-  - ⚠️ Limitación conocida: Multi-path positioning acumula (ver [VECTOR_MULTIPATH_LIMITATION.md](VECTOR_MULTIPATH_LIMITATION.md))
-  - Workaround: Usar single-path vectors o múltiples llamadas DRAW_VECTOR
-- **Arquitectura de subrutinas** (JSR/RTS) para programas grandes
-- **Procesamiento INCLUDE** con 258 símbolos BIOS
-- **Pipeline de optimización** (constant folding, dead code elimination)
-- **Soporte long branches** (LBEQ, LBNE, LBRA, etc.) para saltos 16-bit
-- **Operaciones 16-bit completas** (ADDD, SUBD, CMPD, LDD indexed)
-
-### 🚧 En Progreso
-- **Indexed addressing avanzado** (offsets numéricos: 5,X, -2,Y)
-- **LEA instructions** (LEAX, LEAY, LEAU, LEAS)
-- **Resolución símbolos BIOS** en second pass (Vec_Misc_Count, etc.)
-- **Tests de integración** para programas complejos
-
-### 📋 Próximos Pasos
-- Implementar indexed con acumuladores (A,X, B,Y, D,X)
-- Auto-increment/decrement (,X+, ,-X, ,X++, ,--X)
-- PC-relative addressing (label,PCR)
-- Paridad completa con lwasm (eliminar fallback)
-
-**Documentación técnica detallada:** [COMPILER_STATUS.md](COMPILER_STATUS.md)
-
-## IDE (Electron Shell)
-
-Para arrancar la IDE de escritorio (Electron + React + Monaco + LSP):
-
-```
-./run-ide.ps1
-```
-
-Esto levanta:
-- Vite (frontend React) en `ide/frontend` (puerto 5173)
-- Electron shell en `ide/electron` (menú nativo oculto; la UI expone su propio menú)
-
-El antiguo runtime Tauri ha sido eliminado; Electron es ahora el único shell soportado.
-
-### Nueva función: Run (Compilar y Cargar en Emulador)
+**Hecho con ❤️ para la comunidad Vectrex**
 Dentro del panel del emulador ahora hay un botón **Run** que:
 1. Guarda (si está sucia) la pestaña activa `.vpy`.
 2. Invoca el binario `vectrexc` con `build <archivo>.vpy --target vectrex --bin`.
