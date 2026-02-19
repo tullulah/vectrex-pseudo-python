@@ -126,7 +126,7 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
   const clearAllBreakpoints = useEditorStore(s => s.clearAllBreakpoints);
   const pdbData = useDebugStore(s => s.pdbData);
   const currentVpyLine = useDebugStore(s => s.currentVpyLine); // Phase 6.1: Track current line
-  const currentVpyFile = useDebugStore(s => s.currentVpyFile); // CRITICAL: Track which VPy file the breakpoint is in
+  const currentVpyFile = pdbData?.source?.split('/').pop() ?? null; // CRITICAL: Track which VPy file the breakpoint is in
   const debugState = useDebugStore(s => s.state); // Phase 6.1: Track debug state
 
   const targetUri = uri || active;
@@ -1120,7 +1120,7 @@ export const MonacoEditorWrapper: React.FC<{ uri?: string }> = ({ uri }) => {
         []
       );
     }
-  }, [debugState, currentVpyLine, currentVpyFile, doc, active]);
+  }, [debugState, currentVpyLine, pdbData, doc, active]);
 
   return (
     <Editor

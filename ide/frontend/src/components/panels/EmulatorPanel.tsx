@@ -1306,7 +1306,7 @@ export const EmulatorPanel: React.FC = () => {
                   }
                 }
                 console.log(`[EmulatorPanel] 📍 Highlighting VPy line ${lineNumber} in ${vpyFileName} (PC: ${event.data.pc})`);
-                debugStore.setCurrentVpyLineWithFile(lineNumber, vpyFileName); // CRITICAL: Pass both line and file
+                debugStore.setCurrentVpyLine(lineNumber); // CRITICAL: file is derived from pdbData.source
                 
                 // CRITICAL: Auto-switch to VPy file if we're not already in it
                 const editorStore = useEditorStore.getState();

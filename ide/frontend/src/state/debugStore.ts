@@ -31,7 +31,10 @@ export interface PdbData {
     file: string;
     address: string;
     line: number;
+    bankId?: string | number;
   }>;
+  vpyLineMap?: Record<string, { file: string; line: number; column: number }>; // Multibank format
+  romConfig?: { isMultibank?: boolean; [key: string]: unknown };
 }
 
 export interface CallFrame {
@@ -64,6 +67,7 @@ interface DebugStore extends LegacyDebugState {
   setCurrentVpyLine: (line: number | null) => void;
   setCurrentAsmAddress: (address: string | null) => void;
   loadPdbData: (pdb: PdbData) => void;
+  clearPdbData: () => void;
   updateCallStack: (stack: CallFrame[]) => void;
   updateStats: (cycles: number, fps: number) => void;
   setLoadingForDebug: (loading: boolean) => void;
@@ -115,6 +119,7 @@ export const useDebugStore = create<DebugStore>((set, get) => ({
   setCurrentVpyLine: (line) => set({ currentVpyLine: line }),
   setCurrentAsmAddress: (address) => set({ currentAsmAddress: address }),
   setLoadingForDebug: (loading) => set({ loadingForDebug: loading }),
+  clearPdbData: () => set({ pdbData: null }),
   
   loadPdbData: (pdb) => {
     console.log('[DebugStore] 📋 Loaded .pdb:', pdb);
