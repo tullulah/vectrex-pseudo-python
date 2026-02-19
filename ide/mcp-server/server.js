@@ -239,6 +239,144 @@ function simulateIDEResponse(method, params) {
   }
 }
 
+// ============================================================
+// PROJECT DOCUMENTATION - served by get_project_docs tool
+// ============================================================
+function getProjectDocs(topic) {
+  const docs = {
+
+    compiler: `## VPy Compiler - Critical Rules
+- NEVER write WAIT_RECAL() manually - compiler auto-injects at start of loop()
+- NEVER write MUSIC_UPDATE() or AUDIO_UPDATE() - auto-injected at END of loop()
+- Variables in main() are NOT accessible in loop() - separate scopes
+- Declare variables inside loop() where they are used
+- Build: cargo run --bin vectrexc -- build program.vpy --bin
+- Single-bank: fits in 32KB. Multibank needs META ROM_TOTAL_SIZE + ROM_BANK_SIZE
+- Architecture: loop() compiles to LOOP_BODY subroutine, called via JSR from main loop
+- Source: core/src/backend/m6809/mod.rs (main codegen), core/src/backend/m6809/builtins.rs`,
+
+    bios: `## BIOS Usage Rules
+- NEVER use synthetic BIOS - always use real bios.bin
+- Primary path: ide/frontend/src/assets/bios.bin
+- Legacy path: ide/frontend/dist/bios.bin  
+- BIOS boots automatically to Minestorm (no button press needed)
+- BIOS always jumps to $0000 (Bank #0) - NEVER uses RESET vector at $FFFE
+- record_bios_call: only registers JSR/BSR toward >= 0xF000, no fake side effects
+- Key BIOS addresses: Wait_Recal=0xF192, Draw_Line_d=0xF2B2, Print_Str_d=0xF373
+- DP must be set to $D0 before most BIOS calls (compiler handles this)`,
+
+    tests: `## Tests Structure & Rules
+- tests/opcodes/ - MC6809 opcode tests (arithmetic, branch, comparison, data_transfer, logic, register, stack)
+- tests/components/ - emulator component tests (integration, hardware, engine, memory, cpu)
+- RAM in tests: 0xC800-0xCFFF. Stack: 0xCFFF. One file per opcode.
+- NEVER use synthetic BIOS in tests
+- Always verify: registers, flags, cycles after each opcode
+- cargo test -p vectrex_emulator after any CPU/WASM API changes`,
+
+    assets: `## Asset System (Vectors & Music)
+- .vec files: assets/vectors/*.vec  - .vmus files: assets/music/*.vmus
+- Auto-discovered at compile time (Phase 0), auto-embedded in ROM (Phase 5)
+- In code: DRAW_VECTOR("name") and PLAY_MUSIC("name")
+- NEVER invent asset names - verify with project/get_structure first
+
+### .vec format (JSON only):
+{"version":"1.0","name":"player","canvas":{"width":256,"height":256,"origin":"center"},
+ "layers":[{"name":"default","visible":true,"paths":[{
+   "name":"ship","intensity":127,"closed":true,
+   "points":[{"x":0,"y":20},{"x":-15,"y":-10},{"x":15,"y":-10}]
+ }]}]}
+
+### .vmus format (JSON only):
+{"version":"1.0","name":"theme","author":"Composer","tempo":120,"ticksPerBeat":24,
+ "totalTicks":384,"notes":[{"id":"n1","note":60,"start":0,"duration":48,"velocity":12,"channel":0}],
+ "noise":[{"id":"noise1","start":0,"duration":24,"period":15,"channels":1,"velocity":12}],
+ "loopStart":0,"loopEnd":384}
+- note: MIDI (60=C4, 69=A4). velocity: 0-15. channel: 0-2 (PSG A/B/C). period: 0-31 (noise pitch)
+- Use project/create_vector and project/create_music tools (they validate JSON)`,
+
+    joystick: `## Joystick Input System
+- J1_X() returns -1 (left), 0 (center), +1 (right)
+- J1_Y() returns -1 (down), 0 (center), +1 (up)
+- RAM addresses: $CF00=Joy_1_X, $CF01=Joy_1_Y (unsigned 0-255)
+- Frontend writes these addresses every frame (browser Gamepad API)
+- Thresholds: 0-107=-1, 108-148=0, 149-255=+1 (deadzone ±20 around 128)
+- Source: core/src/backend/m6809/builtins.rs lines ~213-276`,
+
+    buttons: `## Button System (J1_BUTTON_1-4) - Auto-injected
+- NEVER call UPDATE_BUTTONS() - compiler auto-injects Read_Btns at start of loop()
+- J1_BUTTON_1() through J1_BUTTON_4() return 0=released, 1=pressed
+- Auto-injection sequence at loop start: JSR DP_to_D0 → JSR Read_Btns → JSR DP_to_C8
+- Buttons read cached $C80F (Vec_Btn_State) - set once per frame, no auto-fire
+- Why one Read_Btns per frame: multiple calls break Vec_Prev_Btns debounce
+- Source: core/src/backend/m6809/mod.rs line ~748 (auto-injection)
+         core/src/backend/m6809/emission.rs lines 105-160 (builtin handlers)`,
+
+    const_arrays: `## Const Arrays - ROM-Only Data
+- const keyword: allocates in ROM, zero RAM overhead
+- Syntax: const player_x = [10, 20, 30]  (NOT let)
+- Indexing: val = player_x[0] or val = player_x[index]  (both work)
+- Const string arrays: const names = ["HELLO", "WORLD"] - indexing returns pointer
+  - Use with PRINT_TEXT: PRINT_TEXT(x, y, names[i])
+- Regular arrays (let) allocate RAM pointer + init code in main()
+- Const arrays emit CONST_ARRAY_N labels in ROM, no VAR_* defined
+- Source: core/src/backend/m6809/mod.rs lines 246-273 (collection), 997-1039 (emission)
+         core/src/backend/m6809/expressions.rs lines 239-267 (indexing)`,
+
+    modules: `## Module System (Phase 6.3 Complete)
+- Import: import input  then call input.get_input() or access input.var_name[i]
+- Unifier transforms dot notation: input.get_input() → INPUT_GET_INPUT()
+- Helpers auto-deduplicated (unifier merges all imports into one module before codegen)
+- Build: cargo run --bin vectrexc -- build main.vpy --bin (auto-resolves imports)
+- Example: examples/multi-module/
+- Source: core/src/unifier.rs (dot notation rewriting)
+         core/src/backend/m6809/mod.rs lines 820-838 (collision-free array labels)`,
+
+    banking: `## Multibank ROM Architecture
+- Meta required: META ROM_TOTAL_SIZE = 524288 and META ROM_BANK_SIZE = 16384
+- 32 banks × 16KB = 512KB max. Bank #31 fixed at $4000-$7FFF (always visible)
+- Bank switch register: $DF00 (write bank ID 0-31). NEVER $4000 or $D000.
+- Boot sequence: BIOS → $0000 (Bank #0) → STA $DF00 #31 → JMP MAIN (Bank #31)
+- CRITICAL: BIOS always jumps to $0000, NEVER to RESET vector. Bank switch MUST be in Bank #0.
+- Cross-bank calls auto-wrapped (save bank → switch → call → restore)
+- CURRENT_ROM_BANK RAM tracker at $C880
+- Phase 6.7: multibank linker. Phase 6.8: PDB with correct bank addresses
+- Known issue: VAR_ARG2 undefined in bank_31 if PRINT_TEXT not used in code
+- Source: core/src/backend/m6809/mod.rs lines 839-851 (boot), bank_wrappers.rs`,
+
+    draw_line: `## DRAW_LINE Optimization
+- DRAW_LINE(x0, y0, x1, y1, intensity)
+- Inline optimization: when all args constant AND |dx|,|dy| <= 127
+- Wrapper (DRAW_LINE_WRAPPER): auto-emitted only when segmentation needed
+- Segmentation: segment1=±127, segment2=remainder (for lines > 127px)
+- Variable args always use wrapper (safe fallback)
+- Source: core/src/backend/m6809/analysis.rs lines 259-283 (detection)
+         core/src/backend/m6809/emission.rs lines 260-368 (wrapper code)`,
+
+    music: `## Music System
+- PLAY_MUSIC("name") - plays .vmus file embedded in ROM
+- AUDIO_UPDATE auto-injected at END of loop() by compiler
+- PSG player updates every frame (50Hz)
+- MIDI to PSG: period = 1_500_000 / (32 * freq). freq = 440 * 2^((note-69)/12)
+- note 60 (C4) → PSG period 179, note 69 (A4) → period 106
+- PSG channels: 0=A, 1=B, 2=C. Velocity: 0-15. Noise period: 0-31.
+- Source: core/src/musres.rs (MusicResource), core/src/backend/m6809/mod.rs (injection)`,
+
+    meta: `## VPy META Configuration
+- META TITLE = "Game Name"      - Cartridge title
+- META MUSIC = 1                - Enable music system
+- META ROM_TOTAL_SIZE = 524288  - Enable multibank (512KB = 32×16KB)
+- META ROM_BANK_SIZE = 16384    - Bank size (always 16384 for Vectrex)
+- Single bank (no ROM_TOTAL_SIZE): code must fit in 32KB
+- Multibank: code auto-distributed across banks, cross-bank calls auto-wrapped`,
+
+  };
+
+  if (topic === 'all') {
+    return Object.values(docs).join('\n\n---\n\n');
+  }
+  return docs[topic] || `Unknown topic '${topic}'. Available: ${Object.keys(docs).join(', ')}`;
+}
+
 // MCP Protocol - stdio transport
 class StdioTransport {
   constructor() {
@@ -835,6 +973,21 @@ class StdioTransport {
             },
             required: ['address', 'value']
           }
+        },
+        {
+          name: 'get_project_docs',
+          description: 'Get detailed project documentation for a specific topic. Call this WHENEVER you need technical details about this VPy/Vectrex project. Available topics: assets, joystick, buttons, const_arrays, modules, banking, draw_line, music, compiler, bios, tests, meta',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              topic: {
+                type: 'string',
+                description: 'Topic name. One of: assets, joystick, buttons, const_arrays, modules, banking, draw_line, music, compiler, bios, tests, meta, all',
+                enum: ['assets', 'joystick', 'buttons', 'const_arrays', 'modules', 'banking', 'draw_line', 'music', 'compiler', 'bios', 'tests', 'meta', 'all']
+              }
+            },
+            required: ['topic']
+          }
         }
       ]
     };
@@ -843,6 +996,13 @@ class StdioTransport {
   async handleToolCall(params) {
     const { name, arguments: args } = params;
     log('Tool call:', name, 'Arguments:', JSON.stringify(args));
+
+    // Handle get_project_docs locally (no IPC needed)
+    if (name === 'get_project_docs') {
+      const topic = (args && args.topic) ? args.topic : 'all';
+      const docs = getProjectDocs(topic);
+      return { content: [{ type: 'text', text: docs }] };
+    }
     
     // Convert tool name to method (editor_list_documents -> editor/list_documents)
     // Only replace first underscore with slash to match Electron server naming
