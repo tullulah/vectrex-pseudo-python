@@ -1,691 +1,254 @@
-# Setup Completo - vectrex-pseudo-python
+# Vectrex Studio — Setup Guide
 
-**Guía completa para configurar el entorno de desarrollo desde cero**  
-*Actualizado: Noviembre 15, 2025*
-
----
-
-## Tabla de Contenidos
-
-1. [Requisitos del Sistema](#requisitos-del-sistema)
-2. [Instalación de Herramientas](#instalación-de-herramientas)
-3. [Configuración del Proyecto](#configuración-del-proyecto)
-4. [Compilación de Componentes](#compilación-de-componentes)
-5. [Ejecución de la IDE](#ejecución-de-la-ide)
-6. [Verificación del Setup](#verificación-del-setup)
-7. [Troubleshooting](#troubleshooting)
-8. [Estructura del Proyecto](#estructura-del-proyecto)
+Complete guide to setting up the development environment from scratch.
 
 ---
 
-## Requisitos del Sistema
+## Prerequisites
 
-### Sistema Operativo
-- **Windows 10/11** (PowerShell 5.1+)
-- **Linux** (Ubuntu 20.04+ o equivalente)
-- **macOS** (10.15+ Catalina o superior)
+### System requirements
+- **macOS** 12+, **Linux** (Ubuntu 20.04+), or **Windows** 10/11
+- **RAM**: 8 GB minimum (16 GB recommended for AI features)
+- **Disk**: 5 GB free
 
-### Hardware Mínimo
-- **RAM**: 8 GB (16 GB recomendado)
-- **Disco**: 5 GB espacio libre
-- **CPU**: x64 con soporte SSE2
+### Required tools
 
----
+**1. Rust (stable)**
 
-## Instalación de Herramientas
-
-### 1. Rust (Obligatorio)
-
-**Windows:**
-```powershell
-# Descargar instalador desde https://rustup.rs/
-# O usar scoop/chocolatey:
-scoop install rustup
-# O:
-choco install rustup
-```
-
-**Linux/macOS:**
 ```bash
+# macOS / Linux:
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-```
 
-**Verificar instalación:**
-```bash
-rustc --version   # Debe mostrar >= 1.70.0
-cargo --version
-```
-
-**Configurar toolchain:**
-```bash
+# Then:
 rustup default stable
 rustup update
 ```
 
-### 2. Node.js (Obligatorio para IDE)
+Verify: `rustc --version` (requires >= 1.70.0)
 
-**Versión requerida:** 18.x o superior
+**2. Node.js 18+**
 
-**Windows:**
-```powershell
-# Usando scoop:
-scoop install nodejs
-
-# O descarga desde: https://nodejs.org/
-```
-
-**Linux:**
 ```bash
+# macOS:
+brew install node@18
+
 # Ubuntu/Debian:
 curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
 sudo apt-get install -y nodejs
-
-# Arch:
-sudo pacman -S nodejs npm
 ```
 
-**macOS:**
-```bash
-brew install node@18
-```
+Verify: `node --version`
 
-**Verificar:**
-```bash
-node --version    # >= v18.0.0
-npm --version
-```
-
-### 3. WASM Target (Para emulador web)
+**3. Git**
 
 ```bash
-rustup target add wasm32-unknown-unknown
-```
-
-### 4. wasm-bindgen-cli (Para emulador web)
-
-```bash
-cargo install wasm-bindgen-cli
-```
-
-### 5. Git (Si clonando el repositorio)
-
-**Windows:**
-```powershell
-scoop install git
-# O descarga desde: https://git-scm.com/
-```
-
-**Linux:**
-```bash
-sudo apt-get install git  # Ubuntu/Debian
-sudo pacman -S git         # Arch
-```
-
-**macOS:**
-```bash
-brew install git
+brew install git        # macOS
+sudo apt-get install git  # Ubuntu
 ```
 
 ---
 
-## Configuración del Proyecto
-
-### 1. Clonar el Repositorio
+## Clone the Repository
 
 ```bash
 git clone https://github.com/tullulah/vectrex-pseudo-python.git
 cd vectrex-pseudo-python
 ```
 
-O si ya tienes el código:
-```bash
-cd /ruta/al/proyecto/vectrex-pseudo-python
-```
+---
 
-### 2. Estructura de Archivos Críticos
+## Project Structure
 
-Verificar que existen estos directorios:
 ```
 vectrex-pseudo-python/
-├── core/                  # Compilador VPy y emulador
-│   ├── src/
-│   ├── Cargo.toml
-├── emulator_v2/          # Emulador refactorizado (WIP)
+├── core/              # Core (legacy) compiler — Rust crate
+│   └── src/
+│       ├── lexer.rs
+│       ├── parser.rs
+│       ├── codegen.rs
+│       └── lsp.rs     # LSP server (shared by both backends)
+├── buildtools/        # Buildtools (new) compiler — 9 Rust crates
+│   ├── vpy_loader/
+│   ├── vpy_parser/
+│   ├── vpy_assembler/
+│   └── ...
 ├── ide/
-│   ├── frontend/         # React + Vite
-│   │   ├── package.json
-│   │   └── src/
-│   └── electron/         # Electron shell
-│       ├── package.json
-│       └── src/
-├── runtime/              # Runtime del lenguaje VPy
-├── tests/                # Tests del emulador
-├── Cargo.toml            # Workspace Rust
-└── run-ide.ps1          # Script de inicio IDE
-```
-
-### 3. Archivo BIOS (CRÍTICO)
-
-**El emulador requiere la BIOS real de Vectrex.**
-
-**Ubicación esperada:**
-```
-ide/frontend/dist/bios.bin      # Primaria (8192 bytes)
-ide/frontend/src/assets/bios.bin # Alternativa
-```
-
-**Obtener BIOS:**
-- Buscar "vectrex bios.bin" (archivo liberado, 8KB)
-- Hash MD5 esperado: `(verificar con tu archivo)`
-- **Tamaños válidos:** 4096 bytes (4KB) o 8192 bytes (8KB)
-
-**Verificar BIOS:**
-```bash
-# Windows PowerShell:
-(Get-Item ide\frontend\dist\bios.bin).Length  # Debe ser 4096 u 8192
-
-# Linux/macOS:
-ls -l ide/frontend/dist/bios.bin
-```
-
-Si falta, crear directorios:
-```bash
-mkdir -p ide/frontend/dist
-# Copiar tu bios.bin aquí
+│   ├── frontend/      # React + Vite UI
+│   ├── electron/      # Electron shell
+│   └── mcp-server/    # MCP server (Node.js)
+├── examples/          # Example VPy projects
+└── docs/              # Documentation
 ```
 
 ---
 
-## Compilación de Componentes
+## Build
 
-### 1. Compilar el Workspace Rust (Core + Emulador)
+### 1. Build the Core compiler
 
-**Build Debug (desarrollo):**
-```bash
-# Desde raíz del proyecto:
-cargo build
-```
-
-**Build Release (optimizado):**
-```bash
-cargo build --release
-```
-
-**Compilar solo el compilador VPy:**
 ```bash
 cargo build --bin vectrexc
-# O release:
+```
+
+Binary output: `target/debug/vectrexc`
+
+For release:
+```bash
 cargo build --bin vectrexc --release
 ```
 
-**Ubicaciones de binarios:**
-- Debug: `target/debug/vectrexc` (o `.exe` en Windows)
-- Release: `target/release/vectrexc`
-
-**Verificar compilación:**
-```bash
-# Windows:
-.\target\debug\vectrexc.exe --help
-
-# Linux/macOS:
-./target/debug/vectrexc --help
-```
-
-Salida esperada:
-```
-Pseudo-Python multi-target assembler compiler (prototype)
-
-Usage: vectrexc.exe <COMMAND>
-
-Commands:
-  build  
-  lex    
-  ast    
-  help   Print this message or the help of the given subcommand(s)
-```
-
-### 2. Compilar Frontend (React + Vite)
+### 2. Build the LSP server
 
 ```bash
-cd ide/frontend
-npm install     # Instalar dependencias (primera vez)
-npm run build   # Build producción
-# O para desarrollo:
-npm run dev     # Servidor desarrollo (no necesario si usas run-ide.ps1)
-cd ../..        # Volver a raíz
+cargo build --bin vpy_lsp
 ```
 
-### 3. Compilar Electron Shell
+The IDE launches this automatically — you only need to build it manually if you're working on the LSP.
+
+### 3. Build the Buildtools compiler (optional)
 
 ```bash
-cd ide/electron
-npm install     # Instalar dependencias (primera vez)
-npm run build   # TypeScript → JavaScript
-cd ../..
+cargo build --bin vpy_cli
 ```
 
-### 4. (Opcional) Compilar Emulador WASM
+Only needed if you're working on the new compiler pipeline or need multibank/PDB support.
 
-**Solo si necesitas emulador en navegador:**
-
-```bash
-# 1. Compilar a WASM:
-cargo build --target wasm32-unknown-unknown --release
-
-# 2. Generar bindings:
-wasm-bindgen \
-  --target web \
-  --out-dir ide/frontend/dist-wasm \
-  target/wasm32-unknown-unknown/release/vectrex_lang.wasm
-
-# Para Node/Electron:
-wasm-bindgen \
-  --target nodejs \
-  --out-dir ide/electron/dist-wasm \
-  target/wasm32-unknown-unknown/release/vectrex_lang.wasm
-```
-
-### 5. Compilar Tests (Opcional)
+### 4. Install IDE dependencies
 
 ```bash
-# Tests del emulador:
-cargo test --package vectrex_emulator
-
-# Tests del compilador:
-cargo test --package vectrex_lang
-
-# Todos los tests:
-cargo test --workspace
+cd ide/frontend && npm install && cd ../..
+cd ide/electron && npm install && cd ../..
+cd ide/mcp-server && npm install && cd ../..
 ```
 
 ---
 
-## Ejecución de la IDE
+## Launch the IDE
 
-### Método 1: Script PowerShell (Recomendado - Windows)
+Open two terminals:
 
+**Terminal 1 — Frontend dev server:**
+```bash
+cd ide/frontend
+npm run dev
+# Wait for: "Local: http://localhost:5173/"
+```
+
+**Terminal 2 — Electron:**
+```bash
+cd ide/electron
+npm start
+```
+
+The IDE window will open automatically.
+
+### Windows convenience script
+
+On Windows, `run-ide.ps1` in the project root launches both processes:
 ```powershell
 .\run-ide.ps1
 ```
 
-Este script:
-1. Inicia Vite dev server (frontend) en puerto 5173
-2. Espera que Vite esté listo
-3. Lanza Electron apuntando al dev server
-4. Hot reload habilitado para desarrollo
+---
 
-### Método 2: Manual (Todas las plataformas)
+## Vectrex BIOS
 
-**Terminal 1 - Frontend:**
-```bash
-cd ide/frontend
-npm run dev
-# Esperar "Local: http://localhost:5173/"
+The emulator requires the Vectrex BIOS ROM file.
+
+**Required location:**
+```
+ide/frontend/dist/bios.bin
 ```
 
-**Terminal 2 - Electron:**
+The file is 8 KB (8192 bytes). Obtain it separately (it is freely available online).
+
 ```bash
-cd ide/electron
-npm start
-# O si ya compilaste:
-npm run electron
+mkdir -p ide/frontend/dist
+cp /path/to/your/bios.bin ide/frontend/dist/bios.bin
 ```
 
-### Método 3: Build Empaquetado (Producción)
-
+Verify:
 ```bash
-cd ide/electron
-npm run build         # Compilar TypeScript
-npm run package       # Empaquetar con electron-builder
-# Binarios en: dist/ (según tu SO)
+wc -c ide/frontend/dist/bios.bin   # should be 8192
 ```
 
 ---
 
-## Verificación del Setup
+## Verify the Setup
 
-### 1. Verificar Compilador VPy
-
-**Crear archivo de prueba:**
-```python
-# test_setup.vpy
-def setup():
-    Intensity_a(127)
-    Reset0Ref()
-
-def loop():
-    Moveto_d(-50, -50)
-    Draw_Line_d(50, 50)
-```
-
-**Compilar:**
-```bash
-# Windows:
-.\target\debug\vectrexc.exe build test_setup.vpy
-
-# Linux/macOS:
-./target/debug/vectrexc build test_setup.vpy
-```
-
-**Salida esperada:**
-```
-=== COMPILATION PIPELINE START ===
-...
-✓ Phase 5 SUCCESS: Written to .\test_setup.asm
-...
-=== COMPILATION PIPELINE COMPLETE ===
-```
-
-**Compilar con binario:**
-```bash
-.\target\debug\vectrexc.exe build --bin test_setup.vpy
-```
-
-Debe generar:
-- `test_setup.asm` (assembly)
-- `test_setup.bin` (binario ejecutable, 8192 bytes)
-- `test_setup.pdb` (símbolos debug)
-
-### 2. Verificar IDE
-
-1. Ejecutar `.\run-ide.ps1`
-2. Debe abrir ventana Electron
-3. Panel izquierdo: explorador de archivos
-4. Panel central: editor Monaco
-5. Panel derecho: emulador Vectrex
-6. Abrir `test_setup.vpy`
-7. Click botón **"Run"** (▶️)
-8. Debe ver línea diagonal en pantalla del emulador
-
-### 3. Verificar Emulador Standalone
+### Test the Core compiler
 
 ```bash
-# Test de opcode específico:
-cargo test --package vectrex_emulator test_lda_immediate
-
-# Test con BIOS real:
-cargo test --package vectrex_emulator test_bios_boot_sequence
+./target/debug/vectrexc --help
 ```
 
-### 4. Verificar Integración Completa
+Expected output includes: `Usage: vectrexc <COMMAND>`
 
-**Compilar archivo de ejemplo complejo:**
+Compile a test file:
 ```bash
-.\target\debug\vectrexc.exe build --bin examples\demo.vpy
-# O si existe rotating_line_correct.vpy:
-.\target\debug\vectrexc.exe build --bin rotating_line_correct.vpy
+./target/debug/vectrexc build examples/hello/src/main.vpy
 ```
 
-Verificar que genera `.bin` sin caer en lwasm fallback:
-```
-⚠ Native assembler failed: ...
-  Falling back to lwasm...
-```
+### Test the IDE
 
-Si ves esto, revisa qué instrucciones faltan (ver sección de progreso).
+1. Launch the IDE (see above)
+2. Use **File → Open Project** to open an example from `examples/`
+3. Click **Run** (▶)
+4. The game should appear in the emulator panel
 
 ---
 
 ## Troubleshooting
 
-### Problema: "cargo: command not found"
-
-**Solución:**
+### "cargo: command not found"
+Restart your terminal after installing Rust, or run:
 ```bash
-# Reiniciar terminal después de instalar Rust
-# O cargar manualmente:
-source $HOME/.cargo/env  # Linux/macOS
+source $HOME/.cargo/env
 ```
 
-### Problema: "vectrexc not found"
-
-**Solución:**
+### "vectrexc not found"
 ```bash
-# Recompilar:
 cargo build --bin vectrexc
-
-# Verificar ruta:
-ls -la target/debug/vectrexc*
+ls target/debug/vectrexc*
 ```
 
-### Problema: "Cannot find BIOS"
+### "Cannot find BIOS" / emulator shows blank screen
+Copy `bios.bin` to `ide/frontend/dist/bios.bin` (see BIOS section above).
 
-**Solución:**
+### Port 5173 already in use
 ```bash
-# Verificar ubicación:
-ls ide/frontend/dist/bios.bin
-
-# Si falta, copiar:
-cp /ruta/a/tu/bios.bin ide/frontend/dist/bios.bin
-
-# Verificar tamaño:
-# Windows:
-(Get-Item ide\frontend\dist\bios.bin).Length
-# Linux/macOS:
-wc -c ide/frontend/dist/bios.bin  # Debe ser 4096 u 8192
-```
-
-### Problema: "Native assembler failed"
-
-**Síntomas:**
-```
-⚠ Native assembler failed: Error en línea X: Instrucción no soportada: XXX
-  Falling back to lwasm...
-```
-
-**Solución:**
-- Verifica qué instrucción falta (ej: `CMPX`, `LEAX`, etc.)
-- Revisa COMPILER_STATUS.md para estado de implementación
-- Usa `--verbose` para más detalles:
-```bash
-.\target\debug\vectrexc.exe build --bin archivo.vpy --verbose
-```
-
-### Problema: "Port 5173 already in use"
-
-**Solución:**
-```bash
-# Matar proceso en puerto 5173:
-# Windows:
-netstat -ano | findstr :5173
-taskkill /PID <PID> /F
-
-# Linux/macOS:
+# macOS / Linux:
 lsof -ti:5173 | xargs kill -9
-
-# O cambiar puerto en ide/frontend/vite.config.ts
 ```
+Then restart the frontend dev server.
 
-### Problema: Electron no abre ventana
-
-**Solución:**
+### Electron window doesn't open
 ```bash
-# Verificar logs:
 cd ide/electron
-npm start 2>&1 | tee electron.log
-
-# Verificar dependencias:
 npm install
-
-# Reinstalar Electron:
-npm uninstall electron
-npm install electron --save-dev
-```
-
-### Problema: Hot Reload no funciona
-
-**Solución:**
-```bash
-# Verificar que Vite está corriendo:
-curl http://localhost:5173
-
-# Reiniciar ambos procesos:
-# Ctrl+C en ambas terminales, luego:
-.\run-ide.ps1
-```
-
-### Problema: Tests fallan
-
-**Solución:**
-```bash
-# Compilar primero:
-cargo build --workspace
-
-# Ejecutar test específico:
-cargo test --package vectrex_emulator <nombre_test> -- --nocapture
-
-# Ver output completo:
-cargo test -- --show-output
+npm start
 ```
 
 ---
 
-## Estructura del Proyecto
+## Run Tests
 
-### Crates Rust (Cargo Workspace)
-
-```
-Cargo.toml (workspace root)
-├── core/                  # vectrex_lang crate
-│   ├── Cargo.toml
-│   ├── src/
-│   │   ├── lib.rs
-│   │   ├── lexer/        # Tokenización VPy
-│   │   ├── parser/       # AST parsing
-│   │   ├── backend/      # Codegen M6809
-│   │   │   ├── asm_to_binary.rs  # Ensamblador nativo
-│   │   │   ├── m6809_binary_emitter.rs  # Emisión opcodes
-│   │   │   └── m6809.rs  # Backend principal
-│   │   └── wasm_api.rs   # Exportaciones WASM
-│   └── tests/            # Tests unitarios compilador
-├── emulator_v2/          # Refactor emulador (WIP)
-├── vectrex_emulator/     # Emulador 6809 actual
-│   ├── Cargo.toml
-│   ├── src/
-│   │   ├── lib.rs
-│   │   ├── cpu6809.rs    # CPU core
-│   │   ├── memory_map.rs # Bus de memoria
-│   │   ├── via.rs        # VIA 6522 (parcial)
-│   │   └── wasm_api.rs   # Exports WASM
-│   └── tests/            # Tests opcodes
-└── runtime/              # Runtime VPy (futuro)
-```
-
-### Frontend (Node.js)
-
-```
-ide/
-├── frontend/             # React + Vite
-│   ├── package.json
-│   ├── vite.config.ts
-│   ├── src/
-│   │   ├── main.tsx      # Entry point React
-│   │   ├── App.tsx       # Componente principal
-│   │   ├── components/   # Componentes UI
-│   │   ├── services/     # Lógica negocio
-│   │   └── assets/       # Recursos estáticos
-│   └── dist/             # Build output
-│       └── bios.bin      # ⚠️ BIOS aquí
-└── electron/             # Electron shell
-    ├── package.json
-    ├── src/
-    │   ├── main.ts       # Proceso principal
-    │   ├── preload.ts    # Preload script
-    │   └── ipc/          # IPC handlers
-    └── dist/             # Binarios empaquetados
-```
-
-### Archivos de Configuración
-
-```
-.
-├── Cargo.toml            # Workspace Rust
-├── rust-toolchain.toml   # Versión Rust fijada (si existe)
-├── .gitignore
-├── README.md             # Documentación general
-├── SETUP.md              # Este archivo
-├── COMPILER_STATUS.md    # Estado del compilador
-├── SUPER_SUMMARY.md      # Documentación técnica detallada
-└── run-ide.ps1          # Script inicio IDE (Windows)
-```
-
----
-
-## Comandos Rápidos de Referencia
-
-### Compilación
 ```bash
-# Compilador VPy (debug):
-cargo build --bin vectrexc
-
-# Compilador VPy (release):
-cargo build --bin vectrexc --release
-
-# Todo el workspace:
-cargo build --workspace
-
-# Solo emulador:
-cargo build --package vectrex_emulator
-```
-
-### Tests
-```bash
-# Todos los tests:
+# All Rust tests:
 cargo test --workspace
 
-# Tests de emulador:
-cargo test --package vectrex_emulator
+# Compiler tests only:
+cargo test --package vectrex_lang
 
-# Test específico:
-cargo test test_adda_immediate
-
-# Ver output:
-cargo test -- --nocapture
-```
-
-### IDE
-```bash
-# Inicio rápido (Windows):
-.\run-ide.ps1
-
-# Manual:
-cd ide/frontend && npm run dev
-# En otra terminal:
-cd ide/electron && npm start
-```
-
-### Compilar Programa VPy
-```bash
-# Solo ASM:
-.\target\debug\vectrexc.exe build programa.vpy
-
-# ASM + Binario:
-.\target\debug\vectrexc.exe build --bin programa.vpy
-
-# Ver AST:
-.\target\debug\vectrexc.exe ast programa.vpy
-
-# Ver tokens:
-.\target\debug\vectrexc.exe lex programa.vpy
+# Specific test:
+cargo test test_adda_immediate -- --nocapture
 ```
 
 ---
 
-## Próximos Pasos
+## Next Steps
 
-Una vez verificado el setup:
-
-1. **Explorar ejemplos:** `examples/*.vpy`
-2. **Leer documentación técnica:** `SUPER_SUMMARY.md`
-3. **Revisar estado compilador:** `COMPILER_STATUS.md`
-4. **Estudiar arquitectura emulador:** `docs/TIMING.md`, `docs/VECTOR_MODEL.md`
-5. **Contribuir:** Ver issues en GitHub
-
----
-
-## Soporte
-
-**Issues:** https://github.com/tullulah/vectrex-pseudo-python/issues  
-**Documentación adicional:** `docs/` en el repositorio  
-
-**Versión de este documento:** 1.0 (Nov 15, 2025)
+- [MANUAL.md](MANUAL.md) — VPy language reference
+- [IDE_GUIDE.md](IDE_GUIDE.md) — How to use the IDE
+- [COMPILER_STATUS.md](COMPILER_STATUS.md) — Compiler backend status and known limitations
+- `examples/` — Working example projects to study and run

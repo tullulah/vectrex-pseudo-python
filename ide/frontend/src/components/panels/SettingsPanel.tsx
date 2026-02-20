@@ -27,8 +27,8 @@ export const SettingsPanel: React.FC = () => {
             <div className="radio-content">
               <span className="radio-title">Buildtools (New)</span>
               <span className="radio-description">
-                Modular Rust compiler with separate crates. Better organized, 
-                supports incremental builds. Recommended for development.
+                Modular 9-phase pipeline. Supports multibank ROMs and PDB debug symbols.
+                Some edge cases may not compile correctly yet.
               </span>
             </div>
           </label>
@@ -44,8 +44,8 @@ export const SettingsPanel: React.FC = () => {
             <div className="radio-content">
               <span className="radio-title">Core (Legacy)</span>
               <span className="radio-description">
-                Original monolithic compiler. Stable but less maintained.
-                Use if you encounter issues with buildtools.
+                Original compiler. Stable and well-tested. Always outputs a fixed
+                32KB ROM. No PDB debug symbols. Recommended for most projects.
               </span>
             </div>
           </label>
