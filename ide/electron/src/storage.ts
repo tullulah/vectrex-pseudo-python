@@ -8,12 +8,18 @@ import { app } from 'electron';
 import { join } from 'path';
 import { promises as fs } from 'fs';
 
-const STORAGE_DIR = join(app.getPath('userData'), 'storage');
+let _storageDir: string | null = null;
+function getStorageDir(): string {
+  if (!_storageDir) {
+    _storageDir = join(app.getPath('userData'), 'storage');
+  }
+  return _storageDir;
+}
 
 // Ensure storage directory exists
 async function ensureStorageDir() {
   try {
-    await fs.mkdir(STORAGE_DIR, { recursive: true });
+    await fs.mkdir(getStorageDir(), { recursive: true });
   } catch (error) {
     console.error('[Storage] Failed to create storage directory:', error);
   }
@@ -52,7 +58,7 @@ export async function storageGet<T = any>(key: string): Promise<T | null> {
   await ensureStorageDir();
   
   try {
-    const filePath = join(STORAGE_DIR, key);
+    const filePath = join(getStorageDir(), key);
     const data = await fs.readFile(filePath, 'utf8');
     return JSON.parse(data);
   } catch (error) {
@@ -72,7 +78,7 @@ export async function storageSet(key: string, value: any): Promise<boolean> {
   await ensureStorageDir();
   
   try {
-    const filePath = join(STORAGE_DIR, key);
+    const filePath = join(getStorageDir(), key);
     await fs.writeFile(filePath, JSON.stringify(value, null, 2), 'utf8');
     return true;
   } catch (error) {
@@ -88,7 +94,7 @@ export async function storageDelete(key: string): Promise<boolean> {
   await ensureStorageDir();
   
   try {
-    const filePath = join(STORAGE_DIR, key);
+    const filePath = join(getStorageDir(), key);
     await fs.unlink(filePath);
     return true;
   } catch (error) {
@@ -107,7 +113,7 @@ export async function storageKeys(): Promise<string[]> {
   await ensureStorageDir();
   
   try {
-    const files = await fs.readdir(STORAGE_DIR);
+    const files = await fs.readdir(getStorageDir());
     return files.filter(f => f.endsWith('.json'));
   } catch (error) {
     console.error('[Storage] Error listing keys:', error);
@@ -133,7 +139,7 @@ export async function storageClear(): Promise<boolean> {
  * Get storage directory path (for debugging)
  */
 export function getStoragePath(): string {
-  return STORAGE_DIR;
+  return getStorageDir();
 }
 
 /**

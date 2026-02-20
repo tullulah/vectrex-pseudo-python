@@ -861,10 +861,10 @@ fn cmd_build(input: &PathBuf, output: Option<PathBuf>, rom_size: usize, bank_siz
             );
             
             match linker.generate_multibank_rom(&asm_path, &output_path_mb) {
-                Ok(symbol_table) => {
-                    println!("  {} Phase 6.7 SUCCESS: Multi-bank binary written to {}", 
+                Ok(_symbol_table) => {
+                    println!("  {} Phase 6.7 SUCCESS: Multi-bank binary written to {}",
                         "✓".green(), output_path_mb.display());
-                    println!("     Total size: {} KB ({} banks × {} KB)", 
+                    println!("     Total size: {} KB ({} banks × {} KB)",
                         rom_size / 1024,
                         rom_size / bank_size,
                         bank_size / 1024);
@@ -1125,10 +1125,10 @@ fn cmd_build(input: &PathBuf, output: Option<PathBuf>, rom_size: usize, bank_siz
         );
         
         match linker.generate_multibank_rom(&asm_path, &output_path_mb) {
-            Ok(symbol_table) => {
-                println!("  {} Phase 6.7 SUCCESS: Multi-bank binary written to {}", 
+            Ok(_symbol_table) => {
+                println!("  {} Phase 6.7 SUCCESS: Multi-bank binary written to {}",
                     "✓".green(), output_path_mb.display());
-                println!("     Total size: {} KB ({} banks × {} KB)", 
+                println!("     Total size: {} KB ({} banks × {} KB)",
                     rom_size / 1024,
                     rom_size / bank_size,
                     bank_size / 1024);
