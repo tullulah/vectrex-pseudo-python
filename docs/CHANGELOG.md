@@ -7,10 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Pendiente
-- Resolver símbolos BIOS en second pass (Vec_Misc_Count)
-- Implementar LEA instructions (LEAX, LEAY, LEAU, LEAS)
-- Indexed addressing con offsets numéricos (5,X, -2,Y)
+### Pending
+- Resolve BIOS symbols in second pass (Vec_Misc_Count)
+- Implement LEA instructions (LEAX, LEAY, LEAU, LEAS)
+- Indexed addressing with numeric offsets (5,X, -2,Y)
 - Auto-increment/decrement (,X+, ,-X)
 
 ## [November 15, 2025] - Native M6809 Assembler - Massive Implementation 🚀

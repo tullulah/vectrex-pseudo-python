@@ -1,58 +1,58 @@
-# Vectrex Memory Map - VPy Compiler
+# Vectrex Memory Map — VPy Compiler
 
-Este documento describe todas las direcciones de memoria usadas por el compilador VPy y su relación con el hardware Vectrex real.
+This document describes all memory addresses used by the VPy compiler and their relationship to real Vectrex hardware.
 
-## 1. Vectrex Hardware Memory Map (Oficial)
+## 1. Vectrex Hardware Memory Map (Official)
 
-Según la documentación oficial del Vectrex (VECTREX.INC):
+As documented in the official Vectrex reference (VECTREX.INC):
 
 ```
 $C800-$C87F  BIOS RAM (128 bytes)
-             Variables del sistema usadas por la BIOS
-             
-$C880-$CBEA  USER RAM (874 bytes disponibles)
-             ✅ Área segura para programas de usuario
-             
-$CBEA-$CFFF  BIOS Stack y vectores de interrupción
-             Stack default en $CBEA
-             
+             System variables used by the BIOS
+
+$C880-$CBEA  USER RAM (874 bytes available)
+             ✅ Safe area for user programs
+
+$CBEA-$CFFF  BIOS Stack and interrupt vectors
+             Default stack at $CBEA
+
 $D000-$D7FF  6522 VIA (shadowed 128 times)
              Hardware I/O (PSG, joystick, etc.)
-             
+
 $E000-$FFFF  System ROM (8KB BIOS)
-             Código de la BIOS
+             BIOS code
 ```
 
-## 2. Variables BIOS Reales (Usadas por VPy)
+## 2. Real BIOS Variables (Used by VPy)
 
-El compilador VPy usa estas direcciones BIOS REALES del hardware Vectrex:
+The VPy compiler uses these REAL BIOS addresses from Vectrex hardware:
 
 ### 2.1 Joystick (Joy_Analog BIOS)
 ```asm
-$C81A  Vec_Joy_Resltn  ; Resolution (usado en init)
+$C81A  Vec_Joy_Resltn  ; Resolution (used in init)
 $C81B  Vec_Joy_1_X     ; ✅ Joystick 1 X axis (0-255)
 $C81C  Vec_Joy_1_Y     ; ✅ Joystick 1 Y axis (0-255)
-$C81F  Vec_Joy_Mux_1_X ; X axis enable (usado en init)
-$C820  Vec_Joy_Mux_1_Y ; Y axis enable (usado en init)
-$C821  Vec_Joy_Mux_2_X ; Joystick 2 disable (usado en init)
-$C822  Vec_Joy_Mux_2_Y ; Joystick 2 disable (usado en init)
-$C823  Analog mode flag ; Cleared in init (Joy_Analog hace DEC)
+$C81F  Vec_Joy_Mux_1_X ; X axis enable (used in init)
+$C820  Vec_Joy_Mux_1_Y ; Y axis enable (used in init)
+$C821  Vec_Joy_Mux_2_X ; Joystick 2 disable (used in init)
+$C822  Vec_Joy_Mux_2_Y ; Joystick 2 disable (used in init)
+$C823  Analog mode flag ; Cleared in init (Joy_Analog does DEC)
 ```
 
-**IMPORTANTE**: Estas son las ÚNICAS direcciones válidas para joystick. NO inventar direcciones custom.
+**IMPORTANT**: These are the ONLY valid addresses for joystick. Do NOT invent custom addresses.
 
 ### 2.2 Buttons (Read_Btns BIOS)
 ```asm
 $C80F  Vec_Btn_State   ; Button state (written by Read_Btns)
 ```
 
-## 3. Variables VPy Compiler
+## 3. VPy Compiler Variables
 
-El compilador VPy usa el sistema **`RamLayout`** para asignar variables automáticamente, garantizando CERO colisiones:
+The VPy compiler uses the **`RamLayout`** system to assign variables automatically, guaranteeing ZERO collisions:
 
-### 3.1 RamLayout Automático (Sistema Perfecto ✅)
+### 3.1 Automatic RamLayout (Perfect System ✅)
 ```rust
-// TODAS las variables se asignan en este orden automáticamente:
+// ALL variables are assigned in this order automatically:
 let mut ram = RamLayout::new(0xC880);
 
 // 1. Runtime temporaries
@@ -60,11 +60,11 @@ ram.allocate("RESULT", 2, "Main result temporary");
 ram.allocate("TMPPTR", 2, "Pointer temp");
 // ...
 
-// 2. PSG Music (si hay assets de música)
+// 2. PSG Music (if music assets present)
 ram.allocate("PSG_MUSIC_PTR", 2, "...");
 // ...
 
-// 3. SFX (si hay assets de SFX)
+// 3. SFX (if SFX assets present)
 ram.allocate("SFX_PTR", 2, "...");
 // ...
 
@@ -82,17 +82,17 @@ ram.allocate("DRAW_VEC_X", 1, "...");
 ram.allocate("MIRROR_X", 1, "...");
 // ...
 
-// 7. User variables (ÚLTIMO - usa espacio restante)
+// 7. User variables (LAST — uses remaining space)
 ram.allocate("VAR_PLAYER_X", 2, "...");
 ram.allocate("VAR_ENEMIES_DATA", 6, "Array 3 elements");
 // ...
 ```
 
-### 3.2 Resultado en ASM
+### 3.2 ASM Output
 ```asm
 ; === RAM VARIABLE DEFINITIONS (EQU) ===
 ; AUTO-GENERATED - All offsets calculated automatically
-; Total RAM used: 34 bytes (ejemplo programa pequeño)
+; Total RAM used: 34 bytes (small program example)
 RESULT               EQU $C880+$00   ; Main result temporary (2 bytes)
 TEMP_YX              EQU $C880+$02   ; Temporary y,x storage (2 bytes)
 VL_PTR               EQU $C880+$0C   ; Current position in vector list (2 bytes)
@@ -101,131 +101,131 @@ VAR_PLAYER_X         EQU $C880+$22   ; User variable (2 bytes)
 ...
 ```
 
-**Ventajas del Sistema RamLayout**:
-- ✅ **Cero colisiones**: Imposible que dos variables usen la misma dirección
-- ✅ **Compacto**: No hay huecos ni espacio desperdiciado
-- ✅ **Automático**: No hay que calcular offsets manualmente
-- ✅ **Flexible**: Agregar/quitar variables no rompe nada
-- ✅ **Seguro**: Garantiza no exceder USER RAM limit ($CBEA)
+**RamLayout advantages**:
+- ✅ **Zero collisions**: Impossible for two variables to share an address
+- ✅ **Compact**: No gaps or wasted space
+- ✅ **Automatic**: No manual offset calculation needed
+- ✅ **Flexible**: Adding/removing variables does not break anything
+- ✅ **Safe**: Guarantees USER RAM limit ($CBEA) is never exceeded
 
-## 4. ERRORES HISTÓRICOS CORREGIDOS
+## 4. Historical Bugs (Fixed)
 
-### 4.1 Custom Joystick Addresses (CORREGIDO 2025-12-30)
-❌ **ERROR (antiguo)**:
+### 4.1 Custom Joystick Addresses (Fixed 2025-12-30)
+❌ **BUG (old)**:
 ```asm
-$CF00  Joy_1_X  ; DIRECCIÓN INVENTADA - no existe en hardware
-$CF01  Joy_1_Y  ; DIRECCIÓN INVENTADA - no existe en hardware
+$CF00  Joy_1_X  ; INVENTED ADDRESS — does not exist in hardware
+$CF01  Joy_1_Y  ; INVENTED ADDRESS — does not exist in hardware
 ```
 
-**Problema**: En Vectrex real, estas direcciones contienen basura → joystick aleatorio
+**Problem**: On real Vectrex hardware, these addresses contain garbage → random joystick values.
 
-✅ **CORRECTO (actual)**:
+✅ **CORRECT (current)**:
 ```asm
-$C81B  Vec_Joy_1_X  ; BIOS address real (escrita por Joy_Analog $F1F5)
-$C81C  Vec_Joy_1_Y  ; BIOS address real (escrita por Joy_Analog $F1F5)
+$C81B  Vec_Joy_1_X  ; Real BIOS address (written by Joy_Analog $F1F5)
+$C81C  Vec_Joy_1_Y  ; Real BIOS address (written by Joy_Analog $F1F5)
 ```
 
-### 4.2 Vector List Variables en Stack Zone (RESUELTO 2025-12-30)
-❌ **ERROR (antiguo)**:
+### 4.2 Vector List Variables in Stack Zone (Fixed 2025-12-30)
+❌ **BUG (old)**:
 ```asm
-$CF80  VL_PTR    ; En zona de stack ($CBEA-$CFFF) - PELIGROSO
+$CF80  VL_PTR    ; In stack zone ($CBEA-$CFFF) — DANGEROUS
 $CF82  VL_Y
 $CF83  VL_X
 $CF84  VL_SCALE
 ```
 
-**Problema**: Stack crece hacia abajo desde $CBEA → puede sobreescribir estas variables
+**Problem**: Stack grows downward from $CBEA → can overwrite these variables.
 
-✅ **CORRECTO (actual - RamLayout automático)**:
-- Todas las variables VL_*, DRAW_*, y VAR_* se asignan automáticamente
-- El sistema RamLayout garantiza que NO hay overlaps
-- Ejemplo: En programa pequeño (34 bytes total):
-  - VL_PTR en $C880+$0C
-  - DRAW_VEC_X en $C880+$11
-  - Variables de usuario después de TODO lo demás
-- Imposible colisionar con stack zone porque RamLayout controla límite superior
+✅ **CORRECT (current — automatic RamLayout)**:
+- All VL_*, DRAW_*, and VAR_* variables are assigned automatically
+- RamLayout guarantees NO overlaps
+- Example: In a small program (34 bytes total):
+  - VL_PTR at $C880+$0C
+  - DRAW_VEC_X at $C880+$11
+  - User variables after everything else
+- Collision with stack zone is impossible because RamLayout controls the upper bound
 
-## 5. REGLAS DE ASIGNACIÓN DE MEMORIA
+## 5. Memory Assignment Rules
 
-### 5.1 Sistema RamLayout (Automático y Seguro)
-✅ **Proceso automático**:
-1. Todas las variables se asignan en orden secuencial
-2. No hay huecos ni overlaps
-3. Total calculado automáticamente
-4. Garantía de no exceder USER RAM limit
+### 5.1 RamLayout System (Automatic and Safe)
+✅ **Automatic process**:
+1. All variables assigned in sequential order
+2. No gaps or overlaps
+3. Total size calculated automatically
+4. Guaranteed not to exceed USER RAM limit
 
-✅ **Rangos Seguros**:
-- Base: `$C880` (inicio USER RAM)
-- Variables asignadas secuencialmente hacia arriba
-- Límite: `$CBEA` (inicio stack zone) - RamLayout verifica automáticamente
+✅ **Safe ranges**:
+- Base: `$C880` (start of USER RAM)
+- Variables assigned sequentially upward
+- Limit: `$CBEA` (start of stack zone) — verified automatically by RamLayout
 
-❌ **Prohibido**: Direcciones hardcoded fuera de sistema RamLayout
-❌ **Prohibido**: `$C800-$C87F` (BIOS system variables)
-❌ **Prohibido**: `$CBEA-$CFFF` (Stack zone)
+❌ **Forbidden**: Hardcoded addresses outside the RamLayout system
+❌ **Forbidden**: `$C800-$C87F` (BIOS system variables)
+❌ **Forbidden**: `$CBEA-$CFFF` (Stack zone)
 
-### 5.2 Stack Considerations (Sin Cambios)
-El stack Vectrex por defecto comienza en `$CBEA` y crece hacia abajo:
+### 5.2 Stack Considerations
+The Vectrex stack starts at `$CBEA` by default and grows downward:
 ```
-$CBEA  ← Stack pointer inicial
+$CBEA  ← Initial stack pointer
 $CBE9
 $CBE8
-...    ← Stack crece hacia aquí
-$C8XX  ← RamLayout termina aquí (depende del programa)
+...    ← Stack grows toward here
+$C8XX  ← RamLayout ends here (depends on program)
 ```
 
-**Espacio disponible**: 
-- USER RAM total: 874 bytes ($C880-$CBEA)
-- Programa pequeño: ~34 bytes → 840 bytes libres
-- Programa grande: ~200 bytes → 674 bytes libres
-- Stack: ~200 bytes seguros (asumiendo uso normal)
+**Available space**:
+- Total USER RAM: 874 bytes ($C880-$CBEA)
+- Small program: ~34 bytes → 840 bytes free
+- Large program: ~200 bytes → 674 bytes free
+- Stack: ~200 bytes assumed safe (normal usage)
 
 ## 6. Frontend Emulator Integration
 
-El frontend (`EmulatorPanel.tsx`) debe escribir valores de joystick a las direcciones BIOS REALES:
+The frontend (`EmulatorPanel.tsx`) must write joystick values to the REAL BIOS addresses:
 
 ```typescript
-// ✅ CORRECTO: Escribir a BIOS addresses
+// ✅ CORRECT: Write to BIOS addresses
 vecx.write8(0xC81B, analogX); // Vec_Joy_1_X
 vecx.write8(0xC81C, analogY); // Vec_Joy_1_Y
 
-// ❌ INCORRECTO: NO inventar direcciones custom
-// vecx.write8(0xCF00, analogX); // ¡Esta dirección no existe en hardware!
+// ❌ INCORRECT: Do NOT invent custom addresses
+// vecx.write8(0xCF00, analogX); // This address does not exist in hardware!
 ```
 
-## 7. Verificación de Colisiones
+## 7. Collision Verification
 
-**Sistema RamLayout garantiza CERO colisiones automáticamente**:
+**RamLayout automatically guarantees ZERO collisions**:
 
-1. **Variables VPy**: Asignadas secuencialmente por RamLayout
-2. **VL_* variables**: Integradas en RamLayout (no más hardcoded)
-3. **Límite superior**: RamLayout puede verificar que `total_size() + stack_size < 874 bytes`
+1. **VPy variables**: Assigned sequentially by RamLayout
+2. **VL_* variables**: Integrated into RamLayout (no longer hardcoded)
+3. **Upper bound**: RamLayout verifies `total_size() + stack_size < 874 bytes`
 
-**NO es necesario verificar manualmente** - el sistema RamLayout previene colisiones por diseño.
+**No manual verification is needed** — the RamLayout system prevents collisions by design.
 
-### 7.1 Ejemplo Real (testsmallline.vpy)
+### 7.1 Real Example (testsmallline.vpy)
 ```
 Total RAM used: 34 bytes
-Máximo teórico: 874 bytes
-Espacio libre: 840 bytes (96% libre!)
-Stack seguro: 200 bytes asumidos → 640 bytes disponibles para variables
+Theoretical maximum: 874 bytes
+Free space: 840 bytes (96% free!)
+Safe stack: 200 bytes assumed → 640 bytes available for variables
 ```
 
-**Si un programa necesita más de ~674 bytes de variables**:
-- ✅ RamLayout detectará automáticamente el límite
-- ✅ Considerar optimizaciones:
-  - Usar const arrays (almacenados en ROM, no RAM)
-  - Reusar variables entre funciones
-  - Usar structs más eficientes
+**If a program needs more than ~674 bytes of variables**:
+- ✅ RamLayout will detect the limit automatically
+- ✅ Consider optimisations:
+  - Use const arrays (stored in ROM, not RAM)
+  - Reuse variables between functions
+  - Use more efficient data structures
 
 ## 8. Debugging Memory Issues
 
-Si experimentas corrupción de memoria:
+If you experience memory corruption:
 
-1. **Verificar tamaño de variables**: ¿Estás usando muchas arrays grandes?
-2. **Verificar stack overflow**: ¿Tu programa tiene recursión profunda o muchas llamadas anidadas?
-3. **Memory Panel en IDE**: Usa la búsqueda para inspeccionar rangos de memoria
-4. **Watch List**: Agrega variables críticas para monitorear cambios
+1. **Check variable size**: Are you using many large arrays?
+2. **Check stack overflow**: Does your program have deep recursion or many nested calls?
+3. **Memory Panel in IDE**: Use the search to inspect memory ranges
+4. **Watch List**: Add critical variables to monitor changes
 
 ---
 
-Última actualización: 2026-01-02 - Sistema RamLayout implementado: eliminados TODOS los hardcoded addresses, asignación automática de variables garantiza cero colisiones
+*Last updated: 2026-01-02 — RamLayout system implemented: all hardcoded addresses removed, automatic variable assignment guarantees zero collisions.*
