@@ -1,106 +1,105 @@
 # Copilot Project Instructions
 
-> **Para detalles técnicos de cualquier sistema, llama `get_project_docs(topic)`.**
-> Topics disponibles: `assets`, `joystick`, `buttons`, `const_arrays`, `modules`, `banking`, `draw_line`, `music`, `compiler`, `bios`, `tests`, `meta`, `all`
+> **For technical details on any system, call `get_project_docs(topic)`.**
+> Available topics: `assets`, `joystick`, `buttons`, `const_arrays`, `modules`, `banking`, `draw_line`, `music`, `compiler`, `bios`, `tests`, `meta`, `all`
 
 ---
 
-## REGLAS CRÍTICAS - NUNCA VIOLAR
+## CRITICAL RULES — NEVER BREAK
 
 ### Git
-- Rama principal: `master` (NO `main`)
-- macOS: usar `&&`. En Windows PowerShell v5.1: usar `;` (NO `&&`)
+- Main branch: `master` (NOT `main`)
+- macOS: use `&&`. On Windows PowerShell v5.1: use `;` (NOT `&&`)
 
-### WAIT_RECAL y AUDIO_UPDATE - AUTO-INYECTADOS
-- ❌ NUNCA escribir `WAIT_RECAL()` en código VPy — el compilador lo inyecta automáticamente al inicio del `loop()`
-- ❌ NUNCA escribir `MUSIC_UPDATE()` o `AUDIO_UPDATE()` — se inyecta automáticamente al FINAL del `loop()`
-- ❌ NUNCA escribir `UPDATE_BUTTONS()` — `Read_Btns` se inyecta automáticamente al inicio del `loop()`
+### WAIT_RECAL and AUDIO_UPDATE — AUTO-INJECTED
+- ❌ NEVER write `WAIT_RECAL()` in VPy code — the compiler injects it automatically at the start of `loop()`
+- ❌ NEVER write `MUSIC_UPDATE()` or `AUDIO_UPDATE()` — injected automatically at the END of `loop()`
+- ❌ NEVER write `UPDATE_BUTTONS()` — `Read_Btns` is injected automatically at the start of `loop()`
 
-### Scopes de Variables
-- Variables declaradas en `main()` NO son accesibles en `loop()` — scopes separados
-- Declarar variables dentro de la función donde se usan
+### Variable Scopes
+- Variables declared in `main()` are NOT accessible in `loop()` — separate scopes
+- Declare variables inside the function where they are used
 
 ### BIOS
-- NUNCA usar BIOS sintética. Rutas válidas:
+- NEVER use a synthetic BIOS. Valid paths:
   - `ide/frontend/src/assets/bios.bin`
   - `ide/frontend/dist/bios.bin`
-- NUNCA usar rutas absolutas fuera del workspace
+- NEVER use absolute paths outside the workspace
 
 ### Assets (.vec / .vmus)
-- Formato SIEMPRE JSON — nunca inventar formatos de texto
-- NUNCA inventar nombres de assets — verificar con `project/get_structure` antes de usar `DRAW_VECTOR("name")`
-- Usar `project/create_vector` y `project/create_music` (validan JSON automáticamente)
+- Format is ALWAYS JSON — never invent text-based formats
+- NEVER invent asset names — verify with `project/get_structure` before using `DRAW_VECTOR("name")`
+- Use `project/create_vector` and `project/create_music` (they validate JSON automatically)
 
-### Código — No Sintético
-- Todas las implementaciones deben ser reales, no heurísticas ni simuladas
-- No fabricar side effects, no inventar APIs sin verificar código fuente
+### Code — No Synthetic Implementations
+- All implementations must be real, not heuristic or simulated
+- Do not fabricate side effects or invent APIs without verifying source code
 
-### Verificación 1:1 (emulator_v2)
-- Antes de crear cualquier API: leer el .cpp/.h correspondiente en `vectrexy/libs/emulator/`
-- Cada función debe incluir comentario `// C++ Original:` con código fuente real
+### 1:1 Verification (emulator_v2)
+- Before creating any API: read the corresponding .cpp/.h file in `vectrexy/libs/emulator/`
+- Each function must include a `// C++ Original:` comment with the real source code
 
 ---
 
-## VPy Language — Recordatorio Rápido
+## VPy Language — Quick Reference
 
 ```python
-# CORRECTO
+# CORRECT
 def main():
     SET_INTENSITY(127)
 
 def loop():
-    # WAIT_RECAL() ← NO escribir, se inyecta solo
-    player_x = 0       # declarar aquí, no en main()
-    
+    # WAIT_RECAL() ← DO NOT write, injected automatically
+    player_x = 0       # declare here, not in main()
+
     joy_x = J1_X()     # -1, 0, +1
     btn1 = J1_BUTTON_1()  # 0=released, 1=pressed
-    
-    const coords = [10, 20, 30]   # ROM-only, sin RAM
-    val = coords[1]               # indexing funciona
-    
-    DRAW_VECTOR("ship")           # asset debe existir
-    PLAY_MUSIC("theme")           # auto-update al final del loop
+
+    const coords = [10, 20, 30]   # ROM-only, no RAM
+    val = coords[1]               # indexing works
+
+    DRAW_VECTOR("ship")           # asset must exist
+    PLAY_MUSIC("theme")           # auto-updated at end of loop
 ```
 
 ```python
-# META para multibank
+# META for multibank
 META ROM_TOTAL_SIZE = 524288
 META ROM_BANK_SIZE = 16384
 ```
 
 ---
 
-## Arquitectura del Compilador — Resumen
+## Compiler Architecture — Summary
 
-| Fase | Descripción |
-|------|-------------|
+| Phase | Description |
+|-------|-------------|
 | 0 | Asset discovery (assets/vectors/*.vec, assets/music/*.vmus) |
-| 1-3 | Parse → Unify (imports resueltos, dot notation → PREFIX_NAME) |
-| 4 | Codegen M6809 ASM |
-| 5 | Asset embedding (FCB/FDB en ROM) |
-| 6.3+ | Multibank split si ROM_TOTAL_SIZE definido |
+| 1-3 | Parse → Unify (imports resolved, dot notation → PREFIX_NAME) |
+| 4 | MC6809 ASM codegen |
+| 5 | Asset embedding (FCB/FDB in ROM) |
+| 6.3+ | Multibank split if ROM_TOTAL_SIZE is defined |
 
-- Build: `cargo run --bin vectrexc -- build programa.vpy --bin`
+- Build: `cargo run --bin vectrexc -- build program.vpy --bin`
 - Tests: `cargo test -p vectrex_emulator`
 
 ---
 
-## MCP Tools Disponibles (ide/mcp-server/server.js)
+## Available MCP Tools (ide/mcp-server/server.js)
 
-| Categoría | Tools |
-|-----------|-------|
+| Category | Tools |
+|----------|-------|
 | Editor | editor_list_documents, editor_read_document, editor_write_document, editor_replace_range, editor_insert_at, editor_delete_range, editor_get_diagnostics |
 | Compiler | compiler_build, compiler_get_errors |
 | Emulator | emulator_run, emulator_get_state, emulator_stop |
 | Memory | memory_dump, memory_list_variables, memory_read_variable, memory_write |
 | Debugger | debugger_start, debugger_add_breakpoint, debugger_remove_breakpoint, debugger_get_callstack, debugger_get_registers |
 | Project | project_get_structure, project_read_file, project_write_file, project_create, project_open, project_close, project_create_vector, project_create_music |
-| **Docs** | **get_project_docs(topic)** ← llamar para detalles técnicos |
+| **Docs** | **get_project_docs(topic)** ← call for technical details |
 
-### Reglas de uso de tools
-- `editor/write_document`: crea O actualiza (siempre funciona)
-- `editor/read_document`: solo si el archivo ya está abierto
-- `editor/replace_range`: requiere startLine/endLine (NO character offsets)
-- `project/read_file`: paths RELATIVAS al project root (ej: `src/main.vpy`)
-- NO inventar nombres de tools — solo las listadas arriba
-
+### Tool usage rules
+- `editor/write_document`: creates OR updates (always works)
+- `editor/read_document`: only if the file is already open
+- `editor/replace_range`: requires startLine/endLine (NOT character offsets)
+- `project/read_file`: paths RELATIVE to project root (e.g. `src/main.vpy`)
+- DO NOT invent tool names — only use those listed above
