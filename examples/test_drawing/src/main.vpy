@@ -4,28 +4,18 @@ def main():
     SET_INTENSITY(127)
 
 def loop():
-    WAIT_RECAL()
-    
-    # Test DRAW_CIRCLE - circle at center
+    # Circle at center
     DRAW_CIRCLE(0, 0, 40, 80)
-    
-    # Test DRAW_RECT - rectangle in top-left
-    DRAW_RECT(-50, 50, 30, 20, 100)
-    
-    # Test DRAW_POLYGON - triangle in bottom-right
+
+    # Polygon (triangle) in bottom-right
     DRAW_POLYGON(30, -30, 50, -50, 70, -30, 90)
-    
-    # Test DRAW_CIRCLE_SEG - octagon (8 segments)
+
+    # Circle with custom segment count (octagon)
     DRAW_CIRCLE_SEG(8, -60, 0, 30, 70)
-    
-    # Test DRAW_ARC - 90 degree arc
-    DRAW_ARC(12, 50, 50, 25, 0, 90, 85)
-    
-    # Test DRAW_FILLED_RECT - filled rectangle
-    DRAW_FILLED_RECT(-70, -70, 15, 10, 60)
-    
-    # Test DRAW_ELLIPSE - ellipse
-    DRAW_ELLIPSE(60, -50, 20, 10, 95)
-    
-    # Test DRAW_SPRITE - placeholder
-    DRAW_SPRITE(0, 0, "test")
+
+    # Line using MOVE + DRAW_TO
+    MOVE(-50, 50)
+    DRAW_TO(50, -50)
+
+    # Line segment
+    DRAW_LINE(-50, -50, 50, 50, 100)

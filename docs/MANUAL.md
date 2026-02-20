@@ -1,327 +1,501 @@
-# Pseudo-Python Vector Compiler Programming Manual (Draft)
+# VPy Language Manual
 
-This manual describes the current prototype language supported by the multi-target pseudo-Python compiler for Vectrex (6809), PiTrex (ARM), VecFever / Vextreme (Cortex-M).
+VPy is a Python-inspired language that compiles to MC6809 assembly for the Vectrex console. It is statically typed (all values are 16-bit integers), compiled, and designed for game development on constrained hardware.
 
-## 1. Design Goals
-- Very small, explicit subset inspired by Python for fast iteration on vector hardware.
-- Deterministic, no dynamic allocation, no recursion (currently not prevented but discouraged).
-- Uniform 16-bit unsigned integer arithmetic semantics across all targets (values masked to 0xFFFF after operations where needed).
+---
 
-## 2. Source File Basics
-- File extension: `.vpy` (convention).
-- Encoding: UTF-8.
-- Indentation: exactly 4 spaces per block level. Tabs are rejected. Mixed indentation levels must be multiples of 4.
-- One module = one file. No imports yet.
+## Table of Contents
 
-## 3. Lexical Elements
-Tokens currently supported:
-- Keywords: `def`, `return`, `for`, `in`, `range`, `if`, `elif`, `else`, `while`, `break`, `continue`, `and`, `or`, `not`, `let`
-- Operators / punctuation: `+ - * / % << >> & | ^ ~ == != < <= > >= = ( ) , :`
-- Literals: 
-    - Decimal integers (no sign inside literal; unary `-` handled syntactically)
-    - Hexadecimal: `0x` followed by hex digits
-    - Binary: `0b` followed by binary digits
-- Identifiers: `[a-zA-Z_][a-zA-Z0-9_]*`
-- Comments: `#` to end of line (ignored by lexer)
-- Boolean literals: (not separate; any non-zero is truthy, zero is false). `True/False` may be added later.
-- End of line creates statement boundaries (like Python). Blank lines are ignored.
+1. [Program Structure](#1-program-structure)
+2. [Variables and Constants](#2-variables-and-constants)
+3. [Types and Values](#3-types-and-values)
+4. [Operators](#4-operators)
+5. [Control Flow](#5-control-flow)
+6. [Functions](#6-functions)
+7. [Arrays](#7-arrays)
+8. [META Directives](#8-meta-directives)
+9. [Built-in Functions](#9-built-in-functions)
+10. [VectorList DSL](#10-vectorlist-dsl)
+11. [Language Rules and Gotchas](#11-language-rules-and-gotchas)
 
-## 4. Types & Values
-- Single primitive: 16-bit unsigned integer (0..65535). Negative intermediate results wrap modulo 65536.
-- Truthiness: `0` is false; any other value is true.
+---
 
-## 5. Statements
-1. Function definition:
-```
-def name(param0, param1, ...):
-    body
-```
-Up to 4 parameters participate in the current simple ABI (more will be ignored / future error).
+## 1. Program Structure
 
-2. Local declaration (`let`):
-```
-let x = expression
-```
-Creates a local variable stored in the function's stack frame (one 16-bit slot currently rounded to 2 bytes on 6809, 4 bytes on ARM/Cortex-M for simplicity – may compact later). Lifetime = function invocation.
+Every VPy program has two special functions:
 
-3. Assignment:
-```
-name = expression
-```
-Writes to an existing local if a `let name` appeared earlier in the same function; otherwise writes / creates a global variable.
+```python
+def main():
+    # Called once at startup — initialization only
+    SET_INTENSITY(127)
+    player_x = 0
 
-3. For loop (range based):
-```
-for i in range(start, end, step):
-    body
-```
-`step` is optional; default = 1 when omitted. Loop variable and bounds are reloaded each iteration for the comparison; loop runs while `i < end`.
-
-For-loop induction variable locality:
-
-- The loop variable (e.g. `i`) is always treated as an implicit local even without a preceding `let`. It is allocated a 2‑byte slot in the function's stack frame on all backends.
-- It does not create or touch a `VAR_I` style global symbol, allowing shadowing and preventing global namespace pollution.
-- Nested loops allocate additional slots (`i` at offset 0, `j` at offset 2, etc.).
-- A specified `step` expression is evaluated after the body each iteration; if omitted, a constant 1 is synthesized.
-
-Example with step:
-```
-for i in range(0, 6, 2):
-    acc = acc + i
-```
-Generates a local slot for `i` and increments it by 2 each pass; no global `VAR_I` is emitted.
-
-4. While loop:
-```
-while condition:
-    body
+def loop():
+    # Called every frame automatically — game logic goes here
+    draw_player()
 ```
 
-5. If / Elif / Else:
+- `main()` runs once when the cartridge starts. Use it for initialization.
+- `loop()` runs every frame (~50 fps). All game logic, drawing, and input handling goes here.
+- You do not need an explicit frame loop — the runtime calls `loop()` automatically.
+- Other functions can be defined and called freely from `main()` or `loop()`.
+
+### Minimal example
+
+```python
+META TITLE = "HELLO"
+
+def main():
+    SET_INTENSITY(100)
+
+def loop():
+    PRINT_TEXT(-50, 0, "HELLO WORLD")
 ```
-if cond:
-    ...
-elif other:
-    ...
-else:
-    ...
+
+---
+
+## 2. Variables and Constants
+
+### Global variables
+
+Variables declared at the top level (outside functions) are globals, persisted across frames:
+
+```python
+player_x = 0
+player_y = 0
+score = 0
 ```
-`elif` chain short-circuits; only one block executes.
 
-6. Break / Continue inside loops.
+### Local variables
 
-7. Return (optional expression). If last statement not an explicit return, backends emit a function epilogue returning (value in result register is unspecified unless you return explicitly).
+Variables declared inside a function are local to that function call:
 
-8. Expression statement: just an expression on a line (mainly function calls).
+```python
+def update_player():
+    dx = joy_x * 2      # local
+    player_x = player_x + dx   # player_x is global
+```
 
-## 6. Expressions
-- Literals: decimal / hex / binary (`123`, `0x1F`, `0b1010`)
-- Identifiers: `foo`
-- Binary arithmetic: `+ - * / %` (unsigned 16-bit; division or modulo by zero currently leaves left operand — placeholder UB)
-- Bitwise: `& | ^ << >> ~` (shift amounts masked to low 4 bits during folding / codegen to keep 0..15 range)
-- Comparisons: `== != < <= > >=`
-- Chained comparisons: `a < b < c` expands to `(a < b) and (b < c)` with short-circuiting
-- Logical: `and`, `or` (short-circuit) and unary `not`
-- Unary plus and minus: `-x` lowers to `0 - x`; `+x` is identity.
-- Bitwise not: `~x` -> mask applied yielding 16-bit result.
-- Function call: `name(arg0, arg1, ...)` evaluating up to 4 arguments.
+The compiler determines scope automatically: if the name was declared at the top level, assignment inside a function modifies the global. Otherwise it's local.
 
-Operator precedence (high to low):
+### Constants
+
+`const` declares a compile-time constant. Constants cannot be reassigned:
+
+```python
+const MAX_ENEMIES = 8
+const GRAVITY = 1
+const GROUND_Y = -70
+```
+
+### Compound assignment
+
+```python
+x += 1
+x -= 5
+x *= 2
+counter += 1
+```
+
+---
+
+## 3. Types and Values
+
+VPy has a single type: **16-bit integer**.
+
+- All arithmetic is unsigned 16-bit (values wrap modulo 65536).
+- Truthiness: `0` is false, any other value is true.
+- No floating point.
+- No booleans (`True`/`False`) — use `1` and `0` instead.
+
+### Integer literals
+
+```python
+x = 42        # decimal
+x = 0xFF      # hexadecimal
+x = 0b1010    # binary
+x = -7        # negative (compiled as 0 - 7)
+```
+
+### String literals
+
+Strings are used as arguments to built-in functions or stored in arrays. They are zero-terminated (high-bit terminated for Vectrex BIOS):
+
+```python
+PRINT_TEXT(-50, 0, "GAME OVER")
+const names = ["LEVEL 1", "LEVEL 2", "LEVEL 3"]
+```
+
+---
+
+## 4. Operators
+
+### Arithmetic
+
+| Operator | Description |
+|----------|-------------|
+| `+` | Addition |
+| `-` | Subtraction |
+| `*` | Multiplication |
+| `/` | Integer division (truncates) |
+| `%` | Modulo |
+| `-x` | Unary negation (compiled as `0 - x`) |
+
+### Bitwise
+
+| Operator | Description |
+|----------|-------------|
+| `&` | AND |
+| `\|` | OR |
+| `^` | XOR |
+| `~` | NOT (bitwise complement) |
+| `<<` | Shift left |
+| `>>` | Shift right |
+
+### Comparison
+
+`==`, `!=`, `<`, `<=`, `>`, `>=`
+
+Chained comparisons are supported: `0 < x < 100` expands to `(0 < x) and (x < 100)`.
+
+### Logical
+
+`and`, `or`, `not` — short-circuit evaluation.
+
+### Operator precedence (high to low)
+
 1. Unary: `- + not ~`
-2. Multiplicative: `* / %`
-3. Additive: `+ -`
-4. Shifts: `<< >>`
-5. Bitwise AND: `&`
-6. Bitwise XOR: `^`
-7. Bitwise OR: `|`
-8. Comparison (including chained)
-9. Logical AND: `and`
-10. Logical OR: `or`
+2. `* / %`
+3. `+ -`
+4. `<< >>`
+5. `&`
+6. `^`
+7. `|`
+8. Comparisons (including chained)
+9. `and`
+10. `or`
 
-Short-circuit rules preserve left-to-right evaluation for logical ops and chained comparisons.
+---
 
-## 7. Function Calling & ABI (Prototype)
-- Caller evaluates arguments right-to-left ensuring leftmost ends in r0 (ARM/Cortex-M) or placed sequentially (6809 temporary slots) before the call.
-- ARM / Cortex-M: Up to 4 args in r0..r3. Callee prologue stores each to a global `VAR_<PARAM>` location.
-- 6809: Caller stores each evaluated arg into `VAR_ARGi`. Callee copies into `VAR_<PARAM>` at entry.
-- Return value: r0 (ARM/Cortex-M), D register (6809) and also stored in a pseudo global `RESULT` (6809) during expression evaluation.
+## 5. Control Flow
 
-## 8. Optimization Passes
-Executed iteratively (up to 5 rounds) until stable:
-1. Constant folding & algebraic simplifications (e.g., `x+0 -> x`, `x*1 -> x`, bitwise identities like `x|0 -> x`, `x&0 -> 0`, `x^0 -> x`).
-2. Dead code elimination (unreachable removal after constant conditions become false/true, prunes empty constructs).
-3. Forward constant propagation with branch merging (simple environment merge — losing knowledge on divergence).
-4. Dead store elimination (drops assignments whose values are never subsequently read and have no side effects).
-5. Peepholes in backends (e.g., multiply/divide by power-of-two becomes shifts, `x+x` duplicates to single ADD/shift sequences, 6809 special patterns).
+### if / elif / else
 
-All arithmetic coerced via mask to 16 bits after operations where necessary.
-
-## 9. Backend Notes
-### 6809 (Vectrex)
-- Uses zero-page-like globals: `VAR_<NAME>` for globals, `VAR_ARGi` for call arguments, temporaries (`TMPLEFT`, `TMPRIGHT`, etc.).
-- Locals (`let` and for-loop counters) allocated on stack via `LEAS -N,S` at function entry; each consumes 2 bytes; freed with `LEAS +N,S` before return.
-- Multiplication / division call helper subroutines `MUL16`, `DIV16` (prototype) or inline shift peepholes for powers of two.
-
-### ARM (PiTrex)
-- Simple linear code, preserves no callee-saved registers (prototype). r4, r5 used as temporaries during binary ops.
-- Locals allocated with `SUB sp, sp, #size` (2 bytes per local) and accessed by halfword ops `STRH/LDRH [sp,#off]`. Freed with corresponding `ADD sp, sp, #size` in epilogue.
-- Masks results with `AND r0,r0,#0xFFFF` post arithmetic.
-- Modulo synthesized via division helper + multiply-subtract sequence.
-- Shifts emitted with `MOV r0,r4,LSL r5` / `MOV r0,r4,LSR r5` (prototype; assumes shift amount already in low bits).
-
-### Cortex-M (VecFever / Vextreme)
-- Similar to ARM backend; provides a vector table and an infinite loop after `main` returns.
-- Locals follow same stack frame scheme as ARM (2 bytes per local, STRH/LDRH).
-- Same modulo / shift strategy as ARM (uses MVN for bitwise not).
-
-## 10. Example
+```python
+if x > 0:
+    move_right()
+elif x < 0:
+    move_left()
+else:
+    stay()
 ```
+
+### while
+
+```python
+while active == 1:
+    update()
+    if done == 1:
+        break
+```
+
+### for (range-based)
+
+```python
+for i in range(0, 8):
+    if enemy_active[i] == 1:
+        update_enemy(i)
+
+# With step:
+for i in range(0, 100, 5):
+    draw_tick(i)
+```
+
+- `range(start, end)` — runs while `i < end`, step defaults to 1.
+- `range(start, end, step)` — custom step.
+- The loop variable is always local to the loop.
+
+### for (array iteration)
+
+```python
+for enemy in enemies:
+    if enemy > 0:
+        draw_enemy(enemy)
+```
+
+### switch / case
+
+```python
+switch screen:
+    case STATE_TITLE:
+        draw_title()
+    case STATE_GAME:
+        draw_game()
+    default:
+        draw_error()
+```
+
+### break / continue
+
+Work as in Python — `break` exits the loop, `continue` skips to the next iteration.
+
+---
+
+## 6. Functions
+
+```python
 def add(a, b):
     return a + b
 
-def main():
-    s = add(3,5)
-    n = -7
-    t = 0
-    if 1 < 2 < 3:
-        t = s & 255
-    bw = (s & 0x00FF) | (t ^ ~n)
-    m = (bw << 3) % 16
-    z = 0b1010 ^ m
-    return s + t + n + bw + z
+def draw_player(x, y, frame):
+    DRAW_VECTOR("player", x, y)
 ```
 
-## 11. Current Limitations / Undefined Behavior
-- Division by zero: leaves left operand (subject to change).
-- More than 4 function parameters: ignored / presently unsafe.
-- Shadowing across functions only (no nested scopes yet). Locals must be declared with `let` before first assignment to be local; otherwise assignment creates a global.
-- No recursion guard or stack depth check.
-- No negative integer literals (unary minus rewrite only).
-- No string / data sections beyond variables.
-- No constant folding across function boundaries.
- - Parser sólo reporta el primer error por archivo (multi-error recovery pendiente) aunque warnings heurísticos (como `POLYGON 2`) se agregan siempre.
-
-## 12. Roadmap (Potential)
-- Local variable allocation vs globals.
-- Basic register allocation to reduce memory traffic.
-- Array / vector primitives.
-- Inline line-drawing API intrinsics.
-- Improved error messages with spans.
-- Test harness & golden assembly diffs.
-- Optional signed arithmetic mode.
-
-## 13. Contributing (Draft)
-- Keep new language constructs minimal and consistent across all backends.
-- Always implement feature in: lexer -> parser -> AST -> optimizer -> all backends -> example + manual update.
-- Write deterministic code (avoid randomness, time-based data).
-
-## 14. License
-MIT (see `README.md`).
-
-## 15. IDE / WASM Build Note
-Running the helper script `run-ide.ps1` now automatically:
-- Builds the Rust workspace (unless `-NoRustBuild`).
-- Builds the WebAssembly emulator artifacts (`npm run wasm:build`) unless `-NoWasmBuild` is passed.
-
-The wasm-bindgen outputs (`vectrex_emulator_bg.wasm`, `vectrex_emulator.js`) live in `ide/frontend/src/wasm/` and are statically imported by the React code. No copy to `public/` is required; Vite serves them via the module graph. If you change Rust emulator code, re-run the script (or `npm run wasm:build` in `ide/frontend`) and refresh the IDE.
+- Up to 4 parameters per function.
+- Parameters are passed through `VAR_ARG0`..`VAR_ARG3` on the 6809.
+- Return value is stored in the D register (16-bit).
+- Functions can call other functions freely.
+- Recursion is not safe (no stack depth protection).
 
 ---
-(End of Draft Section: This manual is a living document; update with each feature.)
 
-## 15. Vectrex Minimal Mode & META Directives (Actual)
+## 7. Arrays
 
-El backend Vectrex actualmente fuerza un modo "minimal clásico" para generar la cabecera estándar sin runtime adicional. Sólo se emite el código estrictamente necesario y las cadenas realmente usadas (sin duplicados manuales).
+### Mutable arrays
 
-### 15.1 CLI Simplificado
-Subcomando principal:
-```
-cargo run -- build fuente.vpy [--out salida] [--target vectrex] [--title T] [--bin]
-```
-- `--target` por defecto = `vectrex`.
-- `--title` puede ser sobrescrito en el propio archivo con `META TITLE`.
-- `--bin` genera además del `.asm` un `.bin` usando lwasm (o script fallback `tools/lwasm.ps1`).
-
-Se han eliminado flags anteriores (blink, bank-size, debug, etc.) en este modo.
-
-### 15.2 Directivas META Soportadas
-Se colocan al inicio del archivo `.vpy` (antes de funciones):
-```
-META TITLE = "MI JUEGO"        # <=24 chars, se fuerza MAYÚSCULAS y se limpian caracteres no válidos
-META COPYRIGHT = "g GCE 2025"  # Reemplaza línea de copyright (default: g GCE 1998)
-META MUSIC = "music1"          # Símbolo BIOS (por defecto music1)
-META MUSIC = "0"               # Desactiva música (puntero $0000)
-```
-Sólo estas claves afectan la cabecera por ahora. Los bytes de parámetros ($F8,$50,$20,$AA) están fijos.
-
-### 15.3 Cabecera Generada (Estructura)
-```
-FCC "<COPYRIGHT>"
-FCB $80
-FDB <music_pointer | $0000>
-FCB $F8,$50,$20,$AA
-FCC "<TITLE>"   ; título normalizado
-FCB $80          ; terminador título
-FCB 0            ; terminador lista vectores en este modo minimal
+```python
+enemy_active = [0, 0, 0, 0, 0, 0, 0, 0]
+enemy_x = [0, 0, 0, 0, 0, 0, 0, 0]
 ```
 
-### 15.4 Ejemplo
-Fuente:
+### Constant arrays (read-only)
+
+```python
+const level_names = ["LEVEL 1", "LEVEL 2", "LEVEL 3"]
+const x_coords = [40, 40, -40, -10, 20, 50]
 ```
-META TITLE = "HELLO WORLD"
+
+### Access and assignment
+
+```python
+x = enemy_x[i]          # read by index
+enemy_x[i] = new_x      # write by index
+count = len(enemy_x)    # array length
+```
+
+### for-in over arrays
+
+```python
+for state in enemy_active:
+    if state == 1:
+        active_count += 1
+```
+
+### Notes
+
+- Array size is fixed at compile time.
+- Index must be within bounds — no runtime bounds checking.
+- Coordinates are clamped to 8-bit signed (-128..127) for drawing.
+
+---
+
+## 8. META Directives
+
+META directives go at the top of the entry file and customize the ROM header:
+
+```python
+META TITLE = "PANG"
 META COPYRIGHT = "g GCE 2025"
-META MUSIC = "0"
-
-def main():
-    PRINT_TEXT(-0x50, 0x10, "HELLO WORLD")
+META MUSIC = music1
+META MUSIC = "0"        # disables startup music
 ```
-Genera cabecera con música desactivada (FDB $0000) y título/copyright.
 
-### 15.5 Notas Futuras
-- Posibles META adicionales (coordenadas/escala) aún no implementados.
-- Limpieza de opciones legacy en estructuras internas pendiente (campos no usados en CodegenOptions).
+| Directive | Description |
+|-----------|-------------|
+| `META TITLE` | Game title (max 24 chars, auto-uppercased) |
+| `META COPYRIGHT` | Copyright string (default: `g GCE 1998`) |
+| `META MUSIC` | BIOS music symbol played at startup, or `"0"` to disable |
 
-## 16. DSL de Vector Lists (Nuevo - Sintaxis Unificada)
+---
 
-Bloques `vectorlist nombre:` permiten definir listas de vectores compactas interpretadas por el runtime `Run_VectorList`.
+## 9. Built-in Functions
 
-Comandos soportados (sintaxis unificada con paréntesis):
-- `MOVE(x, y)` : punto inicial absoluto (CMD_START)
-- `SET_INTENSITY(val)` : fija intensidad del haz; equivale a `INTENSITY(val)`
-- `SET_ORIGIN()` : reset origen (0,0); equivale a `ORIGIN`
-- `RECT(x1, y1, x2, y2)` : rectángulo (4 segmentos)
-- `POLYGON(N, x0, y0, ..., xN-1, yN-1)` : polígono cerrado (N≥2) usando líneas sucesivas
-- `CIRCLE(cx, cy, r)` o `CIRCLE(cx, cy, r, segs)` : aproximación poligonal (segs≥3, default=16)
-- `ARC(cx, cy, r, start_deg, sweep_deg)` o `ARC(..., segs)` : arco abierto subdividido (segs≥2, default=16)
-- `SPIRAL(cx, cy, r_start, r_end, turns)` o `SPIRAL(..., segs)` : espiral abierta (segs≥4, default=64)
-- `ORIGIN` : Reset0Ref (CMD_ZERO) recarga integradores a (0,0) - sin paréntesis
-- `INTENSITY(val)` : inserta comando de intensidad; si val ∈ [0..7] se mapea a presets ($1F,$3F,$5F,$7F); otro valor se toma directo (8 bits)
+VPy is case-insensitive, so `DRAW_LINE`, `draw_line`, and `Draw_Line` are all the same.
 
-**Sintaxis Unificada**: Todos los comandos de vectorlist ahora usan la misma sintaxis que las funciones globales con paréntesis y comas. Esto hace el lenguaje más consistente y fácil de usar.
+### Frame control
 
-Normalización backend:
-1. Se elimina ZERO inicial redundante si inmediatamente va un START.
-2. Se inserta un START (0,0) inicial si no existe.
-3. La primera INTENSITY se mueve tras ese START.
-4. START duplicados consecutivos en mismas coords se colapsan.
-5. ZERO consecutivos se colapsan.
+| Function | Description |
+|----------|-------------|
+| `SET_INTENSITY(val)` | Set beam intensity (0–127) |
+| `SET_SCALE(val)` | Set drawing scale |
 
-Salida:
-```
-VL_MAZE:
-    FCB <count>
-    FCB $yy,$xx,CMD_START ; START to (...)
-    ...
-    FCB $00,$00,CMD_END ; END
-```
-Los comentarios muestran deltas y coordenadas absolutas para depuración.
+> **Note:** `WAIT_RECAL` is **automatically injected** by the compiler at the start of every `loop()` call. Do not call it manually — it must never appear in VPy source code.
 
-Ejemplo mínimo (sintaxis nueva):
-```
-vectorlist demo:
-    SET_INTENSITY(0x5F)
-    MOVE(-16, -16)
-    RECT(-16, -16, 16, 16)
-    SET_ORIGIN()
-    POLYGON(4, 0, -16, 16, 0, 0, 16, -16, 0)
+### Drawing
+
+| Function | Description |
+|----------|-------------|
+| `MOVE(x, y)` | Move beam to position without drawing |
+| `DRAW_TO(x, y)` | Draw a line from the current beam position to (x, y) |
+| `DRAW_LINE(x0, y0, x1, y1, intensity)` | Draw a line segment |
+| `DRAW_CIRCLE(cx, cy, diam, intensity)` | Draw a circle (16 segments) |
+| `DRAW_CIRCLE_SEG(segs, cx, cy, diam, intensity)` | Draw a circle with custom segment count |
+| `DRAW_POLYGON(x0, y0, x1, y1, ..., intensity)` | Draw a polygon |
+| `DRAW_VECTOR("name", x, y)` | Draw a `.vec` vector asset at position (x, y) |
+| `DRAW_VECTOR_EX("name", x, y, mirror, intensity)` | Draw a `.vec` asset with mirror and intensity override |
+
+`mirror` values for `DRAW_VECTOR_EX`: `0`=none, `1`=flip X, `2`=flip Y, `3`=flip both.
+
+**Buildtools-only** (not available when using the Core compiler):
+
+| Function | Description |
+|----------|-------------|
+| `DRAW_RECT(x, y, w, h, intensity)` | Draw a rectangle |
+| `DRAW_FILLED_RECT(x, y, w, h, intensity)` | Draw a filled rectangle |
+| `DRAW_ARC(segs, cx, cy, r, start_deg, sweep_deg, intensity)` | Draw an arc |
+| `DRAW_ELLIPSE(cx, cy, rx, ry, intensity)` | Draw an ellipse |
+
+### Text
+
+| Function | Description |
+|----------|-------------|
+| `PRINT_TEXT(x, y, "text")` | Print a string at screen position |
+| `PRINT_TEXT(x, y, var)` | Print a string variable |
+
+### Input — Joystick 1
+
+| Function | Description |
+|----------|-------------|
+| `J1_BUTTON_1()` | Returns 1 on press (rising edge), 0 otherwise |
+| `J1_BUTTON_2()` | Same for button 2 |
+| `J1_BUTTON_3()` | Same for button 3 |
+| `J1_BUTTON_4()` | Same for button 4 |
+
+Joystick analog values are typically read via an array: `joystick1_state = [0,0,0,0,0,0]` (X, Y, BTN1–4).
+
+### Audio
+
+| Function | Description |
+|----------|-------------|
+| `PLAY_MUSIC("name")` | Play a `.vmus` music file |
+| `PLAY_SFX("name")` | Play a `.vsfx` sound effect |
+| `STOP_MUSIC()` | Stop current music |
+
+### Level / Assets
+
+| Function | Description |
+|----------|-------------|
+| `LOAD_LEVEL("name")` | Load a `.vplay` level file |
+
+### Math
+
+| Function | Description |
+|----------|-------------|
+| `abs(x)` | Absolute value |
+| `min(a, b)` | Minimum of two values |
+| `max(a, b)` | Maximum of two values |
+| `clamp(v, lo, hi)` | Clamp value between lo and hi |
+| `sin(a)` | Sine — argument 0..127 covers full circle, result -127..127 |
+| `cos(a)` | Cosine — same range |
+
+---
+
+## 10. VectorList DSL
+
+`vectorlist` blocks define reusable static vector graphics compiled into the ROM:
+
+```python
+vectorlist player_sprite:
+    SET_INTENSITY(0x7F)
+    MOVE(-8, -8)
+    RECT(-8, -8, 8, 8)
     CIRCLE(0, 0, 12, 24)
-    ARC(0, -16, 16, 0, 180, 24)
-    SPIRAL(0, 0, 10, 40, 2, 64)
+
+def draw_player():
+    DRAW_VECTORLIST("player_sprite")
 ```
 
-Uso en `main`:
+### Available commands
+
+| Command | Description |
+|---------|-------------|
+| `MOVE(x, y)` | Move beam to absolute position |
+| `SET_INTENSITY(val)` | Set beam intensity |
+| `SET_ORIGIN()` | Reset to (0,0) — same as `ORIGIN` |
+| `ORIGIN` | Reset to (0,0) (no parentheses) |
+| `INTENSITY(val)` | Set intensity (alias for SET_INTENSITY) |
+| `RECT(x1, y1, x2, y2)` | Rectangle (4 segments) |
+| `POLYGON(N, x0, y0, x1, y1, ..., xN-1, yN-1)` | Closed polygon with N vertices |
+| `CIRCLE(cx, cy, r)` | Circle (16 segments) |
+| `CIRCLE(cx, cy, r, segs)` | Circle with custom segment count |
+| `ARC(cx, cy, r, start_deg, sweep_deg)` | Open arc (16 segments) |
+| `ARC(cx, cy, r, start_deg, sweep_deg, segs)` | Arc with custom segment count |
+| `SPIRAL(cx, cy, r_start, r_end, turns)` | Spiral (64 segments) |
+| `SPIRAL(cx, cy, r_start, r_end, turns, segs)` | Spiral with custom segment count |
+
+### Notes
+
+- Coordinates are 8-bit signed (-128..127).
+- The backend automatically inserts a `MOVE(0,0)` at the start and moves the first `SET_INTENSITY` after it.
+- Consecutive duplicate `ORIGIN` or `MOVE` commands are collapsed.
+- Dense vectorlists can cause flicker — split into multiple lists drawn on alternating frames if needed.
+
+---
+
+## 11. Language Rules and Gotchas
+
+### Case-insensitivity
+
+VPy is case-insensitive. `INTENSITY`, `intensity`, and `Intensity` are the same identifier. This means **built-in names cannot be used as variable names**:
+
+```python
+# BAD — conflicts with built-in
+intensity = 50       # ERROR: 'intensity' is a built-in
+
+# GOOD — use a different name
+brightness = 50
 ```
-def main():
-    vectrex_draw_vectorlist("demo")
+
+Common conflicts to avoid: `intensity`, `sin`, `cos`, `tan`, `min`, `max`, `abs`, `clamp`, `move`.
+
+### Variable scope
+
+- Top-level assignments → global (allocated in RAM, persisted across frames)
+- Assignments inside a function → local (stack frame, discarded when function returns)
+- There is no `global` keyword — globals are accessed automatically
+
+### 16-bit unsigned arithmetic
+
+All values wrap at 65536. Negative numbers are represented as two's complement:
+
+```python
+x = -1      # compiled as 0xFFFF = 65535
+x = -70     # compiled as 65466
 ```
 
-Limitaciones actuales:
-- Sin clipping automático ni escalado.
-- Coordenadas se truncan a 8 bits (signed) durante emisión (rango efectivo -128..127).
-- Las figuras complejas (círculo/espiral) pueden generar muchos segmentos -> parpadeo; ajustar `segs`.
- - Diagnostics: line/col mostrados en el panel son 1-based (internamente 0-based). Ruta Windows con `C:` ya soportada por extractor robusto.
+This is fine for positions and velocities since the Vectrex coordinate system is signed 8-bit.
 
-Buenas prácticas:
-- Insertar `ORIGIN` entre grupos largos de segmentos para repartir brillo.
-- Usar intensidades más bajas para listas densas.
-- Dividir escenas grandes en varias `vectorlist` y dibujarlas en frames alternos si hay flicker.
+### Parameter limit
 
+Functions accept up to 4 parameters. Additional parameters are ignored.
+
+### No recursion safety
+
+The compiler does not prevent recursion, but there is no stack overflow detection. Deep recursion will corrupt RAM.
+
+### Comments
+
+```python
+# This is a comment
+x = 42  # inline comment
+```
+
+Block comments (`"""..."""`) are not supported.
+
+### Indentation
+
+Exactly 4 spaces per block level. Tabs are not allowed.
+
+### Parser error reporting
+
+The parser currently reports only the first error per file. Fix errors one at a time.

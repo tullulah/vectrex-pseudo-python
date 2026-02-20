@@ -56,6 +56,7 @@ interface DebugStore extends LegacyDebugState {
   // New debug state
   state: ExecutionState;
   currentVpyLine: number | null;
+  currentVpyFile: string | null;
   currentAsmAddress: string | null;
   pdbData: PdbData | null;
   callStack: CallFrame[];
@@ -65,6 +66,7 @@ interface DebugStore extends LegacyDebugState {
   // New actions
   setState: (state: ExecutionState) => void;
   setCurrentVpyLine: (line: number | null) => void;
+  setCurrentVpyLineWithFile: (line: number, file: string) => void;
   setCurrentAsmAddress: (address: string | null) => void;
   loadPdbData: (pdb: PdbData) => void;
   clearPdbData: () => void;
@@ -108,6 +110,7 @@ export const useDebugStore = create<DebugStore>((set, get) => ({
   // New state
   state: 'stopped',
   currentVpyLine: null,
+  currentVpyFile: null,
   currentAsmAddress: null,
   pdbData: null,
   callStack: [],
@@ -117,9 +120,10 @@ export const useDebugStore = create<DebugStore>((set, get) => ({
   // New actions
   setState: (state) => set({ state }),
   setCurrentVpyLine: (line) => set({ currentVpyLine: line }),
+  setCurrentVpyLineWithFile: (line, file) => set({ currentVpyLine: line, currentVpyFile: file }),
   setCurrentAsmAddress: (address) => set({ currentAsmAddress: address }),
   setLoadingForDebug: (loading) => set({ loadingForDebug: loading }),
-  clearPdbData: () => set({ pdbData: null }),
+  clearPdbData: () => set({ pdbData: null, currentVpyLine: null, currentVpyFile: null, currentAsmAddress: null, callStack: [] }),
   
   loadPdbData: (pdb) => {
     console.log('[DebugStore] 📋 Loaded .pdb:', pdb);
@@ -202,9 +206,10 @@ export const useDebugStore = create<DebugStore>((set, get) => ({
   
   stop: () => {
     console.log('[DebugStore] Stop');
-    set({ 
+    set({
       state: 'stopped',
       currentVpyLine: null,
+      currentVpyFile: null,
       currentAsmAddress: null,
       callStack: [],
       cycles: 0

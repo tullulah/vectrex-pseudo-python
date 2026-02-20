@@ -1,305 +1,276 @@
-# 🎵 Sistema de Sonido VPy - Mapa de Recursos
+# VPy Sound System — Resource Map
 
-## Visión General
+## Overview
 
-VPy tiene un **sistema de audio completo** basado en:
-- **PLAY_MUSIC()** - PSG music (canales A+B)
-- **PLAY_SFX()** - AYFX effects (canal C)
-- **AUDIO_UPDATE()** - Auto-injected, actualiza ambos sistemas cada frame
+VPy has a complete audio system based on:
+- **PLAY_MUSIC()** — PSG music (channels A+B)
+- **PLAY_SFX()** — AYFX effects (channel C)
+- Audio update is **automatically injected** by the compiler each frame — do not call it manually.
 
-Este documento te ayuda a **encontrar exactamente lo que necesitas**.
-
----
-
-## 🎯 ¿Qué Necesito?
-
-### "Quiero crear un nuevo SFX desde cero"
-👉 Comienza con: **[GUIDE_SFX_CREATION.md](GUIDE_SFX_CREATION.md)**
-1. Lee Sección 3 (Parámetros Detallados)
-2. Copia una receta de Sección 4
-3. Modifica parámetros según necesites
-4. Guarda en `assets/sfx/mi_sonido.vsfx`
-
-**Tiempo estimado**: 10-15 minutos por SFX
+Use this document to find exactly what you need.
 
 ---
 
-### "Quiero entender cómo funcionan los SFX existentes"
-👉 Comienza con: **[GUIDE_SFX_EXAMPLES.md](GUIDE_SFX_EXAMPLES.md)**
-1. Lee Sección 2 (Análisis Jump - simple)
-2. Lee Sección 3 (Comparación Jump vs Coin)
-3. Lee Sección 4 (Análisis Explosion - complejo)
-4. Intenta recrear en el editor
+## What Do I Need?
 
-**Tiempo estimado**: 20-30 minutos para comprensión completa
+### "I want to create a new SFX from scratch"
+→ Start with: **[GUIDE_SFX_CREATION.md](GUIDE_SFX_CREATION.md)**
+1. Read Section 3 (Detailed Parameters)
+2. Copy a recipe from Section 4
+3. Modify parameters as needed
+4. Save to `assets/sfx/my_sound.vsfx`
 
 ---
 
-### "Quiero usar Arpeggio para acordes musicales"
-👉 Comienza con: **[GUIDE_SFX_CREATION.md](GUIDE_SFX_CREATION.md) - Sección 3.5**
-- Lista de acordes musicales (semitones)
-- Ejemplos en presets existentes
-- Editor visual de arpeggio en SFX Editor
+### "I want to understand how existing SFX work"
+→ Start with: **[GUIDE_SFX_EXAMPLES.md](GUIDE_SFX_EXAMPLES.md)**
+1. Read Section 2 (Jump analysis — simple)
+2. Read Section 3 (Jump vs Coin comparison)
+3. Read Section 4 (Explosion analysis — complex)
+4. Try to recreate them in the SFX Editor
 
-**Ejemplos rápidos**:
+---
+
+### "I want to use Arpeggio for musical chords"
+→ See: **[GUIDE_SFX_CREATION.md](GUIDE_SFX_CREATION.md) — Section 3.5**
+- List of musical chords (semitones)
+- Examples in existing presets
+- Visual arpeggio editor in the SFX Editor
+
+Quick example:
 ```json
 "modulation": {
   "arpeggio": true,
-  "arpeggio_notes": [0, 4, 7],      // Do-Mi-Sol (mayor)
+  "arpeggio_notes": [0, 4, 7],
   "arpeggio_speed": 50
 }
 ```
 
 ---
 
-### "Necesito una referencia rápida de parámetros"
-👉 Consulta: **[GUIDE_SFX_CREATION.md](GUIDE_SFX_CREATION.md) - Sección 2-3**
+### "I need a quick parameter reference"
+→ See: **[GUIDE_SFX_CREATION.md](GUIDE_SFX_CREATION.md) — Sections 2–3**
 
-Tablas de referencia rápida:
-- Oscilador (frequency, channel, duty)
+Quick reference tables:
+- Oscillator (frequency, channel, duty)
 - Envelope (ADSR)
-- Pitch Sweep (multiplicadores)
-- Noise (periodo, volumen, decay)
-- Arpeggio (acordes predefinidos)
+- Pitch Sweep (multipliers)
+- Noise (period, volume, decay)
+- Arpeggio (predefined chords)
 
 ---
 
-### "Quiero ver ejemplos de SFX comunes"
-👉 Consulta: **[GUIDE_SFX_CREATION.md](GUIDE_SFX_CREATION.md) - Sección 4**
+### "I want to see examples of common SFX"
+→ See: **[GUIDE_SFX_CREATION.md](GUIDE_SFX_CREATION.md) — Section 4**
 
-5 recetas completas:
-1. **Laser** - Tono alto que baja rápido
-2. **Coin** - Acorde simple y feliz
-3. **Jump** - Nota que sube
-4. **Explosion** - Complejo con ruido
-5. **Powerup** - Acorde ascendente
+6 complete recipes:
+1. **Laser** — high tone that drops fast
+2. **Coin** — simple, cheerful chord
+3. **Jump** — note that rises
+4. **Explosion** — complex with noise
+5. **Hit** — short impact
+6. **Powerup** — ascending chord
 
 ---
 
-### "¿Cómo uso SFX en mi código VPy?"
-👉 Consulta: **[VPyContext.ts](ide/frontend/src/services/contexts/VPyContext.ts)**
+### "How do I use SFX in my VPy code?"
 
-Sintaxis rápida:
 ```python
 def main():
-    PLAY_SFX("jump")  # Comienza SFX
+    PLAY_SFX("jump")  # play on startup
 
 def loop():
-    WAIT_RECAL()  # Auto-injected: AUDIO_UPDATE()
-    
     if J1_BUTTON_1():
-        PLAY_SFX("coin")  # Toca moneda
-    
-    DRAW_VECTOR("player", x, y)
-    # Audio se actualiza automáticamente
+        PLAY_SFX("coin")
+
+    DRAW_VECTOR("player", player_x, player_y)
+    # Audio updates automatically each frame
 ```
 
 ---
 
-### "El SFX Editor no muestra lo que quiero"
-👉 Ubicación: **`ide/frontend/src/components/SFXEditor.tsx`**
+### "The SFX Editor isn't showing what I want"
+Location: `ide/frontend/src/components/SFXEditor.tsx`
 
-Features actuales:
-- ✅ Oscillator (frecuencia, canal)
+Available features:
+- ✅ Oscillator (frequency, channel)
 - ✅ Envelope (ADSR)
-- ✅ Pitch Sweep (curva)
-- ✅ Noise (ruido blanco)
-- ✅ Arpeggio (acordes) - **NUEVO**
-- ✅ Visualización en tiempo real
+- ✅ Pitch Sweep (curve)
+- ✅ Noise (white noise)
+- ✅ Arpeggio (chords)
+- ✅ Real-time visualization
 
-Cómo usar:
-1. Abre el proyecto
-2. Encuentra `assets/sfx/algo.vsfx`
-3. Doble-click para abrir en SFX Editor
-4. Presiona Play para escuchar
-5. Ajusta sliders
-6. Guarda con Ctrl+S
+How to use:
+1. Open the project
+2. Find `assets/sfx/something.vsfx`
+3. Double-click to open in SFX Editor
+4. Press Play to hear it
+5. Adjust sliders
+6. Save with Ctrl+S
 
 ---
 
-## 📚 Estructura de Documentación
+## Documentation Structure
 
 ```
 VPy Sound System
 ├── [GUIDE_SFX_CREATION.md]
-│   ├── 1. Introducción (qué es AYFX)
-│   ├── 2. Estructura JSON base
-│   ├── 3. Parámetros detallados (tablas)
-│   ├── 4. Recetas comunes (5 ejemplos)
-│   ├── 5. Workflow de creación manual
-│   ├── 6. Tips de diseño
-│   ├── 7. Limitaciones
-│   └── 8. Inspiración externa
+│   ├── 1. Introduction (what is AYFX)
+│   ├── 2. Base JSON structure
+│   ├── 3. Detailed parameters (tables)
+│   ├── 4. Common recipes (6 examples)
+│   ├── 5. Manual creation workflow
+│   ├── 6. Design tips
+│   ├── 7. Limitations
+│   └── 8. External inspiration
 │
 ├── [GUIDE_SFX_EXAMPLES.md]
-│   ├── 1. Ubicación de SFX
-│   ├── 2. Análisis Jump (simple)
-│   ├── 3. Comparación Jump vs Coin
-│   ├── 4. Análisis Explosion (complejo)
+│   ├── 1. SFX file locations
+│   ├── 2. Jump analysis (simple)
+│   ├── 3. Jump vs Coin comparison
+│   ├── 4. Explosion analysis (complex)
 │   ├── 5. Timeline visualization
-│   ├── 6. Template personalizado
-│   └── 7. Checklist y avanzado
-│
-├── [VPyContext.ts]
-│   └── Documentación integrada en IDE
-│       ├── PLAY_MUSIC()
-│       ├── PLAY_SFX()
-│       ├── AUDIO_UPDATE()
-│       └── Ejemplos de código
+│   ├── 6. Custom template
+│   └── 7. Checklist and advanced tips
 │
 └── [SFXEditor.tsx]
-    └── Editor visual interactivo
-        ├── Sliders para todos los parámetros
-        ├── Canvas de visualización envelope
-        ├── Botones de presets
-        ├── Editor de arpeggio
-        └── Botón Play para preview
+    └── Interactive visual editor
+        ├── Sliders for all parameters
+        ├── Envelope visualization canvas
+        ├── Preset buttons
+        ├── Arpeggio editor
+        └── Play button for preview
 ```
 
 ---
 
-## 🚀 Quick Start Paths
+## Quick Start Paths
 
-### Path 1: "Quiero un SFX Laser Rápido" (5 min)
+### Path 1: "I want a quick laser SFX" (5 min)
 ```
-1. Abre SFX Editor
-2. Presiona botón "laser" (preset)
-3. Presiona "Play" para escuchar
-4. ¡Listo! Ya tienes un laser
-```
-
-### Path 2: "Quiero Entender Todo" (60 min)
-```
-1. Lee GUIDE_SFX_CREATION.md (20 min)
-2. Lee GUIDE_SFX_EXAMPLES.md (25 min)
-3. Abre SFX Editor (15 min)
-   - Carga cada preset
-   - Presiona Play
-   - Cambia parámetros
-   - Escucha diferencias
+1. Open SFX Editor
+2. Press the "laser" preset button
+3. Press "Play" to hear it
+4. Done — you have a laser
 ```
 
-### Path 3: "Quiero Crear Mi Sonido Único" (30 min)
+### Path 2: "I want to understand everything" (60 min)
 ```
-1. Elige una inspiración (GUIDE_SFX_EXAMPLES.md - Sección 5)
-2. Copia una receta base (GUIDE_SFX_CREATION.md - Sección 4)
-3. Crea assets/sfx/mi_sonido.vsfx
-4. Abre en SFX Editor
-5. Ajusta parámetros
-6. Presiona Play (itera hasta que te guste)
-7. Guarda
-8. Usa en código: PLAY_SFX("mi_sonido")
+1. Read GUIDE_SFX_CREATION.md (20 min)
+2. Read GUIDE_SFX_EXAMPLES.md (25 min)
+3. Open SFX Editor (15 min)
+   - Load each preset
+   - Press Play
+   - Change parameters
+   - Listen to the differences
+```
+
+### Path 3: "I want to create my own unique sound" (30 min)
+```
+1. Pick an inspiration (GUIDE_SFX_EXAMPLES.md — Section 5)
+2. Copy a base recipe (GUIDE_SFX_CREATION.md — Section 4)
+3. Create assets/sfx/my_sound.vsfx
+4. Open in SFX Editor
+5. Adjust parameters
+6. Press Play (iterate until satisfied)
+7. Save
+8. Use in code: PLAY_SFX("my_sound")
 ```
 
 ---
 
-## 🎓 Conceptos Clave Explicados
+## Key Concepts
 
 ### Envelope (ADSR)
-**Qué es**: Curva de volumen del sonido
+**What it is**: The volume curve of the sound
 
 ```
-Attack (A)   = fade-in (0-500ms)
-Decay (D)    = baja a sustain (0-500ms)
-Sustain (S)  = volumen de reposo (0-15)
-Release (R)  = fade-out final (0-1000ms)
-Peak         = volumen máximo (1-15)
+Attack (A)   = fade-in time (0–500ms)
+Decay (D)    = drop to sustain (0–500ms)
+Sustain (S)  = held volume (0–15)
+Release (R)  = final fade-out (0–1000ms)
+Peak         = maximum volume (1–15)
 ```
 
-**Efecto práctico**:
-- A=0: Comienza fuerte (nítido)
-- A=100: Comienza suave (fade-in)
-- R=50: Corto (sonido seco)
-- R=300: Largo (sonido natural)
+**Practical effect:**
+- A=0: Starts loud (snappy)
+- A=100: Starts quiet (fade-in)
+- R=50: Short (dry sound)
+- R=300: Long (natural sound)
 
 ---
 
 ### Pitch Sweep
-**Qué es**: Cambio de frecuencia durante el efecto
+**What it is**: Frequency change during the effect
 
 ```
-start_mult = 0.5  → comienza a mitad pitch
-end_mult = 2.0    → termina al doble pitch
-curve = 1         → interpolación suave
+start_mult = 0.5  → starts at half pitch
+end_mult = 2.0    → ends at double pitch
+curve = 1         → smooth interpolation
 
-Resultado: Sonido que SUBE (como "POP" de powerup)
-```
-
----
-
-### Arpeggio (Acordes)
-**Qué es**: Toca múltiples notas en secuencia
-
-```
-[0, 4, 7]      → Do-Mi-Sol (acorde mayor)
-[0, 12]        → Do-Do octava arriba
-[0, 3, 7, 10]  → Do menor 7
-
-speed: 50ms    → qué tan rápido cambia entre notas
+Result: Sound that RISES (like a powerup "POP")
 ```
 
 ---
 
-### Noise (Ruido Blanco)
-**Qué es**: Sonido sin tono específico (ruido)
+### Arpeggio (Chords)
+**What it is**: Plays multiple notes in sequence
 
 ```
-period: 8      → ruido agudo
-period: 20     → ruido grave
-volume: 15     → muy fuerte
-decay: 350ms   → desvanece lentamente
+[0, 4, 7]      → C-E-G (major chord)
+[0, 12]        → C one octave up
+[0, 3, 7, 10]  → C minor 7
+
+speed: 50ms    → how fast it cycles between notes
 ```
 
-**Usa para**: explosiones, impactos, fricción
+---
+
+### Noise (White Noise)
+**What it is**: Unpitched sound (noise)
+
+```
+period: 8      → high-pitched noise
+period: 20     → low-pitched noise
+volume: 15     → very loud
+decay: 350ms   → fades slowly
+```
+
+**Use for**: explosions, impacts, friction
 
 ---
 
-## 🔧 Troubleshooting
+## Troubleshooting
 
-### "SFX no suena en el juego"
-1. Verifica que `PLAY_SFX("nombre")` sea correcto
-2. El archivo debe existir en `assets/sfx/nombre.vsfx`
-3. Compila el proyecto: `cargo build --release`
-4. Prueba en emulador
+### "SFX doesn't play in the game"
+1. Check that `PLAY_SFX("name")` matches the filename exactly
+2. The file must exist at `assets/sfx/name.vsfx`
+3. Recompile the project
+4. Test in the emulator
 
-### "SFX suena diferente en SFX Editor vs juego"
-- El editor usa Web Audio API (aproximación)
-- El juego usa hardware PSG real (Vectrex)
-- Es normal pequeñas diferencias
+### "SFX sounds different in the SFX Editor vs the game"
+- The editor uses Web Audio API (approximation)
+- The game uses real PSG hardware (Vectrex)
+- Minor differences are normal
 
-### "¿Cómo edito un SFX existente?"
-1. Abre `assets/sfx/nombre.vsfx`
-2. Edita JSON directamente O
-3. Doble-click para abrir en SFX Editor
-4. Ajusta con sliders
-5. Guarda
-
----
-
-## 📖 Para Más Información
-
-- **Parámetros técnicos**: [GUIDE_SFX_CREATION.md](GUIDE_SFX_CREATION.md) Sección 3
-- **Ejemplos concretos**: [GUIDE_SFX_EXAMPLES.md](GUIDE_SFX_EXAMPLES.md)
-- **Uso en código**: VPyContext.ts → PLAY_SFX
-- **Integración**: Busca `AUDIO_UPDATE` en copilot-instructions.md
+### "How do I edit an existing SFX?"
+1. Open `assets/sfx/name.vsfx`
+2. Edit the JSON directly, or
+3. Double-click to open in SFX Editor
+4. Adjust with sliders
+5. Save
 
 ---
 
-## 🎵 Estado Actual
+## Current Status
 
-| Feature | Estado | Ubicación |
-|---------|--------|-----------|
-| SFX Básico | ✅ Completo | AYFX parser |
-| Oscilador | ✅ Completo | frequency, channel, duty |
-| Envelope | ✅ Completo | ADSR |
-| Pitch Sweep | ✅ Completo | start/end multipliers |
-| Noise | ✅ Completo | period, volume, decay |
-| Arpeggio | ✅ Completo | [0-24] semitones |
-| Editor Visual | ✅ Nuevo | SFXEditor.tsx |
-| Documentación | ✅ Nuevo | GUIDE_SFX_*.md |
-| Presets | ✅ 7 presets | laser, coin, jump, etc. |
-
----
-
-**Última actualización**: 2025-12-23
-**Versión**: 2.0 (con Arpeggio editor y guías completas)
+| Feature | Status |
+|---------|--------|
+| Basic SFX | ✅ Complete |
+| Oscillator | ✅ Complete |
+| Envelope | ✅ Complete |
+| Pitch Sweep | ✅ Complete |
+| Noise | ✅ Complete |
+| Arpeggio | ✅ Complete |
+| Visual Editor | ✅ Complete |
+| Presets | ✅ 7 presets (laser, coin, jump, explosion, hit, powerup, blip) |
