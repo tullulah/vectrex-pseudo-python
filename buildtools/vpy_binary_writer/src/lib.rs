@@ -18,17 +18,8 @@ pub mod writer;
 
 pub use error::{WriterError, WriterResult};
 
-pub fn write_binary(_binary: &[u8], _path: &str) -> WriterResult<()> {
-    // DEBUG TRACE: Log input/output info
-    eprintln!("[vpy_binary_writer] write_binary called: path={}", _path);
-    eprintln!("[vpy_binary_writer] binary size: {} bytes", _binary.len());
-    // Optionally, print first 32 bytes as hex for inspection
-    let preview_len = _binary.len().min(32);
-    if preview_len > 0 {
-        let preview: Vec<String> = _binary[..preview_len].iter().map(|b| format!("{:02X}", b)).collect();
-        eprintln!("[vpy_binary_writer] binary preview: {}", preview.join(" "));
-    }
-    Ok(())
+pub fn write_binary(binary: &[u8], path: &str) -> WriterResult<()> {
+    writer::write_to_file(path, binary)
 }
 
 #[cfg(test)]
@@ -36,7 +27,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_placeholder() {
-        assert!(write_binary(&[], "").is_ok());
+    fn test_write_binary_to_tempfile() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("output.bin");
+        let data = vec![0xDE, 0xAD, 0xBE, 0xEF];
+        write_binary(&data, path.to_str().unwrap()).unwrap();
+        let read_back = std::fs::read(&path).unwrap();
+        assert_eq!(read_back, data);
+    }
+
+    #[test]
+    fn test_write_binary_invalid_path() {
+        // Writing to a non-existent directory must fail
+        assert!(write_binary(&[0x00], "/nonexistent_dir/out.bin").is_err());
     }
 }
