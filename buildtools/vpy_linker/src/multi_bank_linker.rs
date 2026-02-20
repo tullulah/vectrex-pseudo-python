@@ -1592,14 +1592,13 @@ INIT_GAME:
     RTS
 "#;
         
-        let linker = MultiBankLinker::new(16384, 32, true);
+        let linker = MultiBankLinker::new(16384, 32, true, None);
         let sections = linker.split_asm_by_bank(asm).unwrap();
         
-        assert_eq!(sections.len(), 3); // 2 banks + 1 header
+        assert_eq!(sections.len(), 2); // 2 banks (header is embedded in bank #0)
         let last_bank = linker.rom_bank_count - 1;
         assert!(sections.contains_key(&last_bank));
         assert!(sections.contains_key(&0));
-        assert!(sections.contains_key(&255)); // header
         
         let bank31 = sections.get(&last_bank).unwrap();
         assert_eq!(bank31.org, 0x4000);

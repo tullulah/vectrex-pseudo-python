@@ -124,8 +124,20 @@ pub struct LinkedSection {
     pub size: usize,
 }
 
-pub fn link_object_files(_objects: Vec<String>) -> LinkerResult<LinkedBinary> {
-    Err(LinkerError::NotImplemented)
+/// Load `.vo` object files from disk and link them into a single-bank binary.
+pub fn link_object_files(paths: Vec<String>) -> LinkerResult<LinkedBinary> {
+    if paths.is_empty() {
+        return Err(LinkerError::Generic("No object files to link".to_string()));
+    }
+
+    let mut objects = Vec::new();
+    for path in &paths {
+        let obj = VectrexObject::load(std::path::Path::new(path))
+            .map_err(|e| LinkerError::Error(format!("Failed to load '{}': {}", path, e)))?;
+        objects.push(obj);
+    }
+
+    linker::link(objects, 0x0000)
 }
 
 #[cfg(test)]
@@ -133,7 +145,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_placeholder() {
+    fn test_link_object_files_empty() {
         assert!(link_object_files(vec![]).is_err());
+    }
+
+    #[test]
+    fn test_link_object_files_missing_path() {
+        assert!(link_object_files(vec!["/nonexistent/path.vo".to_string()]).is_err());
     }
 }
