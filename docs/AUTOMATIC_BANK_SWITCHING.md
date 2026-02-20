@@ -23,7 +23,7 @@ VPy implements **automatic bank switching** that is transparent to the developer
 ```
 ROM Layout:
   0x0000-0x3FFF: Banked ROM window (16KB) ← Changes based on register
-  0x4000-0x7FFF: Fixed ROM (8KB)          ← Always last bank (FIXED_BANK)
+  0x4000-0x7FFF: Fixed ROM (16KB)         ← Always last bank (FIXED_BANK)
 
 Hardware Register:
   0x4000: ROM_BANK_REG (write-only)
