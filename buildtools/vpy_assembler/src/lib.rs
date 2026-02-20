@@ -255,10 +255,8 @@ pub fn assemble_banks(sections: Vec<BankSection>) -> Result<Vec<BankBinary>, Ass
     }
     
     // Iterative symbol extraction from all banks
-    eprintln!("PASS 1: Starting iterative symbol extraction...");
-    for iteration in 0..max_iterations {
+    for _iteration in 0..max_iterations {
         let prev_count = all_symbols.len();
-        eprintln!("  Iteration {}: {} symbols known", iteration + 1, prev_count);
         
         for bank_id in 0..=max_bank_id {
             if let Some(section) = sections_map.get(&bank_id) {
@@ -277,31 +275,21 @@ pub fn assemble_banks(sections: Vec<BankSection>) -> Result<Vec<BankBinary>, Ass
                 match m6809::assemble_m6809(&asm_source, section.org_address, false, false) {
                     Ok((_bytes, _line_map, symbol_table, _unresolved)) => {
                         // Extract new symbols from successful assembly
-                        let mut new_symbols = 0;
                         for (name, &offset) in &symbol_table {
                             // Skip internal labels
                             if !name.starts_with('.') && !name.starts_with('_') {
-                                if !all_symbols.contains_key(name) {
-                                    new_symbols += 1;
-                                }
                                 all_symbols.insert(name.clone(), offset);
                             }
                         }
-                        eprintln!("    Bank {}: {} new symbols extracted (assembly succeeded)", bank_id, new_symbols);
                     }
                     Err(_e) => {
                         // Assembly failed - extract labels via simple parsing
                         let parsed_labels = extract_labels_from_asm(&asm_source, section.org_address);
-                        let mut new_symbols = 0;
                         for (label, offset) in parsed_labels {
                             if !label.starts_with('.') && !label.starts_with('_') {
-                                if !all_symbols.contains_key(&label) {
-                                    new_symbols += 1;
-                                }
                                 all_symbols.insert(label, offset);
                             }
                         }
-                        eprintln!("    Bank {}: {} new symbols extracted (via parsing, assembly failed)", bank_id, new_symbols);
                     }
                 }
             }
@@ -309,11 +297,9 @@ pub fn assemble_banks(sections: Vec<BankSection>) -> Result<Vec<BankBinary>, Ass
         
         // Check convergence
         if all_symbols.len() == prev_count {
-            eprintln!("  Convergence reached at iteration {}", iteration + 1);
             break;
         }
     }
-    eprintln!("PASS 1 complete: {} total symbols\n", all_symbols.len());
     
     // **PASS 2**: Assemble all banks with complete symbol table
     let mut binaries = Vec::new();

@@ -1,35 +1,35 @@
-// M6809 Binary Code Emitter - Generación directa de código máquina
-// Elimina dependencia de lwasm proporcionando emisión binaria integrada con mapeo preciso
+// M6809 Binary Code Emitter - Direct machine code generation
+// Eliminates dependency on lwasm by providing integrated binary emission with precise mapping
 
 use std::collections::HashMap;
 use super::asm_to_binary::{UnresolvedRef, RefType};
 
-/// Representa una referencia a símbolo que necesita resolverse en la segunda pasada
+/// Represents a symbol reference that needs to be resolved in the second pass
 #[derive(Debug, Clone)]
 struct SymbolRef {
-    offset: usize,      // Posición en el binario donde va la dirección
-    symbol: String,     // Nombre del símbolo referenciado
-    is_relative: bool,  // true para branches relativos, false para absolute
-    ref_size: u8,       // 1 para offset de 8 bits, 2 para dirección de 16 bits
+    offset: usize,      // Position in binary where the address goes
+    symbol: String,     // Name of the referenced symbol
+    is_relative: bool,  // true for relative branches, false for absolute
+    ref_size: u8,       // 1 for 8-bit offset, 2 for 16-bit address
     addend: i16,        // Add/sub offset applied to the resolved symbol address
 }
 
-/// Emisor de código binario M6809 con tracking de direcciones y símbolos
+/// M6809 binary code emitter with address and symbol tracking
 pub struct BinaryEmitter {
-    code: Vec<u8>,                          // Bytes de código generados
-    pub current_address: u16,               // Dirección actual en memoria (ORG) - PUBLIC para debug
-    symbols: HashMap<String, u16>,          // Tabla de símbolos: label -> dirección
-    symbol_refs: Vec<SymbolRef>,            // Referencias pendientes de resolver
-    line_to_offset: HashMap<usize, usize>,  // Línea VPy -> offset en binario
-    offset_to_line: HashMap<usize, usize>,  // Offset en binario -> línea VPy
-    current_line: usize,                    // Línea actual del código fuente VPy
+    code: Vec<u8>,                          // Generated code bytes
+    pub current_address: u16,               // Current memory address (ORG) - PUBLIC for debug
+    symbols: HashMap<String, u16>,          // Symbol table: label -> address
+    symbol_refs: Vec<SymbolRef>,            // Pending references to resolve
+    line_to_offset: HashMap<usize, usize>,  // VPy line -> binary offset
+    offset_to_line: HashMap<usize, usize>,  // Binary offset -> VPy line
+    current_line: usize,                    // Current VPy source line
     object_mode: bool,                      // Object mode: allow unresolved symbols
     unresolved_refs: Vec<UnresolvedRef>,    // Unresolved symbols (for object mode)
     use_long_branches: bool,                // Multi-bank mode: use long branches (LBEQ/LBNE/LBRA) instead of short
 }
 
 impl BinaryEmitter {
-    /// Crea nuevo emisor con dirección base especificada
+    /// Creates a new emitter with the specified base address
     pub fn new(org: u16) -> Self {
         BinaryEmitter {
             code: Vec::new(),
@@ -61,82 +61,53 @@ impl BinaryEmitter {
         std::mem::take(&mut self.unresolved_refs)
     }
 
-    /// Establece la línea actual del código fuente (para debug mapping)
+    /// Sets the current source line (for debug mapping)
     pub fn set_source_line(&mut self, line: usize) {
         self.current_line = line;
     }
 
-    /// Obtiene el offset actual en el buffer de código
+    /// Gets the current offset in the code buffer
     pub fn current_offset(&self) -> usize {
         self.code.len()
     }
 
-    /// Registra mapeo bidireccional línea ↔ offset
+    /// Records bidirectional line ↔ offset mapping
     fn record_line_mapping(&mut self) {
         let offset = self.current_offset();
         self.line_to_offset.insert(self.current_line, offset);
         self.offset_to_line.insert(offset, self.current_line);
     }
 
-    /// Emite un byte y avanza la dirección actual
-    pub fn emit(&mut self, byte: u8) {
-        // DEBUG: Log first 100 bytes to see header emission
-        if self.code.len() < 100 {
-            eprintln!("📝 emit[{}]: byte=0x{:02X} current_addr=0x{:04X}", self.code.len(), byte, self.current_address);
-        }
-        
-        // DEBUG: Log when writing around the problematic address 0x404D
-        if self.current_address >= 0x4048 && self.current_address <= 0x4055 {
-            eprintln!("🔍 [DEBUG 0x404D] emit at addr=0x{:04X}, offset=0x{:04X}, byte=0x{:02X}, line={}", 
-                self.current_address, self.code.len(), byte, self.current_line);
-        }
-        
+    /// Emits a byte and advances the current address
+    pub fn emit(&mut self, byte: u8) { 
         self.code.push(byte);
         self.current_address = self.current_address.wrapping_add(1);
     }
 
-    /// Emite un word de 16 bits (big-endian, formato 6809)
+    /// Emits a 16-bit word (big-endian, 6809 format)
     pub fn emit_word(&mut self, word: u16) {
-        // DEBUG: Log suspicious values
-        if word == 0xC982 || word == 0xC8A2 || (word & 0xFF00 == 0xC800) {
-            eprintln!("DEBUG emit_word: word=0x{:04X} at offset=0x{:04X}", word, self.code.len());
-        }
-        self.emit((word >> 8) as u8);  // High byte primero
-        self.emit(word as u8);          // Low byte segundo
+        self.emit((word >> 8) as u8);  // High byte first
+        self.emit(word as u8);          // Low byte second
     }
 
-    /// Define una etiqueta en la posición actual
+    /// Defines a label at the current position
     pub fn define_label(&mut self, label: &str) {
         // Use current_address for the label, which already accounts for ORG
         // This works correctly for all ORG values including $4000 for Bank 31
         let label_address = self.current_address;
         
-        // DEBUG: Log all important labels including ARRAY labels
-        let should_log = label == "START" || label == "MAIN" || label == "LOOP_BODY" 
-            || label.starts_with("PRINT_TEXT_STR_") || label.starts_with("VECTREX_")
-            || label.starts_with("ARRAY_") || label.contains("DSWM");  // ← Log DSWM labels for debugging
-        if should_log {
-            eprintln!("🏷️  Defining label '{}' at label_address=0x{:04X} (offset=0x{:04X}, current_address=0x{:04X})", 
-                label, label_address, self.code.len(), self.current_address);
-        }
         // Store both original and uppercase variants for case-insensitive lookup
         self.symbols.insert(label.to_string(), label_address);
         self.symbols.insert(label.to_uppercase(), label_address);
     }
 
-    /// Registra referencia a símbolo para resolver en segunda pasada
+    /// Records a symbol reference to resolve in the second pass
     pub fn add_symbol_ref(&mut self, symbol: &str, is_relative: bool, ref_size: u8) {
         self.add_symbol_ref_with_addend(symbol, is_relative, ref_size, 0);
     }
 
-    /// Registra referencia a símbolo con addend (e.g. LABEL+1)
+    /// Records a symbol reference with addend (e.g. LABEL+1)
     pub fn add_symbol_ref_with_addend(&mut self, symbol: &str, is_relative: bool, ref_size: u8, addend: i16) {
-        // DEBUG: Log JSR to VECTREX helpers
-        let should_log = symbol.starts_with("PRINT_TEXT_STR_") || symbol.starts_with("VECTREX_");
-        if should_log {
-            eprintln!("🔗 Adding symbol_ref '{}' at offset=0x{:04X} (is_relative={}, ref_size={})", 
-                symbol, self.code.len(), is_relative, ref_size);
-        }
         // CRITICAL FIX: Reject single-character symbols that are register names
         if symbol.len() == 1 {
             let c = symbol.chars().next().unwrap().to_ascii_uppercase();
@@ -145,12 +116,6 @@ impl BinaryEmitter {
                 eprintln!("❌ BUG: Attempted to add register name '{}' as symbol at offset={} - REJECTED", symbol, self.current_offset());
                 return; // Don't add invalid symbol refs
             }
-        }
-        
-        // DEBUG: Log PRINT_TEXT string references
-        if symbol.starts_with("PRINT_TEXT_STR_") {
-            eprintln!("🔗 Adding symbol_ref '{}' at offset=0x{:04X} (is_relative={}, ref_size={})", 
-                symbol, self.current_offset(), is_relative, ref_size);
         }
         
         self.symbol_refs.push(SymbolRef {
@@ -162,33 +127,22 @@ impl BinaryEmitter {
         });
     }
 
-    /// Emite un opcode de direccionamiento extendido y deja un placeholder para una
-    /// dirección de 16 bits que se resolverá en segunda pasada.
+    /// Emits an extended addressing opcode and leaves a placeholder for a
+    /// 16-bit address to be resolved in the second pass.
     ///
-    /// Esto evita el patrón incorrecto de: add_symbol_ref(); <instr>_extended(0x0000)
-    /// donde el SymbolRef quedaba apuntando al opcode en vez del operando.
+    /// This avoids the incorrect pattern of: add_symbol_ref(); <instr>_extended(0x0000)
+    /// where the SymbolRef ended up pointing at the opcode instead of the operand.
     pub fn emit_extended_symbol_ref(&mut self, opcode: u8, symbol: &str, addend: i16) {
-        let start_offset = self.current_offset();
-        if symbol.len() == 1 {
-            eprintln!("⚠️ emit_extended_symbol_ref: symbol='{}' opcode=0x{:02X} addend={} offset={}", 
-                symbol, opcode, addend, start_offset);
-        }
         self.record_line_mapping();
         self.emit(opcode);
         self.add_symbol_ref_with_addend(symbol, false, 2, addend);
         self.emit_word(0x0000);
     }
 
-    /// Emite uno o más bytes de opcode (e.g. [0x10, 0x8E]) seguidos de un
-    /// operando inmediato de 16 bits (word) que referencia a un símbolo a
-    /// resolver en segunda pasada.
+    /// Emits one or more opcode bytes (e.g. [0x10, 0x8E]) followed by a
+    /// 16-bit immediate word operand referencing a symbol to be resolved
+    /// in the second pass.
     pub fn emit_immediate16_symbol_ref(&mut self, opcode: &[u8], symbol: &str, addend: i16) {
-        // DEBUG: Log single-char symbols BEFORE emitting anything
-        let start_offset = self.current_offset();
-        if symbol.len() == 1 {
-            eprintln!("⚠️ emit_immediate16_symbol_ref: symbol='{}' opcode={:02X?} addend={} offset={}", 
-                symbol, opcode, addend, start_offset);
-        }
         self.record_line_mapping();
         for &b in opcode {
             self.emit(b);
@@ -197,7 +151,7 @@ impl BinaryEmitter {
         self.emit_word(0x0000);
     }
 
-    // ========== INSTRUCCIONES DE CARGA/ALMACENAMIENTO ==========
+    // ========== LOAD/STORE INSTRUCTIONS ==========
 
     /// LDA #immediate (opcode 0x86)
     pub fn lda_immediate(&mut self, value: u8) {
@@ -206,21 +160,21 @@ impl BinaryEmitter {
         self.emit(value);
     }
 
-    /// LDA direct (opcode 0x96) - dirección de 8 bits
+    /// LDA direct (opcode 0x96) - 8-bit address
     pub fn lda_direct(&mut self, addr: u8) {
         self.record_line_mapping();
         self.emit(0x96);
         self.emit(addr);
     }
 
-    /// LDA extended (opcode 0xB6) - dirección de 16 bits
+    /// LDA extended (opcode 0xB6) - 16-bit address
     pub fn lda_extended(&mut self, addr: u16) {
         self.record_line_mapping();
         self.emit(0xB6);
         self.emit_word(addr);
     }
 
-    /// LDA extended con símbolo (resolver después)
+    /// LDA extended with symbol (resolve later)
     pub fn lda_extended_sym(&mut self, symbol: &str) {
         self.record_line_mapping();
         self.emit(0xB6);
@@ -228,7 +182,7 @@ impl BinaryEmitter {
         self.emit_word(0x0000); // Placeholder
     }
 
-    /// LDA indexed (opcode 0xA6) - modos indexados con postbyte
+    /// LDA indexed (opcode 0xA6) - indexed modes with postbyte
     pub fn lda_indexed(&mut self, postbyte: u8) {
         self.record_line_mapping();
         self.emit(0xA6);
@@ -298,7 +252,7 @@ impl BinaryEmitter {
         self.emit_word(addr);
     }
 
-    /// STA indexed (opcode 0xA7) - modos indexados con postbyte
+    /// STA indexed (opcode 0xA7) - indexed modes with postbyte
     pub fn sta_indexed(&mut self, postbyte: u8) {
         self.record_line_mapping();
         self.emit(0xA7);
@@ -319,7 +273,7 @@ impl BinaryEmitter {
         self.emit_word(addr);
     }
 
-    /// STB indexed (opcode 0xE7) - modos indexados con postbyte
+    /// STB indexed (opcode 0xE7) - indexed modes with postbyte
     pub fn stb_indexed(&mut self, postbyte: u8) {
         self.record_line_mapping();
         self.emit(0xE7);
@@ -340,7 +294,7 @@ impl BinaryEmitter {
         self.emit(postbyte);
     }
 
-    // ========== INSTRUCCIONES DE CONTROL DE FLUJO ==========
+    // ========== CONTROL FLOW INSTRUCTIONS ==========
 
     /// JSR extended (opcode 0xBD)
     pub fn jsr_extended(&mut self, addr: u16) {
@@ -349,7 +303,7 @@ impl BinaryEmitter {
         self.emit_word(addr);
     }
 
-    /// JSR extended con símbolo (resolver después)
+    /// JSR extended with symbol (resolve later)
     pub fn jsr_extended_sym(&mut self, symbol: &str) {
         self.record_line_mapping();
         self.emit(0xBD);
@@ -363,14 +317,14 @@ impl BinaryEmitter {
         self.emit(0x39);
     }
 
-    /// BSR - Branch to Subroutine (opcode 0x8D + offset relativo de 8 bits)
+    /// BSR - Branch to Subroutine (opcode 0x8D + 8-bit relative offset)
     pub fn bsr_offset(&mut self, offset: i8) {
         self.record_line_mapping();
         self.emit(0x8D);
         self.emit(offset as u8);
     }
 
-    /// BSR con etiqueta (resolver después)
+    /// BSR with label (resolve later)
     pub fn bsr_label(&mut self, label: &str) {
         self.record_line_mapping();
         self.emit(0x8D);
@@ -384,14 +338,14 @@ impl BinaryEmitter {
         self.emit(0x12);
     }
 
-    /// BRA - branch siempre (opcode 0x20)
+    /// BRA - branch always (opcode 0x20)
     pub fn bra_offset(&mut self, offset: i8) {
         self.record_line_mapping();
         self.emit(0x20);
         self.emit(offset as u8);
     }
 
-    /// BRA con etiqueta (auto-selecciona short/long según configuración)
+    /// BRA with label (auto-selects short/long based on configuration)
     pub fn bra_label(&mut self, label: &str) {
         if self.use_long_branches {
             self.lbra_label(label);
@@ -413,14 +367,14 @@ impl BinaryEmitter {
         self.emit(0x00);
     }
 
-    /// BEQ - branch si igual/cero (opcode 0x27)
+    /// BEQ - branch if equal/zero (opcode 0x27)
     pub fn beq_offset(&mut self, offset: i8) {
         self.record_line_mapping();
         self.emit(0x27);
         self.emit(offset as u8);
     }
 
-    /// BEQ con etiqueta (auto-selecciona short/long según configuración)
+    /// BEQ with label (auto-selects short/long based on configuration)
     pub fn beq_label(&mut self, label: &str) {
         if self.use_long_branches {
             self.lbeq_label(label);
@@ -432,24 +386,24 @@ impl BinaryEmitter {
         }
     }
 
-    /// LBEQ - long branch si igual/cero (opcode 0x10 0x27, offset 16-bit)
+    /// LBEQ - long branch if equal/zero (opcode 0x10 0x27, 16-bit offset)
     pub fn lbeq_label(&mut self, label: &str) {
         self.record_line_mapping();
         self.emit(0x10);
         self.emit(0x27);
-        self.add_symbol_ref(label, true, 2); // 2 bytes para offset de 16 bits
+        self.add_symbol_ref(label, true, 2); // 2 bytes for 16-bit offset
         self.emit(0x00);
         self.emit(0x00);
     }
 
-    /// BNE - branch si no igual/no cero (opcode 0x26)
+    /// BNE - branch if not equal/not zero (opcode 0x26)
     pub fn bne_offset(&mut self, offset: i8) {
         self.record_line_mapping();
         self.emit(0x26);
         self.emit(offset as u8);
     }
 
-    /// BNE con etiqueta (auto-selecciona short/long según configuración)
+    /// BNE with label (auto-selects short/long based on configuration)
     pub fn bne_label(&mut self, label: &str) {
         if self.use_long_branches {
             self.lbne_label(label);
@@ -461,7 +415,7 @@ impl BinaryEmitter {
         }
     }
 
-    /// LBNE - long branch si no igual (opcode 0x10 0x26, offset 16-bit)
+    /// LBNE - long branch if not equal (opcode 0x10 0x26, 16-bit offset)
     pub fn lbne_label(&mut self, label: &str) {
         self.record_line_mapping();
         self.emit(0x10);
@@ -471,21 +425,21 @@ impl BinaryEmitter {
         self.emit(0x00);
     }
 
-    /// BCC - branch si carry clear (opcode 0x24)
+    /// BCC - branch if carry clear (opcode 0x24)
     pub fn bcc_offset(&mut self, offset: i8) {
         self.record_line_mapping();
         self.emit(0x24);
         self.emit(offset as u8);
     }
 
-    /// BCS - branch si carry set (opcode 0x25)
+    /// BCS - branch if carry set (opcode 0x25)
     pub fn bcs_offset(&mut self, offset: i8) {
         self.record_line_mapping();
         self.emit(0x25);
         self.emit(offset as u8);
     }
 
-    // ========== INSTRUCCIONES ARITMÉTICAS Y LÓGICAS ==========
+    // ========== ARITHMETIC AND LOGIC INSTRUCTIONS ==========
 
     /// ADDA #immediate (opcode 0x8B)
     pub fn adda_immediate(&mut self, value: u8) {
@@ -843,7 +797,7 @@ impl BinaryEmitter {
         self.emit_word(addr);
     }
 
-    /// TST extended con símbolo
+    /// TST extended with symbol
     pub fn tst_extended_sym(&mut self, symbol: &str) {
         self.record_line_mapping();
         self.emit(0x7D);
@@ -851,9 +805,9 @@ impl BinaryEmitter {
         self.emit_word(0x0000); // Placeholder
     }
 
-    // ========== INSTRUCCIONES DE TRANSFERENCIA/COMPARACIÓN ==========
+    // ========== TRANSFER/COMPARISON INSTRUCTIONS ==========
 
-    /// TFR (opcode 0x1F) - requiere postbyte con src/dst
+    /// TFR (opcode 0x1F) - requires postbyte with src/dst
     pub fn tfr(&mut self, src: u8, dst: u8) {
         self.record_line_mapping();
         self.emit(0x1F);
@@ -928,7 +882,7 @@ impl BinaryEmitter {
         self.emit_word(value);
     }
 
-    // ========== INSTRUCCIONES 16-BIT ADICIONALES ==========
+    // ========== ADDITIONAL 16-BIT INSTRUCTIONS ==========
 
     /// JMP extended (opcode 0x7E)
     pub fn jmp_extended(&mut self, addr: u16) {
@@ -937,7 +891,7 @@ impl BinaryEmitter {
         self.emit_word(addr);
     }
 
-    /// JMP extended con símbolo
+    /// JMP extended with symbol
     pub fn jmp_extended_sym(&mut self, symbol: &str) {
         self.record_line_mapping();
         self.emit(0x7E);
@@ -952,7 +906,7 @@ impl BinaryEmitter {
         self.emit_word(value);
     }
 
-    /// LDX #immediate con símbolo (opcode 0x8E + symbol ref)
+    /// LDX #immediate with symbol (opcode 0x8E + symbol ref)
     pub fn ldx_immediate_sym(&mut self, symbol: &str) {
         self.record_line_mapping();
         self.emit(0x8E);
@@ -967,7 +921,7 @@ impl BinaryEmitter {
         self.emit_word(addr);
     }
 
-    /// LDX extended con símbolo
+    /// LDX extended with symbol
     pub fn ldx_extended_sym(&mut self, symbol: &str) {
         self.record_line_mapping();
         self.emit(0xBE);
@@ -1052,7 +1006,7 @@ impl BinaryEmitter {
         self.emit_word(value);
     }
 
-    /// LDU #immediate con símbolo (opcode 0xCE + symbol ref)
+    /// LDU #immediate with symbol (opcode 0xCE + symbol ref)
     pub fn ldu_immediate_sym(&mut self, symbol: &str) {
         self.record_line_mapping();
         self.emit(0xCE);
@@ -1074,7 +1028,7 @@ impl BinaryEmitter {
         self.emit_word(addr);
     }
 
-    /// LDU extended con símbolo
+    /// LDU extended with symbol
     pub fn ldu_extended_sym(&mut self, symbol: &str) {
         self.record_line_mapping();
         self.emit(0xFE);
@@ -1097,7 +1051,7 @@ impl BinaryEmitter {
         self.emit_word(value);
     }
 
-    /// LDS #immediate con símbolo (opcode 0x10CE + symbol ref)
+    /// LDS #immediate with symbol (opcode 0x10CE + symbol ref)
     pub fn lds_immediate_sym(&mut self, symbol: &str) {
         self.record_line_mapping();
         self.emit(0x10);
@@ -1130,7 +1084,7 @@ impl BinaryEmitter {
         self.emit_word(addr);
     }
 
-    /// LDS extended con símbolo
+    /// LDS extended with symbol
     pub fn lds_extended_sym(&mut self, symbol: &str) {
         self.record_line_mapping();
         self.emit(0x10);
@@ -1197,9 +1151,9 @@ impl BinaryEmitter {
         self.emit(postbyte);
     }
 
-    // ========== DIRECTIVAS DE DATOS ==========
+    // ========== DATA DIRECTIVES ==========
 
-    /// Emite bytes directos (para FCC, FCB, etc.)
+    /// Emits raw bytes (for FCC, FCB, etc.)
     pub fn emit_bytes(&mut self, bytes: &[u8]) {
         self.record_line_mapping();
         for &byte in bytes {
@@ -1207,7 +1161,7 @@ impl BinaryEmitter {
         }
     }
 
-    /// Emite string ASCII (para FCC)
+    /// Emits ASCII string (for FCC)
     pub fn emit_string(&mut self, s: &str) {
         self.record_line_mapping();
         for byte in s.bytes() {
@@ -1215,7 +1169,7 @@ impl BinaryEmitter {
         }
     }
 
-    /// Emite word de 16 bits (para FDB/FDW)
+    /// Emits a 16-bit word (for FDB/FDW)
     pub fn emit_data_word(&mut self, word: u16) {
         self.record_line_mapping();
         self.emit_word(word);
@@ -1229,68 +1183,28 @@ impl BinaryEmitter {
         }
     }
 
-    // ========== RESOLUCIÓN DE SÍMBOLOS (SEGUNDA PASADA) ==========
+    // ========== SYMBOL RESOLUTION (SECOND PASS) ==========
 
-    /// Resuelve todas las referencias a símbolos después de la primera pasada
-    /// Busca primero en symbols (labels locales), luego en equates (símbolos externos/BIOS)
+    /// Resolves all symbol references after the first pass
+    /// Searches first in symbols (local labels), then in equates (external/BIOS symbols)
     pub fn resolve_symbols_with_equates(&mut self, equates: &std::collections::HashMap<String, u16>) -> Result<(), String> {
-        // DEBUG: Log all symbols before resolution
-        if !self.symbols.is_empty() {
-            eprintln!("🔍 [RESOLVE START] {} symbols defined:", self.symbols.len());
-            for (sym, addr) in &self.symbols {
-                if sym.starts_with("ARRAY_") || sym == "START" || sym == "MAIN" {
-                    eprintln!("     {} → 0x{:04X}", sym, addr);
-                }
-            }
-        }
-        
         for sym_ref in &self.symbol_refs {
-            // DEBUG: Log each symbol lookup attempt
-            if sym_ref.symbol.starts_with("ARRAY_") {
-                eprintln!("🔍 [LOOKUP] Searching for symbol: '{}'", sym_ref.symbol);
-                eprintln!("           offset={}, is_relative={}, ref_size={}", 
-                    sym_ref.offset, sym_ref.is_relative, sym_ref.ref_size);
-            }
-            
-            // Buscar primero en symbols locales (case-sensitive)
+            // Search first in local symbols (case-sensitive)
             let target_addr_opt = if let Some(&addr) = self.symbols.get(&sym_ref.symbol) {
-                // DEBUG: Log successful lookup
-                if sym_ref.symbol.starts_with("ARRAY_") {
-                    eprintln!("✅ [FOUND] Symbol '{}' found in self.symbols at 0x{:04X}", 
-                        sym_ref.symbol, addr);
-                }
                 Some(addr)
             } else {
-                // DEBUG: Log fallback to equates
-                if sym_ref.symbol.starts_with("ARRAY_") {
-                    eprintln!("⚠️  [NOT FOUND] Symbol '{}' not in self.symbols, trying equates...", 
-                        sym_ref.symbol);
-                }
-                
-                // Buscar en equates con uppercase (símbolos BIOS/INCLUDE son uppercase)
+                // Search in equates with uppercase (BIOS/INCLUDE symbols are uppercase)
                 let upper_symbol = sym_ref.symbol.to_uppercase();
-                let result = equates.get(&upper_symbol).copied();
-                
-                // DEBUG: Log equates lookup result
-                if sym_ref.symbol.starts_with("ARRAY_") {
-                    match result {
-                        Some(addr) => eprintln!("✅ [FOUND] Symbol '{}' found in equates as '{}' at 0x{:04X}", 
-                            sym_ref.symbol, upper_symbol, addr),
-                        None => eprintln!("❌ [FAILED] Symbol '{}' not found in equates either", 
-                            sym_ref.symbol),
-                    }
-                }
-                
-                result
+                equates.get(&upper_symbol).copied()
             };
-            
-            // Si el símbolo no se encontró
+
+            // If the symbol was not found
             let target_addr = match target_addr_opt {
                 Some(addr) => addr,
                 None => {
                     let upper_symbol = sym_ref.symbol.to_uppercase();
-                    
-                    // En object mode: agregar a unresolved_refs y usar placeholder
+
+                    // In object mode: add to unresolved_refs and use placeholder
                     if self.object_mode {
                         let ref_type = if sym_ref.is_relative {
                             if sym_ref.ref_size == 1 {
@@ -1308,44 +1222,31 @@ impl BinaryEmitter {
                             ref_type,
                         });
                         
-                        // Usar placeholder 0x0000 (ya emitido durante first pass)
+                        // Use placeholder 0x0000 (already emitted during first pass)
                         continue;
                     }
-                    
-                    // En modo normal: error
-                    eprintln!("❌ SÍMBOLO NO RESUELTO: '{}' (uppercase: '{}') at offset={}, is_relative={}, ref_size={}", 
+
+                    // In normal mode: error
+                    eprintln!("❌ UNRESOLVED SYMBOL: '{}' (uppercase: '{}') at offset={}, is_relative={}, ref_size={}",
                         sym_ref.symbol, upper_symbol, sym_ref.offset, sym_ref.is_relative, sym_ref.ref_size);
-                    
-                    // Si es un carácter solitario, probablemente es un error de parsing
+
+                    // If a single character, likely a parsing error
                     if sym_ref.symbol.len() == 1 {
-                        eprintln!("   ⚠️  POSIBLE BUG: Símbolo de 1 carácter '{}' - probablemente offset mal parseado", sym_ref.symbol);
+                        eprintln!("   ⚠️  POSSIBLE BUG: Single-character symbol '{}' - likely misparse offset", sym_ref.symbol);
                     }
-                    
-                    return Err(format!("Símbolo no definido: {} (buscado como {})", sym_ref.symbol, upper_symbol));
+
+                    return Err(format!("Undefined symbol: {} (searched as {})", sym_ref.symbol, upper_symbol));
                 }
             };
 
             let effective_target = target_addr.wrapping_add(sym_ref.addend as u16);
 
             if sym_ref.is_relative {
-                // Branch relativo: calcular offset desde la siguiente instrucción
-                // Fórmula correcta: next_addr = branch_instruction_addr + opcode_size + ref_size (offset bytes)
+                // Relative branch: calculate offset from the next instruction
+                // Correct formula: next_addr = branch_instruction_addr + opcode_size + ref_size (offset bytes)
                 let org = self.current_address.wrapping_sub(self.code.len() as u16);
-                
-                // 🔍 DEBUG: Log calculation for MAIN.MAIN_LOOP to see what's happening
-                if sym_ref.symbol.contains("MAIN_LOOP") {
-                    eprintln!("🔍 [MAIN_LOOP DEBUG] Resolving branch:");
-                    eprintln!("   symbol: {}", sym_ref.symbol);
-                    eprintln!("   current_address: 0x{:04X}", self.current_address);
-                    eprintln!("   code.len(): {}", self.code.len());
-                    eprintln!("   org (calculated): 0x{:04X}", org);
-                    eprintln!("   sym_ref.offset: {}", sym_ref.offset);
-                    eprintln!("   sym_ref.ref_size: {}", sym_ref.ref_size);
-                    eprintln!("   target_addr: 0x{:04X}", target_addr);
-                    eprintln!("   effective_target: 0x{:04X}", effective_target);
-                }
-                
-                // Detectar si es long branch (opcode 1 or 2 bytes) or short branch (opcode 1 byte)
+
+                // Detect whether it is a long branch (opcode 1 or 2 bytes) or short branch (opcode 1 byte)
                 // LBRA: opcode 0x16 (1 byte!) + 2 bytes offset = 3 bytes total
                 // LBEQ, LBNE, LBCC, etc.: opcode 0x10 0x2x (2 bytes) + 2 bytes offset = 4 bytes total
                 // Short branches: BEQ, BNE, etc.: opcode 0x2x (1 byte) + 1 byte offset = 2 bytes total
@@ -1354,11 +1255,6 @@ impl BinaryEmitter {
                     // sym_ref.offset points to the offset field, so we check the byte before it
                     let prev_byte = if sym_ref.offset > 0 { self.code[sym_ref.offset - 1] } else { 0 };
                     let is_lbra = prev_byte == 0x16;
-                    // 🔍 DEBUG: Log LBRA detection for DSWM_LOOP
-                    if sym_ref.symbol.contains("DSWM_LOOP") {
-                        eprintln!("🔍 [LBRA DEBUG] symbol={}, offset={}, prev_byte=0x{:02X}, is_lbra={}", 
-                            sym_ref.symbol, sym_ref.offset, prev_byte, is_lbra);
-                    }
                     if is_lbra {
                         1 // LBRA has 1-byte opcode (0x16)
                     } else {
@@ -1368,20 +1264,14 @@ impl BinaryEmitter {
                     1 // Short branches have 1-byte opcode
                 };
                 
-                // CRÍTICO: sym_ref.offset apunta al OFFSET FIELD, no al inicio del opcode
-                // Por eso necesitamos restar opcode_size para obtener el inicio real del branch
+                // CRITICAL: sym_ref.offset points to the OFFSET FIELD, not the start of the opcode
+                // Therefore we need to subtract opcode_size to get the real branch start
                 let branch_instruction_addr = org.wrapping_add(sym_ref.offset as u16).wrapping_sub(opcode_size);
                 let next_addr = branch_instruction_addr + opcode_size + sym_ref.ref_size as u16;
                 let offset_i32 = effective_target as i32 - next_addr as i32;
                 
-                // 🔍 TRACE: Resolución de branches importantes (expandido para debug)
-                if sym_ref.symbol.contains("ULR") || sym_ref.symbol.contains("DSWM_LOOP") || sym_ref.symbol == "DSL_NEXT_PATH" || sym_ref.symbol == "DSL_LOOP" || sym_ref.symbol == "DSL_DONE" {
-                    eprintln!("🔗 Resolving {} at bin_offset={}: org=${:04X}, branch_addr=${:04X}, opcode_size={}, ref_size={}, next=${:04X}, target=${:04X}, offset={} (0x{:04X})", 
-                        sym_ref.symbol, sym_ref.offset, org, branch_instruction_addr, opcode_size, sym_ref.ref_size, next_addr, target_addr, offset_i32, offset_i32 as u16);
-                }
-                
                 if sym_ref.ref_size == 1 {
-                    // Branch corto (8-bit offset)
+                    // Short branch (8-bit offset)
                     if offset_i32 < -128 || offset_i32 > 127 {
                         return Err(format!(
                             "❌ Branch offset OUT OF RANGE for '{}' at 0x{:04X}: offset={} (need LBEQ/LBNE/LBxx instead of BEQ/BNE/Bxx)\n   Tip: Distance from 0x{:04X} to 0x{:04X} = {} bytes (exceeds 8-bit range -128..127)",
@@ -1397,25 +1287,12 @@ impl BinaryEmitter {
                     self.code[sym_ref.offset + 1] = (offset & 0xFF) as u8; // Low byte
                 }
             } else {
-                // Dirección absoluta de 16 bits
+                // Absolute 16-bit address
                 if sym_ref.ref_size == 2 {
-                    // 🔍 DEBUG: Log ALL symbol resolutions including PRINT_TEXT strings and VECTREX helpers
-                    let should_log = sym_ref.symbol.starts_with('_') || sym_ref.symbol == "START" || sym_ref.symbol == "MAIN" || sym_ref.symbol == "LOOP_BODY" || sym_ref.symbol.starts_with("PRINT_TEXT_STR_") || sym_ref.symbol.starts_with("VECTREX_");
-                    if should_log {
-                        if sym_ref.addend != 0 {
-                            eprintln!("🔗 Symbol '{}' at bin_offset=0x{:04X} resolved to addr=0x{:04X} (addend {:+}) => 0x{:04X}", 
-                                sym_ref.symbol, sym_ref.offset, target_addr, sym_ref.addend, effective_target);
-                        } else {
-                            eprintln!("🔗 Symbol '{}' at bin_offset=0x{:04X} resolved to addr=0x{:04X}", 
-                                sym_ref.symbol, sym_ref.offset, target_addr);
-                        }
-                        eprintln!("   📝 Writing to self.code[0x{:04X}] = 0x{:02X}{:02X} (code.len()={})", 
-                            sym_ref.offset, (effective_target >> 8) as u8, effective_target as u8, self.code.len());
-                    }
                     self.code[sym_ref.offset] = (effective_target >> 8) as u8;
                     self.code[sym_ref.offset + 1] = effective_target as u8;
                 } else {
-                    // Dirección de 8 bits (direct page)
+                    // 8-bit address (direct page)
                     self.code[sym_ref.offset] = effective_target as u8;
                 }
             }
@@ -1423,7 +1300,7 @@ impl BinaryEmitter {
         Ok(())
     }
 
-    /// Versión legacy que solo usa symbols internos (deprecated)
+    /// Legacy version that only uses internal symbols (deprecated)
     #[allow(dead_code)]
     pub fn resolve_symbols(&mut self) -> Result<(), String> {
         use std::collections::HashMap;
@@ -1431,82 +1308,79 @@ impl BinaryEmitter {
         self.resolve_symbols_with_equates(&empty_equates)
     }
 
-    // ========== SALIDA FINAL ==========
+    // ========== FINAL OUTPUT ==========
 
-    /// Obtiene el código binario generado
+    /// Gets the generated binary code
     pub fn finalize(self) -> Vec<u8> {
         self.code
     }
 
-    /// Obtiene el mapeo línea -> offset
+    /// Gets the line -> offset mapping
     pub fn get_line_to_offset_map(&self) -> &HashMap<usize, usize> {
         &self.line_to_offset
     }
 
-    /// Obtiene el mapeo offset -> línea
+    /// Gets the offset -> line mapping
     #[allow(dead_code)]
     pub fn get_offset_to_line_map(&self) -> &HashMap<usize, usize> {
         &self.offset_to_line
     }
 
-    /// Obtiene la dirección base (ORG)
+    /// Gets the base address (ORG)
     #[allow(dead_code)]
     pub fn get_org(&self) -> u16 {
         self.current_address.wrapping_sub(self.code.len() as u16)
     }
     
-    /// Cambia la dirección base (ORG) y rellena con padding si es necesario
-    /// Esto se usa cuando el ASM tiene múltiples directivas ORG (ej: código + vectores)
+    /// Changes the base address (ORG) and pads with fill bytes if necessary.
+    /// Used when the ASM has multiple ORG directives (e.g., code + vectors).
     pub fn set_org(&mut self, new_org: u16) {
         let current_org = self.get_org();
         let current_offset = self.code.len();
-        
-        // Calcular cuántos bytes necesitamos añadir para llegar al nuevo ORG
-        // new_org debe ser >= current_address para que tenga sentido
+
+        // Calculate how many bytes we need to add to reach the new ORG.
+        // new_org must be >= current_address to make sense.
         if new_org < self.current_address {
-            eprintln!("⚠️  Warning: ORG ${:04X} is before current address ${:04X} - padding backward", 
+            eprintln!("⚠️  Warning: ORG ${:04X} is before current address ${:04X} - padding backward",
                 new_org, self.current_address);
-            // En este caso, necesitamos calcular el offset esperado
-            // Si ORG inicial era $FFF0 y current es $0020, y new_org es $FFF0
-            // entonces queremos mantener el offset pero cambiar current_address
+            // In this case, calculate the expected offset.
+            // If initial ORG was $FFF0 and current is $0020, and new_org is $FFF0
+            // we want to keep the offset but change current_address.
             self.current_address = new_org;
             return;
         }
-        
-        // Calcular cuántos bytes de padding necesitamos
+
+        // Calculate how many padding bytes we need
         let target_offset = if current_org == 0 {
-            // ORG normal (secuencial): new_org es el offset directo
+            // Normal ORG (sequential): new_org is the direct offset
             new_org as usize
         } else {
-            // ORG con base alta (ej: $FFF0): calcular offset relativo
-            // Si current_org = $FFF0 y new_org = $FFF0, offset no cambia
-            // Si current_org = $FFF0 y new_org = $0020, queremos offset = $0030 (0x0020 + 0x0010)
+            // High-base ORG (e.g., $FFF0): calculate relative offset
+            // If current_org = $FFF0 and new_org = $FFF0, offset does not change
+            // If current_org = $FFF0 and new_org = $0020, we want offset = $0030 (0x0020 + 0x0010)
             let offset_from_base = (new_org.wrapping_sub(current_org)) as usize;
             current_offset + offset_from_base
         };
-        
-        // Rellenar con 0xFF hasta el target offset
+
+        // Fill with 0xFF up to the target offset
         if target_offset > current_offset {
-            let padding_bytes = target_offset - current_offset;
-            eprintln!("🔧 ORG ${:04X}: Padding {} bytes (0xFF) from offset 0x{:X} to 0x{:X}", 
-                new_org, padding_bytes, current_offset, target_offset);
             self.code.resize(target_offset, 0xFF);
         }
-        
-        // Actualizar dirección actual
+
+        // Update current address
         self.current_address = new_org;
     }
-    
-    /// Obtiene la tabla de símbolos (labels -> addresses reales)
+
+    /// Gets the symbol table (labels -> real addresses)
     pub fn get_symbol_table(&self) -> &HashMap<String, u16> {
         &self.symbols
     }
 }
 
-// Constantes para TFR - códigos de registros
+// TFR register code constants
 #[allow(dead_code)]
 pub mod tfr_regs {
-    pub const D: u8 = 0;  // A:B concatenado
+    pub const D: u8 = 0;  // A:B concatenated
     pub const X: u8 = 1;
     pub const Y: u8 = 2;
     pub const U: u8 = 3;

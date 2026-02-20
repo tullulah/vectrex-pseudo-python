@@ -73,16 +73,14 @@ impl CallGraph {
     /// Build call graph from unified module
     pub fn from_module(module: &Module) -> Self {
         let mut graph = CallGraph::new();
-        
-        eprintln!("     [CallGraph] Building from module with {} items", module.items.len());
-        
+
         // Add all functions as nodes
         for item in &module.items {
             if let Item::Function(func) = item {
                 let size_estimate = estimate_function_size(func);
                 let is_critical = func.name == "main" || func.name == "loop";
                 let assets_used = find_assets_used(&func.body);
-                
+
                 graph.add_node(FunctionNode {
                     name: func.name.clone(),
                     size_bytes: size_estimate,
@@ -91,8 +89,6 @@ impl CallGraph {
                 });
             }
         }
-        
-        eprintln!("     [CallGraph] Added {} function nodes", graph.nodes.len());
         
         // Analyze function calls to build edges
         for item in &module.items {
@@ -276,10 +272,7 @@ fn estimate_function_size(func: &Function) -> usize {
     let base_size = 100; // Function overhead (prologue, epilogue, locals)
     let stmt_avg = 180; // Average bytes per statement (M6809 is verbose!)
     
-    let size = base_size + (stmt_count * stmt_avg);
-    eprintln!("     [SIZE ESTIMATE] {} → {} stmts × {} + {} = {} bytes", 
-        func.name, stmt_count, stmt_avg, base_size, size);
-    size
+    base_size + (stmt_count * stmt_avg)
 }
 
 /// Find assets used by a function (DRAW_VECTOR, PLAY_MUSIC, PLAY_SFX, etc.)

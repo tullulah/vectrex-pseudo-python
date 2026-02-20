@@ -403,16 +403,9 @@ pub fn emit_builtin(
                         .filter(|a| matches!(a.asset_type, AssetType::Music))
                         .collect();
                     
-                    // DEBUG: Log music assets order
-                    eprintln!("[DEBUG PLAY_MUSIC] Looking for '{}' in music assets:", asset_name);
-                    for (idx, a) in music_assets.iter().enumerate() {
-                        eprintln!("  [{}] = '{}' {}", idx, a.name, if a.name == *asset_name { "<-- MATCH" } else { "" });
-                    }
-                    
                     let asset_index = music_assets.iter()
                         .position(|a| a.name == *asset_name)
                         .unwrap_or(0);
-                    eprintln!("[DEBUG PLAY_MUSIC] Final index for '{}' = {}\n", asset_name, asset_index);
                     
                     let symbol = format!("_{}_MUSIC", asset_name.to_uppercase().replace("-", "_").replace(" ", "_"));
                     out.push_str(&format!("    ; PLAY_MUSIC(\"{}\") - play music asset (index={})\n", asset_name, asset_index));

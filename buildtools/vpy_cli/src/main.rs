@@ -8,6 +8,35 @@ fn discover_assets(source_path: &Path) -> Vec<vpy_codegen::AssetInfo> {
     vpy_codegen::m6809::assets::discover_assets(source_path)
 }
 
+/// Resolve the directory that contains VECTREX.I.
+/// Priority:
+///   1. Same directory as the binary (packaged app — VECTREX.I bundled next to vpy_cli)
+///   2. Walk up 3 levels from binary dir: target/ → buildtools/ → workspace/ide/frontend/public/include
+///   3. Walk up 2 levels (fallback for shallower layouts)
+fn resolve_include_dir() -> PathBuf {
+    let cli_exe = std::env::current_exe().unwrap_or_default();
+    let cli_dir = match cli_exe.parent() {
+        Some(d) => d,
+        None => return PathBuf::from("."),
+    };
+    // Case 1: packaged app – VECTREX.I sits next to the binary
+    if cli_dir.join("VECTREX.I").exists() {
+        return cli_dir.to_path_buf();
+    }
+    // Case 2: dev layout – buildtools/target/(debug|release)/vpy_cli
+    if let Some(ws) = cli_dir.parent().and_then(|p| p.parent()).and_then(|p| p.parent()) {
+        let candidate = ws.join("ide/frontend/public/include");
+        if candidate.join("VECTREX.I").exists() {
+            return candidate;
+        }
+    }
+    // Case 3: fallback – 2 levels up
+    if let Some(ws) = cli_dir.parent().and_then(|p| p.parent()) {
+        return ws.join("ide/frontend/public/include");
+    }
+    cli_dir.to_path_buf()
+}
+
 #[derive(Parser)]
 #[command(name = "vpy_cli")]
 #[command(about = "VPy Compiler - Modular Pipeline", long_about = None)]
@@ -828,16 +857,7 @@ fn cmd_build(input: &PathBuf, output: Option<PathBuf>, rom_size: usize, bank_siz
         println!("  {} ASM written: {}", "✓".green(), asm_path.display());
         
         // Set up workspace paths for include directory (needed for VECTREX.I)
-        let cli_exe = std::env::current_exe()
-            .context("Failed to get CLI executable path")?;
-        let cli_dir = cli_exe.parent()
-            .context("Failed to get CLI directory")?;
-        // Go up from target/debug/ (or target/release/) to workspace root
-        let workspace_root = cli_dir.parent()  // target/
-            .and_then(|p| p.parent())          // buildtools/
-            .and_then(|p| p.parent())          // vectrex-pseudo-python/
-            .context("Failed to get workspace root")?;
-        let include_dir = workspace_root.join("ide/frontend/public/include");
+        let include_dir = resolve_include_dir();
         
         // **CRITICAL: Detect multibank BEFORE assembling**
         // If multibank is detected, skip unified assembler and use multi_bank_linker directly
@@ -925,11 +945,6 @@ fn cmd_build(input: &PathBuf, output: Option<PathBuf>, rom_size: usize, bank_siz
         println!("\n{}", "Phase 6: Assemble Banks".bright_cyan().bold());
         
         // Set include directory for VECTREX.I (absolute path from CLI binary location)
-        let cli_exe = std::env::current_exe()
-            .context("Failed to get CLI executable path")?;
-        eprintln!("🔧 [DEBUG] CLI exe: {:?}", cli_exe);
-        eprintln!("🔧 [DEBUG] Workspace root: {:?}", workspace_root);
-        eprintln!("🔧 [DEBUG] Include dir: {:?}", include_dir);
         vpy_assembler::set_include_dir(Some(include_dir.clone()));
         
         let binaries = vpy_assembler::assemble_banks(sections)
@@ -1106,17 +1121,8 @@ fn cmd_build(input: &PathBuf, output: Option<PathBuf>, rom_size: usize, bank_siz
             source_path.with_extension("bin")
         });
         
-        // Set include directory for VECTREX.I (absolute path from CLI binary location)
-        let cli_exe = std::env::current_exe()
-            .context("Failed to get CLI executable path")?;
-        let cli_dir = cli_exe.parent()
-            .context("Failed to get CLI directory")?;
-        let workspace_root = cli_dir.parent()  // target/
-            .and_then(|p| p.parent())          // buildtools/
-            .and_then(|p| p.parent())          // vectrex-pseudo-python/
-            .context("Failed to get workspace root")?;
-        let include_dir = workspace_root.join("ide/frontend/public/include");
-        
+        let include_dir = resolve_include_dir();
+
         let linker = vpy_linker::MultiBankLinker::new(
             bank_size as u32,
             (rom_size / bank_size) as u8,
@@ -1137,17 +1143,7 @@ fn cmd_build(input: &PathBuf, output: Option<PathBuf>, rom_size: usize, bank_siz
                 {
                     println!("\n{}", "Phase 9: Generating debug symbols (multibank)...".bright_cyan());
                     
-                    // Get workspace root for include dir
-                    let cli_exe = std::env::current_exe()
-                        .context("Failed to get CLI executable path")?;
-                    let cli_dir = cli_exe.parent()
-                        .context("Failed to get CLI directory")?;
-                    // Go up from target/debug/ (or target/release/) to workspace root
-                    // cli_dir = target/debug/, parent = target/, parent = vectrex-pseudo-python/
-                    let workspace_root = cli_dir.parent()  // target/
-                        .and_then(|p| p.parent())          // vectrex-pseudo-python/
-                        .context("Failed to get workspace root")?;
-                    let include_dir = workspace_root.join("ide/frontend/public/include");
+                    let include_dir = resolve_include_dir();
                     
                     // Load VECTREX.I for BIOS symbols
                     let vectrex_i_path = include_dir.join("VECTREX.I");
@@ -1187,17 +1183,8 @@ fn cmd_build(input: &PathBuf, output: Option<PathBuf>, rom_size: usize, bank_siz
         println!("\n{}", "Phase 3: Assembling banks...".bright_cyan());
     }
     
-    // Set include directory for VECTREX.I (absolute path from CLI binary location)
-    let cli_exe = std::env::current_exe()
-        .context("Failed to get CLI executable path")?;
-    let cli_dir = cli_exe.parent()
-        .context("Failed to get CLI directory")?;
-    // Go up from target/debug/ (or target/release/) to workspace root
-    // cli_dir = target/debug/, parent = target/, parent = vectrex-pseudo-python/
-    let workspace_root = cli_dir.parent()  // target/
-        .and_then(|p| p.parent())          // vectrex-pseudo-python/
-        .context("Failed to get workspace root")?;
-    let include_dir = workspace_root.join("ide/frontend/public/include");
+    // Set include directory for VECTREX.I
+    let include_dir = resolve_include_dir();
     vpy_assembler::set_include_dir(Some(include_dir.clone()));
     
     let binaries = vpy_assembler::assemble_banks(sections)

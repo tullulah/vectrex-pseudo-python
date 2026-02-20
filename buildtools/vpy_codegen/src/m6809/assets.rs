@@ -15,17 +15,10 @@ pub fn filter_used_assets(assets: &[AssetInfo], module: &Module) -> Vec<AssetInf
     collect_asset_names(&module.items, &mut used_names);
     
     // Filter assets to only those referenced in code
-    let filtered: Vec<AssetInfo> = assets.iter()
+    assets.iter()
         .filter(|asset| used_names.contains(&asset.name))
         .cloned()
-        .collect();
-    
-    eprintln!("[DEBUG ASSETS] Total discovered: {}, Used in code: {}", assets.len(), filtered.len());
-    for asset in &filtered {
-        eprintln!("[DEBUG ASSETS] Used asset: {} ({:?})", asset.name, asset.asset_type);
-    }
-    
-    filtered
+        .collect()
 }
 
 /// Recursively collect asset names from statements
@@ -103,7 +96,6 @@ fn collect_asset_names_from_expr(expr: &Expr, used_names: &mut HashSet<String>) 
                 // First argument should be asset name (string literal)
                 if let Some(Expr::StringLit(asset_name)) = args.first() {
                     used_names.insert(asset_name.clone());
-                    eprintln!("[DEBUG ASSETS] Found {}(\"{}\") call", up, asset_name);
                 }
             }
             // Recursively check arguments
@@ -168,8 +160,6 @@ pub fn discover_assets(source_path: &Path) -> Vec<AssetInfo> {
         abs_source.clone()
     };
     
-    eprintln!("[DEBUG ASSETS] Project root: {:?}", project_root);
-    
     // Search for vector assets (assets/vectors/*.vec)
     let vectors_dir = project_root.join("assets").join("vectors");
     if vectors_dir.is_dir() {
@@ -178,7 +168,6 @@ pub fn discover_assets(source_path: &Path) -> Vec<AssetInfo> {
                 let path = entry.path();
                 if path.extension().and_then(|e| e.to_str()) == Some("vec") {
                     if let Some(name) = path.file_stem().and_then(|n| n.to_str()) {
-                        eprintln!("[DEBUG ASSETS] Found vector: {} at {:?}", name, path);
                         assets.push(AssetInfo {
                             name: name.to_string(),
                             path: path.display().to_string(),
@@ -198,7 +187,6 @@ pub fn discover_assets(source_path: &Path) -> Vec<AssetInfo> {
                 let path = entry.path();
                 if path.extension().and_then(|e| e.to_str()) == Some("vmus") {
                     if let Some(name) = path.file_stem().and_then(|n| n.to_str()) {
-                        eprintln!("[DEBUG ASSETS] Found music: {} at {:?}", name, path);
                         assets.push(AssetInfo {
                             name: name.to_string(),
                             path: path.display().to_string(),
@@ -210,20 +198,29 @@ pub fn discover_assets(source_path: &Path) -> Vec<AssetInfo> {
         }
     }
     
-    // Search for level assets (assets/levels/*.vlevel)
-    let levels_dir = project_root.join("assets").join("levels");
-    if levels_dir.is_dir() {
-        if let Ok(entries) = fs::read_dir(&levels_dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.extension().and_then(|e| e.to_str()) == Some("vlevel") {
-                    if let Some(name) = path.file_stem().and_then(|n| n.to_str()) {
-                        eprintln!("[DEBUG ASSETS] Found level: {} at {:?}", name, path);
-                        assets.push(AssetInfo {
-                            name: name.to_string(),
-                            path: path.display().to_string(),
-                            asset_type: AssetType::Level,
-                        });
+    // Search for level assets (.vplay in any assets/ subdirectory, .vlevel in assets/levels/)
+    let assets_dir = project_root.join("assets");
+    let mut seen_levels: HashSet<String> = HashSet::new();
+    if assets_dir.is_dir() {
+        if let Ok(subdirs) = fs::read_dir(&assets_dir) {
+            for subdir in subdirs.flatten() {
+                let subdir_path = subdir.path();
+                if !subdir_path.is_dir() { continue; }
+                if let Ok(entries) = fs::read_dir(&subdir_path) {
+                    for entry in entries.flatten() {
+                        let path = entry.path();
+                        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+                        if ext == "vplay" || ext == "vlevel" {
+                            if let Some(name) = path.file_stem().and_then(|n| n.to_str()) {
+                                if seen_levels.insert(name.to_string()) {
+                                    assets.push(AssetInfo {
+                                        name: name.to_string(),
+                                        path: path.display().to_string(),
+                                        asset_type: AssetType::Level,
+                                    });
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -238,7 +235,6 @@ pub fn discover_assets(source_path: &Path) -> Vec<AssetInfo> {
                 let path = entry.path();
                 if path.extension().and_then(|e| e.to_str()) == Some("vsfx") {
                     if let Some(name) = path.file_stem().and_then(|n| n.to_str()) {
-                        eprintln!("[DEBUG ASSETS] Found SFX: {} at {:?}", name, path);
                         assets.push(AssetInfo {
                             name: name.to_string(),
                             path: path.display().to_string(),
@@ -250,17 +246,8 @@ pub fn discover_assets(source_path: &Path) -> Vec<AssetInfo> {
         }
     }
     
-    eprintln!("[DEBUG ASSETS] Total assets found: {}", assets.len());
-    eprintln!("[DEBUG ASSETS] BEFORE sort:");
-    for (idx, a) in assets.iter().enumerate() {
-        eprintln!("  [{}] {} ({})", idx, a.name, match a.asset_type { AssetType::Vector => "Vector", AssetType::Music => "Music", AssetType::Sfx => "SFX", AssetType::Level => "Level" });
-    }
-    // Ordenar assets alfabéticamente por nombre para consistencia
+    // Sort assets alphabetically by name for consistency
     assets.sort_by(|a, b| a.name.cmp(&b.name));
-    eprintln!("[DEBUG ASSETS] AFTER sort:");
-    for (idx, a) in assets.iter().enumerate() {
-        eprintln!("  [{}] {} ({})", idx, a.name, match a.asset_type { AssetType::Vector => "Vector", AssetType::Music => "Music", AssetType::Sfx => "SFX", AssetType::Level => "Level" });
-    }
     assets
 }
 
@@ -292,7 +279,6 @@ pub fn prepare_assets_with_sizes(assets: &[AssetInfo]) -> Vec<SizedAsset> {
             Ok(resource) => {
                 let binary_size = resource.estimate_binary_size();
                 let asm_code = resource.compile_to_asm_with_name(Some(&asset.name));
-                eprintln!("[DEBUG ASSETS] Vector '{}': {} bytes estimated", asset.name, binary_size);
                 sized_assets.push(SizedAsset {
                     info: asset.clone(),
                     binary_size,
@@ -311,7 +297,6 @@ pub fn prepare_assets_with_sizes(assets: &[AssetInfo]) -> Vec<SizedAsset> {
                 let asm_code = resource.compile_to_asm(&asset.name);
                 // Estimate music size: count FCB/FDB bytes in ASM (rough approximation)
                 let binary_size = estimate_asm_size(&asm_code);
-                eprintln!("[DEBUG ASSETS] Music '{}': {} bytes estimated", asset.name, binary_size);
                 sized_assets.push(SizedAsset {
                     info: asset.clone(),
                     binary_size,
@@ -329,7 +314,6 @@ pub fn prepare_assets_with_sizes(assets: &[AssetInfo]) -> Vec<SizedAsset> {
             Ok(resource) => {
                 let asm_code = resource.compile_to_asm();
                 let binary_size = estimate_asm_size(&asm_code);
-                eprintln!("[DEBUG ASSETS] Level '{}': {} bytes estimated", asset.name, binary_size);
                 sized_assets.push(SizedAsset {
                     info: asset.clone(),
                     binary_size,
@@ -347,7 +331,6 @@ pub fn prepare_assets_with_sizes(assets: &[AssetInfo]) -> Vec<SizedAsset> {
             Ok(resource) => {
                 let asm_code = resource.compile_to_asm();
                 let binary_size = estimate_asm_size(&asm_code);
-                eprintln!("[DEBUG ASSETS] SFX '{}': {} bytes estimated", asset.name, binary_size);
                 sized_assets.push(SizedAsset {
                     info: asset.clone(),
                     binary_size,
@@ -433,9 +416,6 @@ pub fn distribute_assets(
     let total_assets = sized_assets.len();
     let total_bytes: usize = sized_assets.iter().map(|a| a.binary_size).sum();
     
-    eprintln!("[ASSET DISTRIBUTION] {} assets, {} bytes total -> Banks #{}-#{} (switchable)", 
-        total_assets, total_bytes, first_asset_bank, last_asset_bank);
-    
     // First-Fit Decreasing bin packing: larger assets first
     let mut sorted_assets = sized_assets;
     sorted_assets.sort_by(|a, b| b.binary_size.cmp(&a.binary_size));
@@ -447,8 +427,6 @@ pub fn distribute_assets(
         for bank_id in first_asset_bank..=last_asset_bank {
             let current_size = *bank_sizes.get(&bank_id).unwrap_or(&0);
             if current_size + asset.binary_size <= bank_size {
-                eprintln!("[ASSET DISTRIBUTION] '{}' ({} bytes) -> Bank #{}", 
-                    asset.info.name, asset.binary_size, bank_id);
                 bank_assignments.entry(bank_id).or_insert_with(Vec::new).push(asset.clone());
                 bank_sizes.insert(bank_id, current_size + asset.binary_size);
                 assigned = true;
@@ -460,15 +438,6 @@ pub fn distribute_assets(
             // All banks full - this is a FATAL error
             panic!("FATAL: Cannot fit asset '{}' ({} bytes) - all banks #{}-#{} are full!", 
                 asset.info.name, asset.binary_size, first_asset_bank, last_asset_bank);
-        }
-    }
-    
-    // Report final distribution
-    for bank_id in first_asset_bank..=last_asset_bank {
-        if let Some(assets) = bank_assignments.get(&bank_id) {
-            let bank_bytes: usize = assets.iter().map(|a| a.binary_size).sum();
-            eprintln!("[ASSET DISTRIBUTION] Bank #{}: {} assets, {} bytes", 
-                bank_id, assets.len(), bank_bytes);
         }
     }
     
@@ -489,7 +458,6 @@ pub fn generate_assets_asm(assets: &[AssetInfo]) -> Result<String, String> {
     
     // Generate vector assets
     for asset in assets.iter().filter(|a| matches!(a.asset_type, AssetType::Vector)) {
-        eprintln!("[DEBUG ASSETS] Generating ASM for vector: {}", asset.name);
         match crate::vecres::VecResource::load(Path::new(&asset.path)) {
             Ok(resource) => {
                 out.push_str(&resource.compile_to_asm_with_name(Some(&asset.name)));
@@ -502,7 +470,6 @@ pub fn generate_assets_asm(assets: &[AssetInfo]) -> Result<String, String> {
     
     // Generate music assets
     for asset in assets.iter().filter(|a| matches!(a.asset_type, AssetType::Music)) {
-        eprintln!("[DEBUG ASSETS] Generating ASM for music: {}", asset.name);
         match crate::musres::MusicResource::load(Path::new(&asset.path)) {
             Ok(resource) => {
                 out.push_str(&resource.compile_to_asm(&asset.name));
@@ -515,7 +482,6 @@ pub fn generate_assets_asm(assets: &[AssetInfo]) -> Result<String, String> {
     
     // Generate level assets
     for asset in assets.iter().filter(|a| matches!(a.asset_type, AssetType::Level)) {
-        eprintln!("[DEBUG ASSETS] Generating ASM for level: {}", asset.name);
         match crate::levelres::VPlayLevel::load(Path::new(&asset.path)) {
             Ok(resource) => {
                 out.push_str(&resource.compile_to_asm());
@@ -528,7 +494,6 @@ pub fn generate_assets_asm(assets: &[AssetInfo]) -> Result<String, String> {
     
     // Generate SFX assets
     for asset in assets.iter().filter(|a| matches!(a.asset_type, AssetType::Sfx)) {
-        eprintln!("[DEBUG ASSETS] Generating ASM for SFX: {}", asset.name);
         match crate::sfxres::SfxResource::load(Path::new(&asset.path)) {
             Ok(resource) => {
                 out.push_str(&resource.compile_to_asm());
@@ -608,7 +573,7 @@ pub fn generate_distributed_assets_asm(
         .cloned()
         .collect();
 
-    // Ordenar cada lista alfabéticamente por nombre para consistencia de índices
+    // Sort each list alphabetically by name for index consistency
     let mut vector_entries = vector_entries;
     let mut music_entries = music_entries;
     let mut sfx_entries = sfx_entries;

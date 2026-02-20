@@ -144,7 +144,7 @@ impl MusicResource {
     
     /// Compile to direct PSG format (inspired by Christman2024/malbanGit)
     /// Frame-based: each frame lists PSG register writes
-    /// Compila a ASM usando el nombre del asset (filename sin extensión), NO el nombre del JSON
+    /// Compiles to ASM using the asset name (filename without extension), NOT the JSON name
     pub fn compile_to_asm(&self, asset_name: &str) -> String {
         let mut asm = String::new();
         let symbol_name = asset_name.to_uppercase().replace("-", "_").replace(" ", "_");

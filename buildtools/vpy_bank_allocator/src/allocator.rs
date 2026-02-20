@@ -162,9 +162,6 @@ impl BankAllocator {
         // Build clusters from call graph
         let clusters = self.graph.build_clusters(&self.asset_sizes);
         
-        eprintln!("   [Bank Allocator] Built {} cluster(s) from {} functions", 
-            clusters.len(), self.graph.nodes.len());
-        
         // Initialize banks
         let mut banks: Vec<BankInfo> = (0..code_banks_count as usize)
             .map(|i| BankInfo::new(i as u8))
@@ -176,10 +173,7 @@ impl BankAllocator {
         // Assign clusters to banks (keeps related code together)
         for cluster in &clusters {
             let mut assigned = false;
-            
-            eprintln!("     Cluster {}: {} functions, {} assets, {} bytes total",
-                cluster.id, cluster.functions.len(), cluster.assets.len(), cluster.total_size);
-            
+
             // Try to fit entire cluster in one bank
             for bank in &mut banks {
                 if bank.can_fit(cluster.total_size, bank_size) {
@@ -193,8 +187,6 @@ impl BankAllocator {
                         asset_assignments.insert(asset.clone(), bank.id);
                     }
                     
-                    eprintln!("       → Assigned to Bank #{} ({} bytes used)", 
-                        bank.id, bank.used_bytes);
                     assigned = true;
                     break;
                 }
@@ -219,7 +211,6 @@ impl BankAllocator {
                     asset_assignments.insert(asset.clone(), 0);
                 }
                 
-                eprintln!("       → Forced into Bank #0 ({} bytes used, may overflow)", bank0.used_bytes);
             }
         }
         
@@ -314,7 +305,6 @@ impl BankAllocator {
             }
         }
         
-        eprintln!("📦 Distributed {} assets across Banks #{}-#{}", all_assets.len(), first_asset_bank, last_asset_bank);
         
         // Re-run the same allocation logic as assign_banks FOR FUNCTIONS ONLY
         for cluster in &clusters {

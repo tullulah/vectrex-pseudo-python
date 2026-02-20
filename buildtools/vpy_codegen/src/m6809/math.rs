@@ -205,7 +205,6 @@ pub fn emit_runtime_helpers(out: &mut String, needed: &HashSet<String>) {
     }
     
     // MOD16: Modulo X % D -> D (remainder) - ALWAYS EMIT (conditional detection broken)
-    eprintln!("[DEBUG MATH] Emitting MOD16 helper (always emitted)");
     out.push_str("MOD16:\n");
     out.push_str("    ; Modulo 16-bit X % D -> D\n");
     out.push_str("    PSHS X,D\n");

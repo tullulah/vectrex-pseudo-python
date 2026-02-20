@@ -89,14 +89,12 @@ fn analyze_used_assets(module: &Module, assets: &[crate::AssetInfo]) -> std::col
                    (name_upper == "PLAY_SFX" && call_info.args.len() == 1) ||
                    (name_upper == "LOAD_LEVEL" && call_info.args.len() == 1) {
                     if let Expr::StringLit(asset_name) = &call_info.args[0] {
-                        eprintln!("[DEBUG] Found asset usage: {} ({})", asset_name, name_upper);
                         used.insert(asset_name.clone());
-                        
+
                         // If loading a level, also mark vectors it references as used
                         if name_upper == "LOAD_LEVEL" {
                             let level_vectors = extract_level_vectors(asset_name, assets);
                             for vec_name in level_vectors {
-                                eprintln!("[DEBUG] Level '{}' references vector: {}", asset_name, vec_name);
                                 used.insert(vec_name);
                             }
                         }
@@ -277,7 +275,6 @@ pub fn generate_m6809_asm(
     
     // Detect if this is a multibank ROM (>32KB)
     let is_multibank = rom_size > 32768;
-    eprintln!("[CODEGEN] rom_size={}, bank_size={}, is_multibank={}", rom_size, bank_size, is_multibank);
     
     // Set multibank mode for builtins (affects asset reference generation)
     builtins::set_multibank_mode(is_multibank);
@@ -384,8 +381,6 @@ pub fn generate_m6809_asm(
     builtins::set_banked_assets_mode(should_distribute_assets);
     
     if is_multibank {
-        eprintln!("[CODEGEN] *** MULTIBANK MODE DETECTED: rom_size={} > 32768 ***", rom_size);
-        
         // Build call graph and run allocator
         use vpy_bank_allocator::{CallGraph, BankConfig};
         
@@ -406,10 +401,6 @@ pub fn generate_m6809_asm(
         
         match allocator.assign_banks() {
             Ok(assignments) => {
-                eprintln!("[CODEGEN] Multibank function distribution:");
-                let stats = allocator.assignment_stats(&assignments);
-                eprintln!("{}", stats.summary());
-                
                 // Generate functions distributed by bank
                 functions_by_bank = functions::generate_functions_by_bank(module, &assets, &assignments)?;
                 _bank_assignments = assignments;
@@ -455,8 +446,6 @@ pub fn generate_m6809_asm(
     if !assets.is_empty() {
         if should_distribute_assets {
             // MULTIBANK: Distribute ALL assets across banks 1-30 (no threshold)
-            eprintln!("[CODEGEN] Multibank mode: distributing {} assets across Banks 1-30", 
-                     assets.len());
             
             let (bank_asm_map, lookup_tables) = assets::generate_distributed_assets_asm(
                 &assets,
@@ -479,8 +468,6 @@ pub fn generate_m6809_asm(
             
         } else {
             // SINGLE-BANK: All assets in Bank #0
-            eprintln!("[CODEGEN] Single-bank mode: keeping {} assets in Bank #0", 
-                     assets.len());
             let assets_asm = assets::generate_assets_asm(&assets)
                 .map_err(|e| format!("Asset generation failed: {}", e))?;
             asm.push_str(&assets_asm);
@@ -493,17 +480,8 @@ pub fn generate_m6809_asm(
         // Use saved bank_asm_map from distribution phase (already computed above)
         let bank_asm_map = &distributed_bank_asm_map;
         
-        // DEBUG: Print what's in the map
-        eprintln!("[DEBUG] distributed_bank_asm_map has {} entries: {:?}", 
-                 bank_asm_map.len(),
-                 bank_asm_map.keys().collect::<Vec<_>>());
-        eprintln!("[DEBUG] functions_by_bank has {} entries: {:?}",
-                 functions_by_bank.len(),
-                 functions_by_bank.keys().collect::<Vec<_>>());
-        
         // Emit banks 1 through (helpers_bank - 1) with their assets and functions
         for bank_id in 1..(helpers_bank as usize) {
-            eprintln!("[DEBUG] Processing bank_id={}", bank_id);
             asm.push_str(&format!("\n; ================================================\n"));
             
             let has_assets = bank_asm_map.get(&(bank_id as u8)).is_some();
@@ -593,14 +571,6 @@ pub fn generate_m6809_asm(
     // Hardware vectors ($FFF0-$FFFF) are in BIOS ROM
     // BIOS vectors point to RAM vectors ($CBF2-$CBFB) as defined in VECTREX.I
     // Cartridge starts at $0000 and BIOS jumps there after verification
-    
-    // DEBUG: Verify final ASM contains Bank #1 assets
-    if let Some(pos) = asm.find("; BANK #1 -") {
-        let snippet = &asm[pos..std::cmp::min(pos + 200, asm.len())];
-        eprintln!("[DEBUG FINAL ASM] Bank #1 marker found at pos {}: {:?}", pos, snippet);
-    } else {
-        eprintln!("[DEBUG FINAL ASM] No '; BANK #1 -' marker found in final ASM!");
-    }
     
     Ok(asm)
 }

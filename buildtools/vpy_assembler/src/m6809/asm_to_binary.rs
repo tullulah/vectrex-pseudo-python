@@ -1,5 +1,5 @@
-// ASM to Binary Converter - Convierte código M6809 assembly a binario
-// Esto reemplaza la dependencia de lwasm con generación nativa
+// ASM to Binary Converter - Converts M6809 assembly code to binary
+// Replaces the dependency on lwasm with native binary generation
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -31,16 +31,16 @@ pub fn set_include_dir(dir: Option<PathBuf>) {
     }
 }
 
-/// Convierte código M6809 assembly a formato binario
-/// 
+/// Converts M6809 assembly code to binary format
+///
 /// Arguments:
 /// - `asm_source`: ASM source code
 /// - `org`: Origin address
 /// - `object_mode`: If true, allows unresolved symbols and returns UnresolvedRef list
 ///
 /// Returns:
-/// - bytes_binarios: Assembled binary
-/// - linea_vpy -> offset_binario: Line map
+/// - assembled binary bytes
+/// - vpy_line -> binary_offset: Line map
 /// - symbol_table: Defined symbols
 /// - unresolved_refs: Unresolved symbols (only in object_mode)
 pub fn assemble_m6809(
@@ -49,71 +49,57 @@ pub fn assemble_m6809(
     object_mode: bool,
     use_long_branches: bool,
 ) -> Result<(Vec<u8>, HashMap<usize, usize>, HashMap<String, u16>, Vec<UnresolvedRef>), String> {
-    let line_count = asm_source.lines().count();
-    let org_count = asm_source.matches("ORG ").count();
-    eprintln!("🔍 [ASSEMBLE START] org=0x{:04X}, asm_source_len={} bytes, {} lines, {} ORG directives", 
-        org, asm_source.len(), line_count, org_count);
-    
-    // DEBUG: Show first 10 lines if multiple ORGs detected
-    if org_count > 1 {
-        eprintln!("⚠️  WARNING: Multiple ORG directives detected in single assembly unit!");
-        eprintln!("   First 10 lines:");
-        for (i, line) in asm_source.lines().take(10).enumerate() {
-            eprintln!("   {:3}: {}", i+1, line);
-        }
-    }
-    
     let mut emitter = BinaryEmitter::new(org);
-    let mut equates: HashMap<String, u16> = HashMap::new(); // Para directivas EQU
-    let mut unresolved_refs: Vec<UnresolvedRef> = Vec::new(); // Símbolos no resueltos (object mode)
+    let mut equates: HashMap<String, u16> = HashMap::new(); // For EQU directives
+    let mut unresolved_refs: Vec<UnresolvedRef> = Vec::new(); // Unresolved symbols (object mode)
     
     // Configure emitter for object mode and long branches
     emitter.set_object_mode(object_mode);
     emitter.set_long_branches(use_long_branches);
     
-    // SIEMPRE cargar símbolos de Vectrex BIOS al inicio
+    // Always load Vectrex BIOS symbols at startup
     load_vectrex_symbols(&mut equates);
     
-    // PRE-PASADA: Procesar TODO el archivo recolectando símbolos EQU e INCLUDE
-    // Hacemos múltiples pasadas para resolver dependencias entre símbolos
+    // PRE-PASS: Process entire file collecting EQU and INCLUDE symbols
+    // Multiple passes to resolve symbol dependencies
     let lines: Vec<&str> = asm_source.lines().collect();
-    let mut unresolved_equs: Vec<(String, String)> = Vec::new(); // (nombre, expresión)
+    let mut unresolved_equs: Vec<(String, String)> = Vec::new(); // (name, expression)
     let mut max_iterations = 10;
     
-    // Primera pasada: Procesar INCLUDE y cargar EQU simples (valores literales)
+    // First pass: Process INCLUDE and load simple EQU (literal values)
     for line in &lines {
         let trimmed = line.trim();
-        
-        // Saltar vacías y comentarios
+
+        // Skip empty lines and comments
         if trimmed.is_empty() || trimmed.starts_with(';') || trimmed.starts_with('*') {
             continue;
         }
-        
-        // Procesar directivas INCLUDE
+
+        // Process INCLUDE directives
         if let Some(include_path) = parse_include_directive(trimmed) {
-            // Procesar archivo incluido y cargar sus símbolos
+            // Process included file and load its symbols
             if let Err(e) = process_include_file(&include_path, &mut equates) {
                 eprintln!("Warning: {}", e);
             }
             continue;
         }
         
-        // Procesar EQU
+        // Process EQU
         if let Some((name, expr)) = parse_equ_directive_raw(trimmed) {
-            // Intentar evaluar la expresión
+            // Try to evaluate the expression
             match evaluate_expression(&expr, &equates) {
                 Ok(value) => {
                     equates.insert(name, value);
                 }
                 Err(_) => {
-                    // No se puede resolver todavía, guardar para después
+                    // Cannot resolve yet, save for later
                     unresolved_equs.push((name, expr));
                 }
             }
         }
     }
-    
-    // Pasadas adicionales para resolver EQU que dependen de otros símbolos
+
+    // Additional passes to resolve EQU symbols that depend on other symbols
     while !unresolved_equs.is_empty() && max_iterations > 0 {
         max_iterations -= 1;
         let mut still_unresolved = Vec::new();
@@ -131,7 +117,7 @@ pub fn assemble_m6809(
             }
         }
         
-        // Si no se resolvió ninguno en esta iteración, romper el ciclo
+        // If none were resolved in this iteration, break the loop
         if still_unresolved.len() == previous_count {
             break;
         }
@@ -139,25 +125,20 @@ pub fn assemble_m6809(
         unresolved_equs = still_unresolved;
     }
     
-    // DEBUG: Check LEVEL_GP_BUFFER value after EQU resolution
-    if let Some(&value) = equates.get("LEVEL_GP_BUFFER") {
-        eprintln!("DEBUG: After EQU resolution, LEVEL_GP_BUFFER = 0x{:04X} ({})", value, value);
-    }
-    
-    // Primera pasada: procesar etiquetas, EQU y generar código
+    // First pass: process labels, EQU and generate code
     let mut current_line = 1;
-    let mut last_global_label = String::from("_START");  // Track última etiqueta global para locales
+    let mut last_global_label = String::from("_START");  // Track last global label for locals
     
     for line in asm_source.lines() {
         let trimmed = line.trim();
         
-        // Saltar líneas vacías y comentarios
+        // Skip empty lines and comments
         if trimmed.is_empty() || trimmed.starts_with(';') || trimmed.starts_with('*') {
             current_line += 1;
             continue;
         }
         
-        // Detectar línea de origen VPy desde comentarios especiales
+        // Detect VPy source line from special marker comments
         // Formato: ; VPy line 42
         if let Some(vpy_line) = parse_vpy_line_marker(trimmed) {
             emitter.set_source_line(vpy_line);
@@ -169,15 +150,15 @@ pub fn assemble_m6809(
             continue;
         }
         
-        // Procesar directiva INCLUDE (ya procesado en PRE-PASS, ignorar aquí)
+        // Process INCLUDE directive (already handled in PRE-PASS, ignore here)
         if trimmed.to_uppercase().starts_with("INCLUDE") {
             current_line += 1;
             continue;
         }
         
-        // Procesar etiquetas (terminan en :)
+        // Process labels (end with :)
         if let Some(label) = parse_label(trimmed) {
-            // Si es etiqueta local (empieza con .), prefijar con última global
+            // If local label (starts with .), prefix with last global label
             let full_label = if label.starts_with('.') {
                 format!("{}{}", last_global_label, label)
             } else {
@@ -185,34 +166,19 @@ pub fn assemble_m6809(
                 label.to_string()
             };
             emitter.define_label(&full_label);
-            
-            // 🔍 TRACE: Definición de labels importantes y assets
-            if full_label == "DSL_NEXT_PATH" || full_label == "DSL_LOOP" || full_label == "DSL_DONE" || full_label.contains("_MUSIC") || full_label.contains("_VECTORS") {
-                eprintln!("🏷️  Line {}: Defined label '{}' at addr=${:04X} off={}", 
-                    current_line, full_label, emitter.current_address, emitter.current_offset());
-            }
-            
+
             current_line += 1;
             continue;
         }
         
-        // Procesar directivas ORG (cambio de dirección base)
+        // Process ORG directives (base address change)
         if trimmed.to_uppercase().starts_with("ORG") {
             // Parse ORG directive: "ORG $FFF0" or "ORG 0xFFF0"
             let parts: Vec<&str> = trimmed.split_whitespace().collect();
             if parts.len() >= 2 {
                 let addr_str = parts[1].trim_start_matches('$').trim_start_matches("0x");
                 if let Ok(new_org) = u16::from_str_radix(addr_str, 16) {
-                    let prev_offset = emitter.current_offset();
                     emitter.set_org(new_org);
-                    let new_offset = emitter.current_offset();
-                    eprintln!("✓ ORG ${:04X} processed at line {} (offset: 0x{:X} → 0x{:X}, delta={})", 
-                        new_org, current_line, prev_offset, new_offset, new_offset as i64 - prev_offset as i64);
-                    
-                    // WARNING if padding is huge
-                    if new_offset > prev_offset && (new_offset - prev_offset) > 16384 {
-                        eprintln!("   ⚠️  LARGE PADDING: {} bytes added!", new_offset - prev_offset);
-                    }
                 } else {
                     eprintln!("⚠️  Warning: Invalid ORG address: {}", parts[1]);
                 }
@@ -221,60 +187,23 @@ pub fn assemble_m6809(
             continue;
         }
         
-        // 🔍 DEBUG: Log when processing lines that will emit around 0x404D
-        if emitter.current_address >= 0x4048 && emitter.current_address <= 0x4055 {
-            eprintln!("🔍 [DEBUG 0x404D] Processing line {}: addr=0x{:04X}, ASM: {}", 
-                current_line, emitter.current_address, trimmed);
-        }
-        
-        // 🔍 TRACE: Antes de procesar instrucción
-        let trace_labels = ["DSL_LOOP", "DSL_NEXT_PATH", "DSL_DONE", "_PLAYER_VECTORS", "_TRIANGLE_VECTORS"];
-        let should_trace = trace_labels.iter().any(|&l| last_global_label == l);
-        if should_trace {
-            eprintln!("🔍 Line {}: [{}] {} → addr=${:04X} off={}", 
-                current_line, last_global_label, trimmed, emitter.current_address, emitter.current_offset());
-        }
-        
-        // Procesar instrucciones y directivas de datos
+        // Process instructions and data directives
         if let Err(e) = parse_and_emit_instruction(&mut emitter, trimmed, &equates, &last_global_label) {
-            return Err(format!("Error en línea {}: {} (código: '{}')", current_line, e, trimmed));
+            return Err(format!("Error at line {}: {} (code: '{}')", current_line, e, trimmed));
         }
-        
-        // 🔍 DEBUG: Log after processing if we emitted at 0x404D range
-        if emitter.current_address >= 0x4048 && emitter.current_address <= 0x4060 {
-            eprintln!("🔍 [DEBUG 0x404D] After line {}: addr=0x{:04X}, offset=0x{:04X}", 
-                current_line, emitter.current_address, emitter.current_offset());
-        }
-        
-        // 🔍 TRACE: Después de procesar
-        if should_trace {
-            eprintln!("   ✓ After: addr=${:04X} off={} (delta={})", 
-                emitter.current_address, emitter.current_offset(),
-                emitter.current_offset() as i32 - (emitter.current_address as i32 - org as i32));
-        }
-        
+
         current_line += 1;
     }
     
-    // 🔍 DEBUG: Log emitter state before resolve_symbols
-    let asm_snippet = if asm_source.len() > 200 { &asm_source[..200] } else { asm_source };
-    eprintln!("🔍 [BEFORE RESOLVE] current_address=0x{:04X}, code.len()={}, org={}", 
-        emitter.current_address, emitter.current_offset(), org);
-    eprintln!("   ASM snippet (first 200 chars): {}", asm_snippet.lines().take(5).collect::<Vec<_>>().join(" | "));
-    
-    // Segunda pasada: resolver símbolos (incluyendo símbolos externos de BIOS)
+    // Second pass: resolve symbols (including external BIOS symbols)
     emitter.resolve_symbols_with_equates(&equates)?;
     
-    // 🔍 DEBUG: Log emitter state after resolve_symbols
-    eprintln!("🔍 [AFTER RESOLVE] current_address=0x{:04X}, code.len()={}", 
-        emitter.current_address, emitter.current_offset());
-    
-    // En object mode, extraer referencias no resueltas del emitter
+    // In object mode, extract unresolved references from emitter
     if object_mode {
         unresolved_refs = emitter.take_unresolved_refs();
     }
     
-    // Obtener mapeo y symbols ANTES de finalizar (finalize consume emitter)
+    // Get mapping and symbols BEFORE finalizing (finalize consumes emitter)
     let line_map = emitter.get_line_to_offset_map().clone();
     let symbol_table = emitter.get_symbol_table().clone();
     let binary = emitter.finalize();
@@ -282,7 +211,7 @@ pub fn assemble_m6809(
     Ok((binary, line_map, symbol_table, unresolved_refs))
 }
 
-/// Extrae número de línea VPy desde comentario marcador
+/// Extracts VPy line number from marker comment
 fn parse_vpy_line_marker(line: &str) -> Option<usize> {
     // Formato: ; VPy line 42
     if line.starts_with("; VPy line ") {
@@ -293,7 +222,7 @@ fn parse_vpy_line_marker(line: &str) -> Option<usize> {
     }
 }
 
-/// Parsea directiva EQU devolviendo la expresión sin evaluar (para pre-pass con dependencias)
+/// Parses an EQU directive returning the raw expression unevaluated (for pre-pass with dependencies)
 fn parse_equ_directive_raw(line: &str) -> Option<(String, String)> {
     let upper = line.to_uppercase();
     if upper.contains(" EQU ") {
@@ -309,7 +238,7 @@ fn parse_equ_directive_raw(line: &str) -> Option<(String, String)> {
     None
 }
 
-/// Parsea directiva EQU (formato: SYMBOL EQU $C800)
+/// Parses an EQU directive (format: SYMBOL EQU $C800)
 #[allow(dead_code)]
 fn parse_equ_directive(line: &str) -> Option<(String, u16)> {
     let upper = line.to_uppercase();
@@ -328,11 +257,11 @@ fn parse_equ_directive(line: &str) -> Option<(String, u16)> {
     None
 }
 
-/// Parsea directiva INCLUDE (formato: INCLUDE "file.I")
+/// Parses an INCLUDE directive (format: INCLUDE "file.I")
 fn parse_include_directive(line: &str) -> Option<String> {
     let upper = line.to_uppercase();
     if upper.starts_with("INCLUDE") {
-        // Extraer nombre de archivo entre comillas
+        // Extract filename between quotes
         if let Some(start) = line.find('"') {
             if let Some(end) = line.rfind('"') {
                 if end > start {
@@ -344,15 +273,15 @@ fn parse_include_directive(line: &str) -> Option<String> {
     None
 }
 
-/// Resuelve path de INCLUDE buscando en directorios estándar
+/// Resolves INCLUDE path by searching standard directories
 #[allow(static_mut_refs)]
 fn resolve_include_path(include_path: &str) -> Option<PathBuf> {
-    // Priorizar el directorio especificado por --include-dir
+    // Prioritize directory specified via --include-dir
     let base_dir = unsafe {
         INCLUDE_DIR.clone().or_else(|| std::env::current_dir().ok())
     }?;
     
-    // Buscar workspace root (sube hasta encontrar Cargo.toml en root)
+    // Find workspace root (walk up until Cargo.toml at root is found)
     let workspace_root = {
         let mut current = base_dir.clone();
         loop {
@@ -366,21 +295,21 @@ fn resolve_include_path(include_path: &str) -> Option<PathBuf> {
         }
     };
     
-    // Paths a intentar (en orden de prioridad)
+    // Paths to try (in priority order)
     let mut search_paths = vec![
-        // Desde el directorio base especificado
+        // From the specified base directory
         base_dir.join(include_path),
         base_dir.join("include").join(include_path),
         base_dir.join("ide/frontend/public/include").join(include_path),
     ];
     
-    // Agregar paths desde workspace root si se encontró
+    // Add paths from workspace root if found
     if let Some(ws_root) = &workspace_root {
         search_paths.push(ws_root.join("include").join(include_path));
         search_paths.push(ws_root.join("ide/frontend/public/include").join(include_path));
     }
     
-    // Paths adicionales (parent del base_dir)
+    // Additional paths (parent of base_dir)
     if let Some(parent) = base_dir.parent() {
         search_paths.push(parent.join(include_path));
         search_paths.push(parent.join("include").join(include_path));
@@ -402,35 +331,35 @@ fn resolve_include_path(include_path: &str) -> Option<PathBuf> {
     None
 }
 
-/// Procesa archivo INCLUDE y extrae símbolos EQU
+/// Processes an INCLUDE file and extracts EQU symbols
 fn process_include_file(include_path: &str, equates: &mut HashMap<String, u16>) -> Result<(), String> {
-    // Resolver path del archivo
+    // Resolve file path
     let resolved_path = resolve_include_path(include_path)
         .ok_or_else(|| format!("INCLUDE file not found: {}", include_path))?;
-    
-    // Leer contenido del archivo
+
+    // Read file content
     let content = fs::read_to_string(&resolved_path)
         .map_err(|e| format!("Error reading INCLUDE file {}: {}", include_path, e))?;
-    
-    // Parsear EQU del archivo incluido
+
+    // Parse EQU from included file
     for line in content.lines() {
         let trimmed = line.trim();
-        
-        // Saltar vacías y comentarios
+
+        // Skip empty lines and comments
         if trimmed.is_empty() || trimmed.starts_with(';') || trimmed.starts_with('*') {
             continue;
         }
         
-        // Procesar EQU
+        // Process EQU
         if let Some((name, expr)) = parse_equ_directive_raw(trimmed) {
-            // Intentar evaluar inmediatamente
+            // Try to evaluate immediately
             match evaluate_expression(&expr, equates) {
                 Ok(value) => {
                     equates.insert(name, value);
                 }
                 Err(_) => {
-                    // Si no se puede resolver, ignorar por ahora
-                    // (será procesado en el pre-pass principal)
+                    // If it cannot be resolved, ignore for now
+                    // (will be processed in the main pre-pass)
                 }
             }
         }
@@ -439,39 +368,44 @@ fn process_include_file(include_path: &str, equates: &mut HashMap<String, u16>) 
     Ok(())
 }
 
-/// Carga símbolos predefinidos de Vectrex (VECTREX.I + BIOS functions)
+/// Loads predefined Vectrex symbols (VECTREX.I + BIOS functions)
+#[allow(static_mut_refs)]
 pub fn load_vectrex_symbols(equates: &mut HashMap<String, u16>) {
-    // Parse VECTREX.I file directly to get authoritative symbol definitions
-    // This ensures we always have the correct addresses from the source
-    
-    // Try multiple possible paths (handle different working directories)
-    let possible_paths = vec![
+    // Build candidate list: INCLUDE_DIR (set by caller) takes highest priority
+    let mut candidates: Vec<std::path::PathBuf> = Vec::new();
+
+    unsafe {
+        if let Some(ref dir) = INCLUDE_DIR {
+            candidates.push(dir.join("VECTREX.I"));
+        }
+    }
+
+    // Fallback relative paths for dev/source-tree usage
+    for rel in &[
         "ide/frontend/public/include/VECTREX.I",
         "../ide/frontend/public/include/VECTREX.I",
         "../../ide/frontend/public/include/VECTREX.I",
         "./ide/frontend/public/include/VECTREX.I",
-    ];
-    
-    let mut found = false;
-    for path in &possible_paths {
-        if let Ok(content) = std::fs::read_to_string(path) {
-            eprintln!("✓ Loaded BIOS symbols from VECTREX.I ({})", path);
+    ] {
+        candidates.push(std::path::PathBuf::from(rel));
+    }
+
+    for candidate in &candidates {
+        if let Ok(content) = std::fs::read_to_string(candidate) {
+            eprintln!("✓ Loaded BIOS symbols from VECTREX.I ({})", candidate.display());
             parse_vectrex_symbols(&content, equates);
-            found = true;
-            break;
+            return;
         }
     }
-    
-    if !found {
-        eprintln!("❌ FATAL: Could not load VECTREX.I from any expected path");
-        eprintln!("   Searched paths:");
-        for path in possible_paths.iter() {
-            eprintln!("     - {:?}", path);
-        }
-        eprintln!("\n   VECTREX.I is required for BIOS symbol definitions.");
-        eprintln!("   Cannot proceed with assembly - BIOS symbols undefined.");
-        panic!("VECTREX.I not found - cannot assemble without BIOS symbols");
+
+    eprintln!("❌ FATAL: Could not load VECTREX.I from any expected path");
+    eprintln!("   Searched paths:");
+    for c in &candidates {
+        eprintln!("     - {:?}", c);
     }
+    eprintln!("\n   VECTREX.I is required for BIOS symbol definitions.");
+    eprintln!("   Cannot proceed with assembly - BIOS symbols undefined.");
+    panic!("VECTREX.I not found - cannot assemble without BIOS symbols");
 }
 
 /// Parse EQU definitions from VECTREX.I content
@@ -518,7 +452,7 @@ fn parse_vectrex_symbols(content: &str, equates: &mut HashMap<String, u16>) {
     }
 }
 
-/// Extrae etiqueta si la línea la define
+/// Extracts label if the line defines one
 fn parse_label(line: &str) -> Option<&str> {
     // ✅ FIX: Remove inline comments BEFORE checking for labels
     // Comments can contain ':' which would be incorrectly detected as labels
@@ -540,9 +474,9 @@ fn parse_label(line: &str) -> Option<&str> {
     None
 }
 
-/// Parsea y emite una instrucción M6809
+/// Parses and emits an M6809 instruction
 fn parse_and_emit_instruction(emitter: &mut BinaryEmitter, line: &str, equates: &HashMap<String, u16>, last_global_label: &str) -> Result<(), String> {
-    // Remover comentarios inline
+    // Remove inline comments
     let code = if let Some(idx) = line.find(';') {
         &line[..idx]
     } else {
@@ -553,22 +487,17 @@ fn parse_and_emit_instruction(emitter: &mut BinaryEmitter, line: &str, equates: 
         return Ok(());
     }
     
-    // Separar mnemónico de operandos
+    // Separate mnemonic from operands
     let parts: Vec<&str> = code.splitn(2, char::is_whitespace).collect();
     let mnemonic = parts[0].to_uppercase();
     let operand = if parts.len() > 1 { parts[1].trim() } else { "" };
     
-    // DEBUG: Ver TODAS las instrucciones indexadas
-    if operand.contains(',') && operand.len() <= 6 && !operand.contains("++") {
-        eprintln!("🔎 parse_and_emit: {} '{}' (full line: '{}')", mnemonic, operand, code);
-    }
-    
-    // Despachar según mnemónico
+    // Dispatch on mnemonic
     match mnemonic.as_str() {
-        // === DIRECTIVAS DE DATOS ===
+        // === DATA DIRECTIVES ===
         "FCC" => emit_fcc(emitter, operand),
-        "FCB" | "DB" => emit_fcb(emitter, operand),  // DB es alias común (Frogger usa DB)
-        "FDB" | "FDW" | "DW" => emit_fdb(emitter, operand, equates),  // DW es alias común (Frogger usa DW)
+        "FCB" | "DB" => emit_fcb(emitter, operand),  // DB is a common alias (Frogger uses DB)
+        "FDB" | "FDW" | "DW" => emit_fdb(emitter, operand, equates),  // DW is a common alias (Frogger uses DW)
         "RMB" => emit_rmb(emitter, operand),
         "ZMB" => emit_zmb(emitter, operand),
         // === LOAD/STORE ===
@@ -589,8 +518,8 @@ fn parse_and_emit_instruction(emitter: &mut BinaryEmitter, line: &str, equates: 
         "BNE" => emit_bne(emitter, operand, last_global_label),
         "BCC" => emit_bcc(emitter, operand, last_global_label),
         "BCS" => emit_bcs(emitter, operand, last_global_label),
-        "BHS" => emit_bcc(emitter, operand, last_global_label), // Alias de BCC (Branch if Higher or Same)
-        "BLO" => emit_bcs(emitter, operand, last_global_label), // Alias de BCS (Branch if LOwer)
+        "BHS" => emit_bcc(emitter, operand, last_global_label), // Alias for BCC (Branch if Higher or Same)
+        "BLO" => emit_bcs(emitter, operand, last_global_label), // Alias for BCS (Branch if LOwer)
         "BLE" => emit_ble(emitter, operand, last_global_label),
         "BGT" => emit_bgt(emitter, operand, last_global_label),
         "BLT" => emit_blt(emitter, operand, last_global_label),
@@ -608,8 +537,8 @@ fn parse_and_emit_instruction(emitter: &mut BinaryEmitter, line: &str, equates: 
         "LBNE" => emit_lbne(emitter, operand, last_global_label),
         "LBCS" => emit_lbcs(emitter, operand, last_global_label),
         "LBCC" => emit_lbcc(emitter, operand, last_global_label),
-        "LBHS" => emit_lbcc(emitter, operand, last_global_label), // LBHS = LBCC (branch if higher or same)
-        "LBLO" => emit_lbcs(emitter, operand, last_global_label), // LBLO = LBCS (branch if lower)
+        "LBHS" => emit_lbcc(emitter, operand, last_global_label), // LBHS = LBCC (Branch if Higher or Same)
+        "LBLO" => emit_lbcs(emitter, operand, last_global_label), // LBLO = LBCS (Branch if Lower)
         "LBHI" => emit_lbhi(emitter, operand, last_global_label),
         "LBLS" => emit_lbls(emitter, operand, last_global_label),
         "LBLT" => emit_lblt(emitter, operand, last_global_label),
@@ -648,8 +577,8 @@ fn parse_and_emit_instruction(emitter: &mut BinaryEmitter, line: &str, equates: 
         "DECA" => { emitter.deca(); Ok(()) },
         "DECB" => { emitter.decb(); Ok(()) },
         "DEC" => emit_dec(emitter, operand, equates),
-        "ASLA" | "LSLA" => { emitter.asla(); Ok(()) },  // LSLA es alias de ASLA
-        "ASLB" | "LSLB" => { emitter.aslb(); Ok(()) },  // LSLB es alias de ASLB
+        "ASLA" | "LSLA" => { emitter.asla(); Ok(()) },  // LSLA is alias for ASLA
+        "ASLB" | "LSLB" => { emitter.aslb(); Ok(()) },  // LSLB is alias for ASLB
         "ROLA" => { emitter.rola(); Ok(()) },
         "ROLB" => { emitter.rolb(); Ok(()) },
         "LSRA" => { emitter.lsra(); Ok(()) },
@@ -696,20 +625,20 @@ fn parse_and_emit_instruction(emitter: &mut BinaryEmitter, line: &str, equates: 
         "PULS" => emit_puls(emitter, operand),
         "PULU" => emit_pulu(emitter, operand),
         
-        _ => Err(format!("Instrucción no soportada: {}", mnemonic))
+        _ => Err(format!("Unsupported instruction: {}", mnemonic))
     }
 }
 
-// === HELPERS DE EMISIÓN POR INSTRUCCIÓN ===
+// === PER-INSTRUCTION EMISSION HELPERS ===
 
-/// Evalúa una expresión aritmética: SYMBOL+10, LABEL-2, etc.
+/// Evaluates an arithmetic expression: SYMBOL+10, LABEL-2, etc.
 fn evaluate_expression(expr: &str, equates: &HashMap<String, u16>) -> Result<u16, String> {
     let expr = expr.trim();
     
     // Strip > or < prefix if present (extended/direct mode markers)
     let expr = expr.trim_start_matches('>').trim_start_matches('<');
     
-    // Detectar operadores + o -
+    // Detect + or - operators
     if let Some(pos) = expr.rfind('+') {
         let left = expr[..pos].trim();
         let right = expr[pos+1..].trim();
@@ -722,9 +651,9 @@ fn evaluate_expression(expr: &str, equates: &HashMap<String, u16>) -> Result<u16
                 Ok(result)
             },
             Err(e) if e.starts_with("SYMBOL:") => {
-                // Preservar addend cuando el símbolo base aún no está resuelto (pass 2)
+                // Preserve addend when the base symbol is not yet resolved (pass 2)
                 if offset > i16::MAX as u16 {
-                    return Err(format!("Addend fuera de rango (>{}): {}", i16::MAX, offset));
+                    return Err(format!("Addend out of range (>{}): {}", i16::MAX, offset));
                 }
                 let sym = e.trim_start_matches("SYMBOL:");
                 Err(format!("SYMBOL:{}+{}", sym, offset))
@@ -734,16 +663,16 @@ fn evaluate_expression(expr: &str, equates: &HashMap<String, u16>) -> Result<u16
     }
     
     if let Some(pos) = expr.rfind('-') {
-        // Cuidado con números negativos como -127
+        // Be careful with negative numbers like -127
         if pos > 0 {
             let left = expr[..pos].trim();
             let right = expr[pos+1..].trim();
-            let offset = evaluate_expression(right, equates)?; // Recursivo para right
+            let offset = evaluate_expression(right, equates)?; // Recursive for right
             return match evaluate_expression(left, equates) {
                 Ok(base) => Ok(base.wrapping_sub(offset)),
                 Err(e) if e.starts_with("SYMBOL:") => {
                     if offset > i16::MAX as u16 {
-                        return Err(format!("Addend fuera de rango (>{}): {}", i16::MAX, offset));
+                        return Err(format!("Addend out of range (>{}): {}", i16::MAX, offset));
                     }
                     let sym = e.trim_start_matches("SYMBOL:");
                     Err(format!("SYMBOL:{}-{}", sym, offset))
@@ -753,38 +682,38 @@ fn evaluate_expression(expr: &str, equates: &HashMap<String, u16>) -> Result<u16
         }
     }
     
-    // No es una expresión, es un valor directo (símbolo o número)
+    // Not an expression, it is a direct value (symbol or number)
     resolve_symbol_value(expr, equates)
 }
 
-/// Resuelve un símbolo a su valor numérico (con evaluación recursiva de expresiones)
+/// Resolves a symbol to its numeric value (with recursive expression evaluation)
 fn resolve_symbol_value(symbol: &str, equates: &HashMap<String, u16>) -> Result<u16, String> {
     // Strip > or < prefix if present (extended/direct mode markers)
     let symbol = symbol.trim_start_matches('>').trim_start_matches('<');
     let upper = symbol.to_uppercase();
-    
-    // Primero verificar si está en equates (puede ser una expresión o valor directo)
+
+    // First check equates (may be an expression or direct value)
     if let Some(&value) = equates.get(&upper) {
-        // El valor en equates ya está resuelto (fue procesado en pre-pass)
+        // Value in equates is already resolved (processed in pre-pass)
         return Ok(value);
     }
-    
-    // Si no está en equates, intentar como literal numérico
+
+    // Not in equates, try as numeric literal
     if symbol.starts_with('$') {
         parse_hex(&symbol[1..])
     } else if symbol.starts_with("0X") || symbol.starts_with("0x") {
         u16::from_str_radix(&symbol[2..], 16)
-            .map_err(|_| format!("Valor hex inválido: {}", symbol))
+            .map_err(|_| format!("Invalid hex value: {}", symbol))
     } else if symbol.chars().all(|c| c.is_digit(10)) {
         symbol.parse::<u16>()
-            .map_err(|_| format!("Valor decimal inválido: {}", symbol))
+            .map_err(|_| format!("Invalid decimal value: {}", symbol))
     } else {
-        // Es un símbolo no resuelto - podría ser una label que se resolverá en pass 2
+        // Unresolved symbol - may be a label that will be resolved in pass 2
         Err(format!("SYMBOL:{}", symbol))
     }
 }
 
-/// Parsea un número (decimal o hex)
+/// Parses a number (decimal or hex)
 #[allow(dead_code)]
 fn parse_number(s: &str) -> Result<u16, String> {
     let s = s.trim();
@@ -792,25 +721,25 @@ fn parse_number(s: &str) -> Result<u16, String> {
         parse_hex(&s[1..])
     } else if s.starts_with("0X") || s.starts_with("0x") {
         u16::from_str_radix(&s[2..], 16)
-            .map_err(|_| format!("Número hex inválido: {}", s))
+            .map_err(|_| format!("Invalid hex number: {}", s))
     } else {
         s.parse::<u16>()
-            .map_err(|_| format!("Número decimal inválido: {}", s))
+            .map_err(|_| format!("Invalid decimal number: {}", s))
     }
 }
 
-/// Resuelve un operando como dirección, consultando primero el HashMap de equates
+/// Resolves an operand as an address, consulting the equates HashMap first
 fn resolve_address(operand: &str, equates: &HashMap<String, u16>) -> Result<u16, String> {
-    // Intentar evaluar como expresión primero
+    // Try to evaluate as an expression first
     evaluate_expression(operand, equates)
 }
 
-/// Extrae (symbol, addend) de un error "SYMBOL:...".
-/// Soporta "SYMBOL:LABEL", "SYMBOL:LABEL+1", "SYMBOL:LABEL-2".
+/// Extracts (symbol, addend) from a "SYMBOL:..." error.
+/// Supports "SYMBOL:LABEL", "SYMBOL:LABEL+1", "SYMBOL:LABEL-2".
 /// Also strips > and < prefixes (extended/direct mode markers)
 fn parse_symbol_and_addend(sym_err: &str) -> Result<(String, i16), String> {
     if !sym_err.starts_with("SYMBOL:") {
-        return Err(format!("Error interno: se esperaba SYMBOL:, got: {}", sym_err));
+        return Err(format!("Internal error: expected SYMBOL:, got: {}", sym_err));
     }
 
     let rest = sym_err.trim_start_matches("SYMBOL:").trim();
@@ -823,7 +752,7 @@ fn parse_symbol_and_addend(sym_err: &str) -> Result<(String, i16), String> {
         let n = rest[pos + 1..].trim();
         let off = parse_number(n)?;
         if off > i16::MAX as u16 {
-            return Err(format!("Addend fuera de rango (>{}): {}", i16::MAX, off));
+            return Err(format!("Addend out of range (>{}): {}", i16::MAX, off));
         }
         return Ok((sym.to_string(), off as i16));
     }
@@ -834,7 +763,7 @@ fn parse_symbol_and_addend(sym_err: &str) -> Result<(String, i16), String> {
             let n = rest[pos + 1..].trim();
             let off = parse_number(n)?;
             if off > i16::MAX as u16 {
-                return Err(format!("Addend fuera de rango (>{}): {}", i16::MAX, off));
+                return Err(format!("Addend out of range (>{}): {}", i16::MAX, off));
             }
             return Ok((sym.to_string(), -(off as i16)));
         }
@@ -843,8 +772,8 @@ fn parse_symbol_and_addend(sym_err: &str) -> Result<(String, i16), String> {
     Ok((rest.to_string(), 0))
 }
 
-/// Helper: Expande labels locales (empiezan con .) con el prefijo del último label global
-/// También verifica si es un label válido (alfanumérico, guión bajo, punto)
+/// Helper: Expands local labels (starting with .) with the last global label prefix
+/// Also verifies that the label is valid (alphanumeric, underscore, dot)
 fn expand_local_label(operand: &str, last_global: &str) -> String {
     if operand.starts_with('.') {
         format!("{}{}", last_global, operand)
@@ -853,7 +782,7 @@ fn expand_local_label(operand: &str, last_global: &str) -> String {
     }
 }
 
-/// Helper: Verifica si un operando es un label (alfanumérico, guión bajo, o punto para locales)
+/// Helper: Checks whether an operand is a label (alphanumeric, underscore, or dot for locals)
 fn is_label(operand: &str) -> bool {
     operand.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '.')
 }
@@ -863,7 +792,7 @@ fn emit_lda(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
         let val = parse_immediate(&operand[1..])?;
         emitter.lda_immediate(val);
     } else if operand.contains(',') {
-        // Modo indexado: LDA ,X  LDA 5,Y  etc.
+        // Indexed mode: LDA ,X  LDA 5,Y  etc.
         let (postbyte, offset) = parse_indexed_mode(operand)?;
         emitter.lda_indexed(postbyte);
         if let Some(off) = offset {
@@ -877,11 +806,11 @@ fn emit_lda(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
             emitter.lda_extended(addr);
         }
     } else if operand.starts_with('<') {
-        // Direct page forzado (lwasm compatibility)
+        // Forced direct page (lwasm compatibility)
         let addr = resolve_address(&operand[1..], equates)?;
         emitter.lda_direct((addr & 0xFF) as u8);
     } else if operand.starts_with('>') {
-        // Extended mode forzado (lwasm compatibility) - soporta números Y símbolos
+        // Forced extended mode (lwasm compatibility) - supports numbers AND symbols
         let operand_without_prefix = &operand[1..];
         match resolve_address(operand_without_prefix, equates) {
             Ok(addr) => {
@@ -894,7 +823,7 @@ fn emit_lda(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
             Err(e) => return Err(e),
         }
     } else if operand.chars().all(|c| c.is_alphanumeric() || c == '_') {
-        // Símbolo - intentar resolver, sino usar referencia
+        // Symbol - try to resolve, otherwise use reference
         let upper = operand.to_uppercase();
         if let Some(&addr) = equates.get(&upper) {
             if addr <= 0xFF {
@@ -931,18 +860,18 @@ fn emit_ldb(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
         let val = parse_immediate(&operand[1..])?;
         emitter.ldb_immediate(val);
     } else if operand.contains(',') {
-        // Modo indexado
+        // Indexed mode
         let (postbyte, offset) = parse_indexed_mode(operand)?;
         emitter.ldb_indexed(postbyte);
         if let Some(off) = offset {
             emitter.emit(off as u8);
         }
     } else if operand.starts_with('<') {
-        // Direct page forzado (lwasm compatibility)
+        // Forced direct page (lwasm compatibility)
         let addr = resolve_address(&operand[1..], equates)?;
         emitter.ldb_direct((addr & 0xFF) as u8);
     } else if operand.starts_with('>') {
-        // Extended mode forzado (lwasm compatibility) - soporta números Y símbolos
+        // Forced extended mode (lwasm compatibility) - supports numbers AND symbols
         let operand_without_prefix = &operand[1..];
         match resolve_address(operand_without_prefix, equates) {
             Ok(addr) => {
@@ -962,7 +891,7 @@ fn emit_ldb(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
             emitter.ldb_extended(addr);
         }
     } else {
-        // Intentar evaluar como expresión (puede incluir símbolos y aritmética)
+        // Try to evaluate as expression (may include symbols and arithmetic)
         match evaluate_expression(operand, equates) {
             Ok(addr) => {
                 if addr <= 0xFF {
@@ -972,7 +901,7 @@ fn emit_ldb(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
                 }
             }
             Err(msg) => {
-                // Si el error es "SYMBOL:xxx", agregar referencia para resolver en pass 2
+                // If error is "SYMBOL:xxx", add reference to resolve in pass 2
                 if msg.starts_with("SYMBOL:") {
                     let (symbol, addend) = parse_symbol_and_addend(&msg)?;
                     emitter.emit_extended_symbol_ref(0xF6, &symbol, addend); // LDB extended
@@ -1153,7 +1082,7 @@ fn emit_std(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
         }
         Ok(())
     } else if operand.starts_with('>') {
-        // Extended mode forzado (lwasm compatibility)
+        // Forced extended mode (lwasm compatibility)
         let operand_without_prefix = &operand[1..];
         match resolve_address(operand_without_prefix, equates) {
             Ok(addr) => {
@@ -1645,7 +1574,7 @@ fn emit_adda(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<Strin
         emitter.adda_immediate(val);
         Ok(())
     } else if operand.contains(',') {
-        // Modo indexado: ADDA ,X  ADDA 5,Y  etc.
+        // Indexed mode: ADDA ,X  ADDA 5,Y  etc.
         let (postbyte, offset) = parse_indexed_mode(operand)?;
         emitter.emit(0xAB);  // ADDA indexed opcode
         emitter.emit(postbyte);
@@ -2171,7 +2100,7 @@ fn emit_tfr(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
     
     let parts: Vec<&str> = operand.split(',').map(|s| s.trim()).collect();
     if parts.len() != 2 {
-        return Err(format!("TFR requiere 2 registros separados por coma: {}", operand));
+        return Err(format!("TFR requires 2 registers separated by comma: {}", operand));
     }
     
     let src = match parts[0].to_uppercase().as_str() {
@@ -2185,7 +2114,7 @@ fn emit_tfr(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
         "B" => tfr_regs::B,
         "CC" => tfr_regs::CC,
         "DP" => tfr_regs::DP,
-        _ => return Err(format!("Registro fuente TFR inválido: {}", parts[0]))
+        _ => return Err(format!("Invalid TFR source register: {}", parts[0]))
     };
     
     let dst = match parts[1].to_uppercase().as_str() {
@@ -2199,7 +2128,7 @@ fn emit_tfr(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
         "B" => tfr_regs::B,
         "CC" => tfr_regs::CC,
         "DP" => tfr_regs::DP,
-        _ => return Err(format!("Registro destino TFR inválido: {}", parts[1]))
+        _ => return Err(format!("Invalid TFR destination register: {}", parts[1]))
     };
     
     emitter.tfr(src, dst);
@@ -2288,7 +2217,7 @@ fn emit_cmpd(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<Strin
         emitter.cmpd_immediate(val);
         Ok(())
     } else if operand.contains(',') {
-        // Modo indexado: CMPD ,X  CMPD 5,Y  etc.
+        // Indexed mode: CMPD ,X  CMPD 5,Y  etc.
         let (postbyte, offset) = parse_indexed_mode(operand)?;
         emitter.emit(0x10);  // CMPD prefix
         emitter.emit(0xA3);  // CMPD indexed opcode
@@ -2336,7 +2265,7 @@ fn emit_cmpx(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<Strin
             Err(e) => Err(e),
         }
     } else {
-        Err(format!("CMPX solo soporta modo inmediato (#valor) o extendido (>label)"))
+        Err(format!("CMPX only supports immediate mode (#value) or extended (>label)"))
     }
 }
 
@@ -2346,7 +2275,7 @@ fn emit_cmpy(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<Strin
         emitter.cmpy_immediate(val);
         Ok(())
     } else {
-        Err(format!("CMPY solo soporta modo inmediato (#valor)"))
+        Err(format!("CMPY only supports immediate mode (#value)"))
     }
 }
 
@@ -2356,7 +2285,7 @@ fn emit_cmpu(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<Strin
         emitter.cmpu_immediate(val);
         Ok(())
     } else {
-        Err(format!("CMPU solo soporta modo inmediato (#valor)"))
+        Err(format!("CMPU only supports immediate mode (#value)"))
     }
 }
 
@@ -2366,7 +2295,7 @@ fn emit_cmps(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<Strin
         emitter.cmps_immediate(val);
         Ok(())
     } else {
-        Err(format!("CMPS solo soporta modo inmediato (#valor)"))
+        Err(format!("CMPS only supports immediate mode (#value)"))
     }
 }
 
@@ -2474,7 +2403,7 @@ fn emit_dec(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
         return Ok(());
     }
     
-    // DEC para memoria (auto-select mode based on address)
+    // DEC for memory (auto-select mode based on address)
     match evaluate_expression(operand, equates) {
         Ok(addr) => {
             if addr <= 0xFF {
@@ -2494,13 +2423,13 @@ fn emit_dec(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
 }
 
 fn emit_tst(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String, u16>) -> Result<(), String> {
-    // TST para memoria (extended mode - opcode 0x7D)
+    // TST for memory (extended mode - opcode 0x7D)
     if operand.chars().all(|c| c.is_alphanumeric() || c == '_') {
-        // Es un símbolo
+        // It is a symbol
         emitter.tst_extended_sym(operand);
         Ok(())
     } else {
-        // Es una dirección numérica
+        // It is a numeric address
         match evaluate_expression(operand, equates) {
             Ok(addr) => {
                 emitter.tst_extended(addr);
@@ -2511,26 +2440,26 @@ fn emit_tst(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
     }
 }
 
-// === HELPERS DE PARSING ===
+// === PARSING HELPERS ===
 
-/// Parsea modo indexado y retorna (postbyte, tiene_offset_extra)
-/// Ejemplos: ,X+ → (0x80, false), ,X++ → (0x81, false), 4,X → (offset en postbyte, true si >-16..+15)
+/// Parses indexed mode and returns (postbyte, extra_offset)
+/// Examples: ,X+ → (0x80, false), ,X++ → (0x81, false), 4,X → (offset in postbyte, true if >-16..+15)
 fn parse_indexed_mode(operand: &str) -> Result<(u8, Option<i8>), String> {
     let trimmed = operand.trim();
     
-    // Helper para obtener bits de registro
+    // Helper to get register bits
     let get_reg_bits = |reg: &str| -> Result<u8, String> {
         match reg.to_uppercase().as_str() {
             "X" => Ok(0x00),
             "Y" => Ok(0x20),
             "U" => Ok(0x40),
             "S" => Ok(0x60),
-            _ => Err(format!("Registro no reconocido: {}", reg))
+            _ => Err(format!("Unrecognized register: {}", reg))
         }
     };
-    
-    // Modos con acumulador: A,X  B,X  D,X  A,Y  B,Y  D,Y  A,U  B,U  D,U  A,S  B,S  D,S
-    // Postbytes: A=0x86, B=0x85, D=0x8B (más bits de registro)
+
+    // Accumulator modes: A,X  B,X  D,X  A,Y  B,Y  D,Y  A,U  B,U  D,U  A,S  B,S  D,S
+    // Postbytes: A=0x86, B=0x85, D=0x8B (plus register bits)
     for index_reg in &["X", "Y", "U", "S"] {
         for acc_reg in &["A", "B", "D"] {
             if trimmed == format!("{},{}", acc_reg, index_reg) {
@@ -2546,9 +2475,9 @@ fn parse_indexed_mode(operand: &str) -> Result<(u8, Option<i8>), String> {
         }
     }
     
-    // Modos auto-increment/decrement: ,REG+ ,REG++ ,-REG --REG
-    // También soporta sin coma: REG+ REG++ (sintaxis alternativa)
-    // Soporta X, Y, U, S
+    // Auto-increment/decrement modes: ,REG+ ,REG++ ,-REG --REG
+    // Also supports without comma: REG+ REG++ (alternative syntax)
+    // Supports X, Y, U, S
     for reg in &["X", "Y", "U", "S"] {
         // ,REG+ o REG+ → post-increment by 1
         if trimmed == format!(",{}+", reg) || trimmed == format!("{}+", reg) {
@@ -2572,36 +2501,30 @@ fn parse_indexed_mode(operand: &str) -> Result<(u8, Option<i8>), String> {
         }
     }
     
-    // offset,REG → constant offset o sin offset
+    // offset,REG → constant offset or no offset
     if let Some(comma_pos) = trimmed.find(',') {
         let offset_str = trimmed[..comma_pos].trim();
         let reg_str = trimmed[comma_pos+1..].trim();
         let reg_bits = get_reg_bits(reg_str)?;
         
-        eprintln!("🐛 parse_indexed_mode: offset_str='{}' reg_str='{}' reg_bits=0x{:02X}", offset_str, reg_str, reg_bits);
-        
         if offset_str.is_empty() {
             // ,REG → zero offset (indirect)
-            eprintln!("🐛   → zero offset: 0x{:02X}", 0x84 | reg_bits);
             return Ok((0x84 | reg_bits, None));
         } else {
             // offset,REG
             let offset = parse_signed(offset_str)?;
-            eprintln!("🐛   → parsed offset: {}", offset);
             if offset >= -16 && offset <= 15 {
-                // 5-bit offset en postbyte
+                // 5-bit offset in postbyte
                 let postbyte = ((offset as u8) & 0x1F) | reg_bits;
-                eprintln!("🐛   → 5-bit postbyte: 0x{:02X}", postbyte);
                 return Ok((postbyte, None));
             } else {
                 // 8-bit offset
-                eprintln!("🐛   → 8-bit postbyte: 0x{:02X} offset={}", 0x88 | reg_bits, offset);
                 return Ok((0x88 | reg_bits, Some(offset)));
             }
         }
     }
-    
-    Err(format!("Modo indexado no reconocido: {}", operand))
+
+    Err(format!("Unrecognized indexed mode: {}", operand))
 }
 
 fn parse_immediate(s: &str) -> Result<u8, String> {
@@ -2615,18 +2538,18 @@ fn parse_immediate(s: &str) -> Result<u8, String> {
     
     if trimmed.starts_with('$') {
         u8::from_str_radix(&trimmed[1..], 16)
-            .map_err(|_| format!("Valor inmediato hex inválido: {}", s))
+            .map_err(|_| format!("Invalid hex immediate value: {}", s))
     } else if trimmed.starts_with("0x") {
         u8::from_str_radix(&trimmed[2..], 16)
-            .map_err(|_| format!("Valor inmediato hex inválido: {}", s))
+            .map_err(|_| format!("Invalid hex immediate value: {}", s))
     } else if trimmed.starts_with('-') {
-        // Número negativo - parsear como i8 y convertir a u8 (representación en complemento a 2)
+        // Negative number - parse as i8 and convert to u8 (two's complement representation)
         trimmed.parse::<i8>()
             .map(|v| v as u8)
-            .map_err(|_| format!("Valor inmediato decimal inválido: {}", s))
+            .map_err(|_| format!("Invalid decimal immediate value: {}", s))
     } else {
         trimmed.parse::<u8>()
-            .map_err(|_| format!("Valor inmediato decimal inválido: {}", s))
+            .map_err(|_| format!("Invalid decimal immediate value: {}", s))
     }
 }
 
@@ -2634,18 +2557,18 @@ fn parse_immediate_16(s: &str) -> Result<u16, String> {
     let trimmed = s.trim();
     if trimmed.starts_with('$') {
         u16::from_str_radix(&trimmed[1..], 16)
-            .map_err(|_| format!("Valor inmediato 16-bit hex inválido: {}", s))
+            .map_err(|_| format!("Invalid 16-bit hex immediate value: {}", s))
     } else if trimmed.starts_with("0x") {
         u16::from_str_radix(&trimmed[2..], 16)
-            .map_err(|_| format!("Valor inmediato 16-bit hex inválido: {}", s))
+            .map_err(|_| format!("Invalid 16-bit hex immediate value: {}", s))
     } else if trimmed.starts_with('-') {
-        // Número negativo - parsear como i16 y convertir a u16 (representación en complemento a 2)
+        // Negative number - parse as i16 and convert to u16 (two's complement representation)
         trimmed.parse::<i16>()
             .map(|v| v as u16)
-            .map_err(|_| format!("Valor inmediato 16-bit decimal inválido: {}", s))
+            .map_err(|_| format!("Invalid 16-bit decimal immediate value: {}", s))
     } else {
         trimmed.parse::<u16>()
-            .map_err(|_| format!("Valor inmediato 16-bit decimal inválido: {}", s))
+            .map_err(|_| format!("Invalid 16-bit decimal immediate value: {}", s))
     }
 }
 
@@ -2655,48 +2578,48 @@ fn parse_immediate_16_with_symbols(s: &str, equates: &HashMap<String, u16>) -> R
     // Try standard numeric parsing first
     if trimmed.starts_with('$') {
         return u16::from_str_radix(&trimmed[1..], 16)
-            .map_err(|_| format!("Valor inmediato 16-bit hex inválido: {}", s));
+            .map_err(|_| format!("Invalid 16-bit hex immediate value: {}", s));
     } else if trimmed.starts_with("0x") {
         return u16::from_str_radix(&trimmed[2..], 16)
-            .map_err(|_| format!("Valor inmediato 16-bit hex inválido: {}", s));
+            .map_err(|_| format!("Invalid 16-bit hex immediate value: {}", s));
     } else if trimmed.starts_with('-') {
         return trimmed.parse::<i16>()
             .map(|v| v as u16)
-            .map_err(|_| format!("Valor inmediato 16-bit decimal inválido: {}", s));
+            .map_err(|_| format!("Invalid 16-bit decimal immediate value: {}", s));
     } else if let Ok(num) = trimmed.parse::<u16>() {
         return Ok(num);
     }
-    
+
     // If not a number, try to resolve as symbol
     let symbol_name = trimmed.to_uppercase();
     if let Some(&value) = equates.get(&symbol_name) {
         Ok(value)
     } else {
-        Err(format!("Símbolo no resuelto: {}", trimmed))
+        Err(format!("Unresolved symbol: {}", trimmed))
     }
 }
 
 fn parse_address(s: &str) -> Result<u16, String> {
-    let trimmed = s.trim().trim_start_matches('<'); // Ignorar < de direct page
+    let trimmed = s.trim().trim_start_matches('<'); // Ignore < direct page prefix
     if trimmed.starts_with('$') {
         parse_hex(&trimmed[1..])
     } else if trimmed.starts_with("0x") {
         u16::from_str_radix(&trimmed[2..], 16)
-            .map_err(|_| format!("Dirección hex inválida: {}", s))
+            .map_err(|_| format!("Invalid hex address: {}", s))
     } else {
         trimmed.parse::<u16>()
-            .map_err(|_| format!("Dirección decimal inválida: {}", s))
+            .map_err(|_| format!("Invalid decimal address: {}", s))
     }
 }
 
 fn parse_hex(s: &str) -> Result<u16, String> {
     u16::from_str_radix(s, 16)
-        .map_err(|_| format!("Valor hexadecimal inválido: ${}", s))
+        .map_err(|_| format!("Invalid hexadecimal value: ${}", s))
 }
 
 fn parse_signed(s: &str) -> Result<i8, String> {
     s.trim().parse::<i8>()
-        .map_err(|_| format!("Offset con signo inválido: {}", s))
+        .map_err(|_| format!("Invalid signed offset: {}", s))
 }
 
 // === DIRECTIVAS DE DATOS ===
@@ -2713,7 +2636,7 @@ fn emit_fcc(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
             }
         }
     }
-    Err(format!("FCC requiere string entre comillas: {}", operand))
+    Err(format!("FCC requires a quoted string: {}", operand))
 }
 
 fn emit_fcb(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
@@ -2734,20 +2657,20 @@ fn emit_fdb(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
         if part.len() == 1 {
             let c = part.chars().next().unwrap().to_ascii_uppercase();
             if ['A', 'B', 'X', 'Y', 'U', 'S'].contains(&c) {
-                return Err(format!("FDB: Símbolo de un carácter '{}' no permitido (probablemente error de parsing)", part));
+                return Err(format!("FDB: Single-character symbol '{}' not allowed (likely a parsing error)", part));
             }
         }
         
-        // Intentar resolver como símbolo primero
+        // Try to resolve as symbol first
         let upper = part.to_uppercase();
         if let Some(&value) = equates.get(&upper) {
             emitter.emit_data_word(value);
         } else if part.chars().all(|c| c.is_alphanumeric() || c == '_') && !part.chars().all(|c| c.is_ascii_digit()) {
-            // Es un símbolo (no es puramente numérico) - usar referencia (normalizado a uppercase para consistencia)
+            // It is a symbol (not purely numeric) - use reference (normalized to uppercase for consistency)
             emitter.add_symbol_ref(&upper, false, 2);
-            emitter.emit_data_word(0x0000); // Placeholder que DEBE resolverse en PASS 2
+            emitter.emit_data_word(0x0000); // Placeholder that MUST be resolved in PASS 2
         } else {
-            // Es un valor numérico
+            // It is a numeric value
             let value = parse_immediate_16(part)?;
             emitter.emit_data_word(value);
         }
@@ -2758,7 +2681,7 @@ fn emit_fdb(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
 fn emit_rmb(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
     // RMB 10 - Reserve Memory Bytes (no init)
     let count = operand.trim().parse::<usize>()
-        .map_err(|_| format!("RMB requiere número entero: {}", operand))?;
+        .map_err(|_| format!("RMB requires an integer: {}", operand))?;
     emitter.reserve_bytes(count);
     Ok(())
 }
@@ -2766,8 +2689,8 @@ fn emit_rmb(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
 fn emit_zmb(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
     // ZMB 10 - Zero Memory Bytes (init to zero)
     let count = operand.trim().parse::<usize>()
-        .map_err(|_| format!("ZMB requiere número entero: {}", operand))?;
-    emitter.reserve_bytes(count); // Ya emite zeros por defecto
+        .map_err(|_| format!("ZMB requires an integer: {}", operand))?;
+    emitter.reserve_bytes(count); // Already emits zeros by default
     Ok(())
 }
 
@@ -2798,11 +2721,6 @@ fn emit_ldx(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
                 Ok(value) => emitter.ldx_immediate(value),
                 Err(e) if e.starts_with("SYMBOL:") => {
                     let (symbol, addend) = parse_symbol_and_addend(&e)?;
-                    // DEBUG: Log when adding symbol ref
-                    if symbol.len() == 1 {
-                        eprintln!("⚠️ LDX emit_ldx: operand='{}' value_part='{}' symbol='{}' addend={} offset={}", 
-                            operand, value_part, symbol, addend, emitter.current_offset());
-                    }
                     emitter.emit_immediate16_symbol_ref(&[0x8E], &symbol, addend);
                 }
                 Err(_) => {
@@ -2866,7 +2784,7 @@ fn emit_ldy(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
             }
         }
     } else if operand.contains(',') {
-        // Modo indexado
+        // Indexed mode
         let (postbyte, offset) = parse_indexed_mode(operand)?;
         emitter.ldy_indexed(postbyte);
         if let Some(off) = offset {
@@ -2956,9 +2874,6 @@ fn emit_ldu(emitter: &mut BinaryEmitter, operand: &str, equates: &HashMap<String
         // Try equates first (fast path)
         let upper = value_part.to_uppercase();
         if let Some(&value) = equates.get(&upper) {
-            if upper.contains("LEVEL_GP_BUFFER") || value == 0xC982 {
-                eprintln!("DEBUG emit_ldu: Found {} = 0x{:04X} in equates", upper, value);
-            }
             emitter.ldu_immediate(value);
         } else {
             match evaluate_expression(value_part, equates) {
@@ -3114,7 +3029,7 @@ fn parse_indexed_postbyte(operand: &str, _emitter: &mut BinaryEmitter) -> Result
             "Y" => 0x20,
             "U" => 0x40,
             "S" => 0x60,
-            _ => return Err(format!("Registro indexado no válido: {}", reg_str))
+            _ => return Err(format!("Invalid indexed register: {}", reg_str))
         };
         
         // Parse offset
@@ -3126,10 +3041,10 @@ fn parse_indexed_postbyte(operand: &str, _emitter: &mut BinaryEmitter) -> Result
         // Parse numeric offset
         let offset = if offset_str.starts_with("$") {
             i16::from_str_radix(&offset_str[1..], 16)
-                .map_err(|_| format!("Offset hexadecimal inválido: {}", offset_str))?
+                .map_err(|_| format!("Invalid hex offset: {}", offset_str))?
         } else {
             offset_str.parse::<i16>()
-                .map_err(|_| format!("Offset inválido: {}", offset_str))?
+                .map_err(|_| format!("Invalid offset: {}", offset_str))?
         };
         
         // Determine offset size and generate postbyte
@@ -3150,7 +3065,7 @@ fn parse_indexed_postbyte(operand: &str, _emitter: &mut BinaryEmitter) -> Result
             Ok(reg_bits | 0x89)
         }
     } else {
-        Err(format!("Formato de direccionamiento indexado inválido: {}", operand))
+        Err(format!("Invalid indexed addressing format: {}", operand))
     }
 }
 
@@ -3181,7 +3096,7 @@ fn emit_pulu(emitter: &mut BinaryEmitter, operand: &str) -> Result<(), String> {
 }
 
 fn parse_push_pull_postbyte(operand: &str) -> Result<u8, String> {
-    // Parsea lista de registros: "D,X,Y" o "A,B,DP"
+    // Parse register list: "D,X,Y" or "A,B,DP"
     let mut postbyte: u8 = 0;
     let parts: Vec<String> = operand.split(',').map(|s| s.trim().to_uppercase()).collect();
     
@@ -3193,10 +3108,10 @@ fn parse_push_pull_postbyte(operand: &str) -> Result<u8, String> {
             "DP" => 0x08,
             "X" => 0x10,
             "Y" => 0x20,
-            "U" | "S" => 0x40,  // Depende de la instrucción (PSHS vs PSHU)
+            "U" | "S" => 0x40,  // Depends on instruction (PSHS vs PSHU)
             "PC" => 0x80,
             "D" => 0x06,  // A+B
-            _ => return Err(format!("Registro desconocido en PUSH/PULL: {}", reg))
+            _ => return Err(format!("Unknown register in PUSH/PULL: {}", reg))
         };
     }
     

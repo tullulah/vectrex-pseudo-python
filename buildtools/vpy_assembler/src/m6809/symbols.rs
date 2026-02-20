@@ -18,18 +18,13 @@ pub fn set_include_dir(dir: Option<PathBuf>) {
 pub fn load_vectrex_symbols(equates: &mut HashMap<String, u16>) {
     // Try to load from VECTREX.I file first
     if let Some(ref include_dir) = unsafe { INCLUDE_DIR.as_ref() } {
-        eprintln!("🔍 [BIOS LOADER] INCLUDE_DIR is set: {:?}", include_dir);
         let vectrex_i = include_dir.join("VECTREX.I");
-        eprintln!("🔍 [BIOS LOADER] Looking for VECTREX.I at: {:?}", vectrex_i);
-        eprintln!("🔍 [BIOS LOADER] File exists: {}", vectrex_i.exists());
-        
+
         if vectrex_i.exists() {
             match fs::read_to_string(&vectrex_i) {
                 Ok(content) => {
-                    eprintln!("✅ [BIOS LOADER] Successfully loaded VECTREX.I ({} bytes)", content.len());
                     parse_vectrex_symbols(&content, equates);
                     add_uppercase_aliases(equates);
-                    eprintln!("✅ [BIOS LOADER] Parsed {} BIOS symbols from VECTREX.I", equates.len());
                     return;
                 }
                 Err(e) => {
@@ -37,12 +32,9 @@ pub fn load_vectrex_symbols(equates: &mut HashMap<String, u16>) {
                 }
             }
         }
-    } else {
-        eprintln!("⚠️ [BIOS LOADER] INCLUDE_DIR is NOT set - using fallback");
     }
-    
+
     // Fallback to embedded symbols
-    eprintln!("⚠️ [BIOS LOADER] Using fallback BIOS symbols");
     load_vectrex_symbols_fallback(equates);
     add_uppercase_aliases(equates);
 }

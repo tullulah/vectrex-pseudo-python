@@ -120,8 +120,6 @@ impl MultiBankLinker {
     ///
     /// Returns: HashMap<bank_id, BankSection>
     pub fn split_asm_by_bank(&self, asm_content: &str) -> Result<HashMap<u8, BankSection>, String> {
-        eprintln!("🔧 split_asm_by_bank called with {} bytes", asm_content.len());
-        
         // **FIRST PASS**: Collect all definitions (EQU) before processing banks
         // This is necessary because definitions may appear AFTER bank code in the ASM
         let mut definitions = String::new();
@@ -144,7 +142,6 @@ impl MultiBankLinker {
                 }
             }
         }
-        eprintln!("📋 Collected definitions: {} bytes", definitions.len());
         
         // Helper: detect start of shared data (arrays/consts) inside a bank block
         let extract_shared_tail = |code: &str| -> Option<String> {
@@ -278,17 +275,6 @@ impl MultiBankLinker {
                         } else {
                             format!("{}\n{}\n{}", include_directives, definitions, current_code)
                         };
-                        eprintln!("🔍 [SPLIT DEBUG] Saving Bank #{}: org=0x{:04X}, current_code_len={}, full_code_len={}", 
-                            bank_id, org, current_code.len(), full_code.len());
-                        // DEBUG: Check if definitions are in current_code
-                        let current_has_equ = current_code.contains(" EQU ");
-                        let current_has_result = current_code.contains("RESULT");
-                        eprintln!("🔍 [SPLIT DEBUG] Bank #{}: current_code has_equ={}, has_result={}", 
-                            bank_id, current_has_equ, current_has_result);
-                        if bank_id == 0 && current_code.len() > 0 {
-                            eprintln!("🔍 [SPLIT DEBUG] Bank #0 current_code preview (first 500 chars):\n{}", 
-                                &current_code[..500.min(current_code.len())]);
-                        }
                         sections.insert(bank_id, BankSection {
                             bank_id,
                             org,
@@ -397,9 +383,6 @@ impl MultiBankLinker {
                 .filter_map(|m| post_bank_code.find(m))
                 .min()
                 .unwrap_or(post_bank_code.len());
-            if cut_pos < post_bank_code.len() {
-                eprintln!("     - Excluding assets from runtime_helpers (cut at position {} / {})", cut_pos, post_bank_code.len());
-            }
             post_bank_code[..cut_pos].to_string()
         };
         runtime_helpers.push_str(&post_bank_code_without_assets);
@@ -445,7 +428,6 @@ impl MultiBankLinker {
             // This ensures PC starts at correct address for this bank
             // Bank #31 (fixed window) uses $4000, all others use $0000
             // CRITICAL: For Bank #31, CUSTOM_RESET must come IMMEDIATELY after ORG, before helpers
-            eprintln!("DEBUG split_asm_by_bank: bank_id={}, org_line_empty={}, org_line={:?}", bank_id, org_line.is_empty(), org_line.trim());
             
             // Extract CUSTOM_RESET if present in helpers bank (must be first instruction)
             let helpers_bank = (self.rom_bank_count - 1) as u8;
@@ -492,12 +474,9 @@ impl MultiBankLinker {
                 .join("\n");
             
             let full_code = if org_line.is_empty() {  // CRITICAL FIX (2026-01-17): Bank #0 also needs ORG directive
-                eprintln!("  → Entering org_line.is_empty() block");
                 let org_directive = if bank_id == helpers_bank {
-                    eprintln!("    → Helpers bank #{} detected - using ORG $4000", helpers_bank);
                     "    ORG $4000  ; Fixed bank window (runtime helpers + interrupt vectors)\n".to_string()
                 } else {
-                    eprintln!("    → Bank #{} detected - using ORG $0000", bank_id);
                     "    ORG $0000\n".to_string()
                 };
                 // For helpers bank: ORG → CUSTOM_RESET → includes/defs → helpers → remaining code
@@ -507,7 +486,6 @@ impl MultiBankLinker {
                     format!("{}{}\n{}\n{}\n{}", org_directive, include_directives, definitions, clean_runtime_helpers, clean_code_without_org)
                 }
             } else {
-                eprintln!("  → Using org_line from code");
                 if bank_id == helpers_bank {
                     format!("{}{}\n{}\n{}\n{}\n{}", org_line, custom_reset_code, include_directives, definitions, clean_runtime_helpers, clean_remaining_code)
                 } else {
@@ -515,10 +493,6 @@ impl MultiBankLinker {
                 }
             };
             let size = full_code.len();
-            if bank_id == helpers_bank {
-                eprintln!("DEBUG: Helpers bank #{} full_code starts with: {}", helpers_bank, &full_code[..80.min(full_code.len())].replace("\n", "\\n"));
-                eprintln!("DEBUG: Inserting helpers bank #{} section with ORG $4000", helpers_bank);
-            }
             sections.insert(bank_id, BankSection {
                 bank_id,
                 org,
@@ -839,20 +813,7 @@ impl MultiBankLinker {
         // DEBUG: Check for multiple ORG directives (should only be ONE)
         let org_count = full_asm_longbranch.matches("ORG $").count();
         
-        if org_count > 1 {
-            eprintln!("     [WARNING] Multiple ORG directives detected! This causes symbol scope conflicts.");
-            // Print first and last 100 lines to debug
-            let lines: Vec<&str> = full_asm_longbranch.lines().collect();
-            eprintln!("     [DEBUG] First 30 lines:");
-            for (i, line) in lines.iter().take(30).enumerate() {
-                eprintln!("       {:4}: {}", i+1, line);
-            }
-            eprintln!("     [DEBUG] Last 30 lines:");
-            let start_idx = lines.len().saturating_sub(30);
-            for (i, line) in lines.iter().skip(start_idx).enumerate() {
-                eprintln!("       {:4}: {}", start_idx+i+1, line);
-            }
-        }
+        let _ = org_count; // suppress unused variable warning
         
         let (binary, _line_map, _symbol_table, _unresolved) = vpy_assembler::m6809::asm_to_binary::assemble_m6809(
             &full_asm_longbranch,
@@ -894,20 +855,12 @@ impl MultiBankLinker {
         asm_path: &Path,
         output_rom_path: &Path,
     ) -> Result<HashMap<String, u16>, String> {
-        eprintln!("   [Multi-Bank Linker] Generating 512KB ROM...");
-        eprintln!("   [DEBUG] ASM path: {:?}", asm_path);
-        eprintln!("   [DEBUG] ASM exists: {}", asm_path.exists());
-        
         // Read ASM
         let asm_content = fs::read_to_string(asm_path)
             .map_err(|e| format!("Failed to read ASM from {:?}: {}", asm_path, e))?;
         
         // Split by bank
         let sections = self.split_asm_by_bank(&asm_content)?;
-        eprintln!("     - Found {} bank section(s)", sections.len());
-        for (bank_id, section) in &sections {
-            eprintln!("       Bank #{}: {} bytes ASM", bank_id, section.asm_code.len());
-        }
         
         // **PASS 1**: Iteratively extract global symbol table from all banks
         // This allows cross-bank references (e.g., CUSTOM_RESET referencing START)
@@ -922,27 +875,16 @@ impl MultiBankLinker {
         
         // Set include_dir BEFORE loading symbols to ensure VECTREX.I is found
         if let Some(ref dir) = self.include_dir {
-            eprintln!("     - Setting INCLUDE_DIR for multibank: {:?}", dir);
             set_include_dir(Some(dir.clone()));
         }
         
         let mut bios_equates = std::collections::HashMap::new();
         load_vectrex_symbols(&mut bios_equates);
         
-        eprintln!("     - Loaded {} BIOS symbols from shared table", bios_equates.len());
-        eprintln!("       [DEBUG] Print_Str_d in bios_equates: {}", bios_equates.contains_key("Print_Str_d"));
-        if let Some(&addr) = bios_equates.get("Print_Str_d") {
-            eprintln!("       [DEBUG] Print_Str_d address in bios_equates: 0x{:04X}", addr);
-        }
-        
         // Insert BIOS symbols into all_symbols
         for (name, addr) in bios_equates.iter() {
             all_symbols.insert(name.clone(), *addr);
         }
-        
-        eprintln!("       [DEBUG] After insert: Print_Str_d in all_symbols: {}", all_symbols.contains_key("Print_Str_d"));
-        
-        eprintln!("     - Loaded {} BIOS symbols from shared table", bios_equates.len());
         
         // Also define a placeholder for START - will be overwritten if found in actual code
         if !all_symbols.contains_key("START") {
@@ -951,8 +893,6 @@ impl MultiBankLinker {
         
         for iteration in 0..max_iterations {
             let prev_count = all_symbols.len();
-            
-            eprintln!("     - PASS 1 Iteration {}: Extracting symbols from all banks...", iteration + 1);
             
             // CRITICAL FIX (2026-01-20): Process Banks #0-#30 FIRST, then Bank #31 LAST
             // Reason: Bank #31 contains ASSET_ADDR_TABLE which references assets in Banks #1-#30
@@ -982,15 +922,6 @@ impl MultiBankLinker {
                         }
                         external_symbols.push_str("\n");
                         
-                        // DEBUG: Check Print_Str_d for Bank #31
-                        if bank_id as u8 == helper_bank_id {
-                            eprintln!("       [DEBUG PASS 1] Bank #31: Injecting {} symbols", all_symbols.len());
-                            eprintln!("       [DEBUG PASS 1] Print_Str_d in all_symbols: {}", all_symbols.contains_key("Print_Str_d"));
-                            if let Some(&addr) = all_symbols.get("Print_Str_d") {
-                                eprintln!("       [DEBUG PASS 1] Print_Str_d address: 0x{:04X}", addr);
-                            }
-                        }
-                        
                         // Insert after INCLUDE directive or at start if no INCLUDE
                         let lines: Vec<&str> = bank_asm.lines().collect();
                         let mut new_asm = String::new();
@@ -1019,7 +950,6 @@ impl MultiBankLinker {
                     // Try to assemble with available symbols
                     match vpy_assembler::m6809::asm_to_binary::assemble_m6809(&bank_asm, 0x0000, false, false) {
                         Ok((_, _, symbol_table, _)) => {
-                            let sym_count = symbol_table.len();
                             
                             // Calculate runtime address for each symbol based on bank
                             // CRITICAL FIX (2026-01-18): Symbol addresses from assembler already include ORG
@@ -1035,41 +965,24 @@ impl MultiBankLinker {
                                 
                                 let runtime_addr = addr;  // Use address as-is (ORG already included)
                                 
-                                // DEBUG: Log PRINT_TEXT_STR symbols from Bank #31
-                                if bank_id as u8 == helper_bank_id && label.contains("PRINT_TEXT_STR") {
-                                    eprintln!("         DEBUG: Bank #{} symbol '{}' at addr 0x{:04X} (runtime 0x{:04X})", 
-                                             bank_id, label, addr, runtime_addr);
-                                }
-                                
-                                // DEBUG: Log VECTOR_BANK_TABLE and VECTOR_ADDR_TABLE
-                                if label.contains("VECTOR_BANK_TABLE") || label.contains("VECTOR_ADDR_TABLE") {
-                                    eprintln!("         ⚠️ IMPORTANT: Bank #{} found symbol '{}' at addr 0x{:04X}", 
-                                             bank_id, label, runtime_addr);
-                                }
-                                
                                 // Prefer symbols from fixed bank (#31) in case of conflicts
                                 if !all_symbols.contains_key(&label) || bank_id as u8 == helper_bank_id {
-                                    // DEBUG: Log music asset symbols
-                                    if label.contains("_MUSIC") {
-                                        eprintln!("         → Adding music asset '{}' at 0x{:04X} from Bank #{}", label, runtime_addr, bank_id);
-                                    }
                                     all_symbols.insert(label, runtime_addr);
                                 }
                             }
-                            eprintln!("       Bank #{}: {} symbols extracted", bank_id, sym_count);
                         }
                         Err(e) => {
                             // Bank failed to assemble - this is expected for cross-bank references
                             // Continue with other banks to collect their symbols
                             // We'll retry this bank in the next iteration with more symbols available
                             if iteration < max_iterations - 1 {
-                                // Extract the symbol name from error "Símbolo no definido: SYMBOLNAME"
+                                // Extract the symbol name from error "Undefined symbol: SYMBOLNAME"
                                 let missing_symbol = if e.contains(": ") {
                                     e.split(": ").last().unwrap_or("unknown")
                                 } else {
                                     "unknown"
                                 };
-                                eprintln!("       ⚠️ Bank #{} deferred (missing: {})", bank_id, missing_symbol);
+                                let _ = missing_symbol; // suppress unused variable
                                 // Continue - don't fail yet, more iterations may resolve this
                             } else {
                                 // Final iteration - this is a real error
@@ -1088,7 +1001,6 @@ impl MultiBankLinker {
             }
             
             let new_count = all_symbols.len();
-            eprintln!("       Total symbols: {} (new: {})", new_count, new_count - prev_count);
             
             // If no new symbols found, we've converged
             if new_count == prev_count {
@@ -1096,30 +1008,17 @@ impl MultiBankLinker {
             }
         }
         
-        eprintln!("     - Extracted {} global symbols", all_symbols.len());
-        
         // CRITICAL: START symbol MUST exist - it's the entry point
         if !all_symbols.contains_key("START") {
             eprintln!("       ❌ FATAL: Symbol START not found in symbol table");
             eprintln!("          START is the program entry point - multibank build cannot proceed.");
             return Err("Symbol START not found - cannot generate multibank ROM".to_string());
         }
-        eprintln!("       ✓ Symbol START found at 0x{:04X}", all_symbols["START"]);
-        
-        // DEBUG: Show vector asset symbols (no reassignment to helpers bank)
-        for asset in &["_PLAYER_VECTORS", "_PLAYER_PATH0", "_ENEMY_VECTORS", "_ENEMY_PATH0"] {
-            if let Some(&addr) = all_symbols.get(*asset) {
-                eprintln!("       • {} at 0x{:04X}", asset, addr);
-            }
-        }
-        // No reassignment: asset symbols keep their original bank address
 
         // **PASS 2**: Assemble helper bank with all symbols available
         let helper_section = sections.get(&helper_bank_id)
             .ok_or_else(|| format!("Helper bank #{} not found in ASM sections", helper_bank_id))?;
 
-        eprintln!("     - PASS 2: Assembling helper bank #{} with global symbols...", helper_bank_id);
-        
         // Inject all extracted symbols into helper bank ASM
         let mut helper_asm_with_symbols = String::new();
         for (symbol, address) in &all_symbols {
@@ -1127,18 +1026,14 @@ impl MultiBankLinker {
         }
         helper_asm_with_symbols.push_str("\n");
         helper_asm_with_symbols.push_str(&helper_section.asm_code);
-        
-        eprintln!("       - Injected {} symbols into helper bank ASM", all_symbols.len());
-        
+
         let helper_full_asm_longbranch = convert_short_to_long_branches(&helper_asm_with_symbols);
         // CRITICAL FIX (2026-01-14): Helper bank uses fixed window at 0x4000, not 0x0000
         let helpers_bank = (self.rom_bank_count - 1) as u8;
-        let helper_org = if helper_bank_id == helpers_bank { 
-            eprintln!("DEBUG: helper_bank_id={} == helpers_bank ({})? YES → using ORG $4000", helper_bank_id, helpers_bank);
-            0x4000u16 
-        } else { 
-            eprintln!("DEBUG: helper_bank_id={} == helpers_bank ({})? NO → using ORG $0000", helper_bank_id, helpers_bank);
-            0x0000u16 
+        let helper_org = if helper_bank_id == helpers_bank {
+            0x4000u16
+        } else {
+            0x0000u16
         };
         let (mut helper_binary, _helper_line_map, _helper_symbol_table, _helper_unresolved) = vpy_assembler::m6809::asm_to_binary::assemble_m6809(
             &helper_full_asm_longbranch,
@@ -1155,7 +1050,6 @@ impl MultiBankLinker {
         helper_binary.resize(bank_size, 0xFF);
 
         // Use the global symbol table extracted from all banks
-        eprintln!("     - Using global symbol table: {} entries", all_symbols.len());
         
         // Create temp directory for bank assemblies
         let temp_dir = output_rom_path.parent()
@@ -1318,33 +1212,14 @@ impl MultiBankLinker {
         flattened.push_str("ORG $FFFE\n");
         flattened.push_str("FDB CUSTOM_RESET\n");
 
-        // DEBUG: Check what Bank #31 looks like in flattened BEFORE writing
-        let bank31_marker = flattened.find("; ===== BANK #31").unwrap_or(0);
-        if bank31_marker > 0 && bank31_marker + 50 < flattened.len() {
-            let after_marker = bank31_marker + 50; // Skip marker line
-            let end = (after_marker + 100).min(flattened.len());
-            let snippet = &flattened[after_marker..end];
-            eprintln!("DEBUG: Flattened Bank #31 content before write starts: {}...", snippet.replace("\n", "\\n"));
-        }
-
         fs::write(&flattened_path, flattened)
             .map_err(|e| format!("Failed to write flattened ASM to {:?}: {}", flattened_path, e))?;
-        {
-            eprintln!("       [DEBUG] Flattened ASM written to {}", flattened_path.display());
-            eprintln!("       [DEBUG] File size: {} bytes", fs::metadata(&flattened_path).map(|m| m.len()).unwrap_or(0));
-        }
 
         // Emit per-bank ASM snapshots (bank_00.asm .. bank_31.asm) with explicit ORG for inspection
-        eprintln!("DEBUG: Writing bank ASM files. sections.keys() = {:?}", sections.keys().collect::<Vec<_>>());
         for bank_id in 0..self.rom_bank_count {
             let bank_path = temp_dir.join(format!("bank_{:02}.asm", bank_id));
             if let Some(section) = sections.get(&bank_id) {
                 let has_org = section.asm_code.contains("ORG ");
-                let has_assets = section.asm_code.contains("_VECTORS:") || section.asm_code.contains("_MUSIC:");
-                eprintln!("DEBUG: Bank #{}: asm_code.len()={}, has_org={}, has_assets={}", 
-                    bank_id, section.asm_code.len(), has_org, has_assets);
-                eprintln!("DEBUG: Bank #{} asm_code preview (first 300 chars):\n{}", 
-                    bank_id, &section.asm_code[..300.min(section.asm_code.len())]);
                 let mut bank_code = String::new();
                 if bank_id == 31 && !has_org {
                     bank_code.push_str("ORG $4000  ; Fixed bank window\n");
@@ -1355,7 +1230,6 @@ impl MultiBankLinker {
                 fs::write(&bank_path, bank_code)
                     .map_err(|e| format!("Failed to write bank_{:02}.asm: {}", bank_id, e))?;
             } else {
-                eprintln!("DEBUG: Bank #{} NOT FOUND in sections!", bank_id);
                 // Create an explicit empty placeholder to keep numbering consistent
                 let placeholder = format!("; [empty bank {:02}]\n", bank_id);
                 fs::write(&bank_path, placeholder)
@@ -1367,13 +1241,11 @@ impl MultiBankLinker {
         let mut rom_data = Vec::new();
         for bank_id in 0..self.rom_bank_count {
             if bank_id as u8 == helper_bank_id {
-                eprintln!("     - Using preassembled helper bank #{}", helper_bank_id);
                 rom_data.extend_from_slice(&helper_binary);
                 continue;
             }
 
             if let Some(section) = sections.get(&bank_id) {
-                eprintln!("     - Assembling Bank #{} ({} bytes code)...", bank_id, section.size_estimate);
                 // CRITICAL FIX (2026-01-20): Filter external symbols for this bank
                 // Include:
                 // 1. Bank #31 code range ($4000-$7FFF fixed window) - always visible
@@ -1390,23 +1262,11 @@ impl MultiBankLinker {
                     .map(|(k, v)| (k.clone(), *v))
                     .collect();
                 
-                // DEBUG: Check if Print_Str_d is in all_symbols and external_symbols
-                if bank_id == 31 {
-                    eprintln!("       [DEBUG] Print_Str_d in all_symbols: {}", all_symbols.contains_key("Print_Str_d"));
-                    eprintln!("       [DEBUG] Print_Str_d in external_symbols: {}", external_symbols.contains_key("Print_Str_d"));
-                    if let Some(&addr) = all_symbols.get("Print_Str_d") {
-                        eprintln!("       [DEBUG] Print_Str_d address in all_symbols: 0x{:04X}", addr);
-                    }
-                }
-                
-                eprintln!("       Filtered {} external symbols for Bank #{} (from {} total)", 
-                    external_symbols.len(), bank_id, all_symbols.len());
                 
                 let binary = self.assemble_bank(section, &temp_dir, &external_symbols)?;
                 rom_data.extend_from_slice(&binary);
             } else {
                 // Empty bank - fill with 0xFF
-                eprintln!("     - Bank #{} empty (padding with 0xFF)", bank_id);
                 rom_data.resize(rom_data.len() + self.rom_bank_size as usize, 0xFF);
             }
         }
@@ -1447,20 +1307,10 @@ impl MultiBankLinker {
         // The backend emits a complete Vectrex header (FCC, FCB, FDB, title, etc.)
         // which is assembled into Bank #0 by the linker's split_asm_by_bank process.
         // DO NOT overwrite it - it's already correct and complete.
-        eprintln!("     ℹ Multibank ROM: Header assembled in Bank #0 (from backend codegen)");
 
         // Write ROM
         fs::write(output_rom_path, final_rom)
             .map_err(|e| format!("Failed to write ROM: {}", e))?;
-        
-        eprintln!("     ✓ Multi-bank ROM written: {} KB ({} bytes)", 
-            expected_size / 1024, expected_size);
-
-        
-        // Cleanup temp directory
-        // DEBUG: Don't remove temp dir so we can inspect ASM files
-        // let _ = fs::remove_dir_all(&temp_dir);
-        eprintln!("     [DEBUG] Temp ASM files kept in: {:?}", temp_dir);
         
         // Return symbol table for PDB generation
         Ok(all_symbols)

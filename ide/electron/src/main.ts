@@ -846,6 +846,8 @@ function resolveCompilerPath(backend: 'buildtools' | 'core' = 'buildtools'): str
     const names = process.platform === 'win32' ? ['vectrexc.exe'] : ['vectrexc'];
     for (const exe of names) {
       candidates.push(
+        // Packaged app: resources directory (highest priority)
+        join(process.resourcesPath, exe),
         join(cwd, 'target', 'debug', exe),
         join(cwd, 'target', 'release', exe),
         join(cwd, 'core', 'target', 'debug', exe),
@@ -864,6 +866,8 @@ function resolveCompilerPath(backend: 'buildtools' | 'core' = 'buildtools'): str
   const names = process.platform === 'win32' ? ['vpy_cli.exe'] : ['vpy_cli'];
   for (const exe of names) {
     candidates.push(
+      // Packaged app: resources directory (highest priority)
+      join(process.resourcesPath, exe),
       join(cwd, 'buildtools', 'target', 'debug', exe),
       join(cwd, 'buildtools', 'target', 'release', exe),
       join(cwd, 'target', 'debug', exe),

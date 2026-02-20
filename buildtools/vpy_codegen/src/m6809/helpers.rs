@@ -10,26 +10,22 @@ use super::ram_layout::RamLayout;
 /// Returns set of helper names that should be emitted
 pub fn analyze_module_helpers(module: &Module) -> HashSet<String> {
     let mut needed = HashSet::new();
-    
-    eprintln!("[DEBUG HELPERS] Analyzing module with {} items", module.items.len());
-    
+
     // Scan all functions in module
     for item in &module.items {
         if let Item::Function(func) = item {
-            eprintln!("[DEBUG HELPERS] Analyzing function: {}", func.name);
             for stmt in &func.body {
                 analyze_stmt_for_helpers(stmt, &mut needed);
             }
         }
     }
-    
+
     needed
 }
 
 /// Generate RAM definitions and array data (called BEFORE user functions)
 /// Returns tuple: (ASM string, RamLayout for later use by generate_helpers)
 pub fn generate_ram_and_arrays(module: &Module) -> Result<String, String> {
-    eprintln!("[DEBUG RAM] Generating RAM definitions and array data...");
     let mut asm = String::new();
     
     // Analyze module to detect which helpers are needed (for RAM allocation)
@@ -113,7 +109,6 @@ pub fn generate_ram_and_arrays(module: &Module) -> Result<String, String> {
     // Audio system variables (auto-detected)
     use crate::m6809::functions::has_audio_calls;
     if has_audio_calls(module) {
-        eprintln!("[DEBUG RAM] Audio calls detected, emitting PSG RAM variables");
         ram.allocate("PSG_MUSIC_PTR", 2, "PSG music data pointer");
         ram.allocate("PSG_MUSIC_START", 2, "PSG music start pointer (for loops)");
         ram.allocate("PSG_MUSIC_ACTIVE", 1, "PSG music active flag");
@@ -140,13 +135,9 @@ pub fn generate_ram_and_arrays(module: &Module) -> Result<String, String> {
     // =========================================================================
     // USER VARIABLES (continue allocation after system vars)
     // =========================================================================
-    eprintln!("[DEBUG RAM] System RAM used: {} bytes", ram.total_size());
-    eprintln!("[DEBUG RAM] Generating user variables...");
-    
+
     // Generate user variables using the same RamLayout instance
     let user_vars_result = crate::m6809::variables::generate_user_variables(module, &mut ram)?;
-    
-    eprintln!("[DEBUG RAM] Total RAM used (system + user): {} bytes", ram.total_size());
     
     // =========================================================================
     // EMIT EQU DEFINITIONS
@@ -174,7 +165,6 @@ pub fn generate_ram_and_arrays(module: &Module) -> Result<String, String> {
 
 /// Recursively analyze statement for helper usage
 fn analyze_stmt_for_helpers(stmt: &Stmt, needed: &mut HashSet<String>) {
-    eprintln!("[DEBUG HELPERS] analyze_stmt: {:?}", std::mem::discriminant(stmt));
     match stmt {
         Stmt::Expr(expr, _) => analyze_expr_for_helpers(expr, needed),
         Stmt::Assign { value, .. } => analyze_expr_for_helpers(value, needed),
@@ -300,16 +290,11 @@ fn analyze_expr_for_helpers(expr: &Expr, needed: &mut HashSet<String>) {
             let left_is_const = matches!(**left, Expr::Number(_));
             let right_is_const = matches!(**right, Expr::Number(_));
             
-            eprintln!("[DEBUG HELPERS] Binary op {:?}: left_const={}, right_const={}", op, left_is_const, right_is_const);
-            
             if !left_is_const || !right_is_const {
                 match op {
                     BinOp::Mul => { needed.insert("MUL16".to_string()); }
                     BinOp::Div | BinOp::FloorDiv => { needed.insert("DIV16".to_string()); }
-                    BinOp::Mod => { 
-                        eprintln!("[DEBUG HELPERS] Detected MOD operation, adding MOD16");
-                        needed.insert("MOD16".to_string()); 
-                    }
+                    BinOp::Mod => { needed.insert("MOD16".to_string()); }
                     _ => {}
                 }
             }
@@ -382,15 +367,13 @@ fn get_bios_address(symbol_name: &str, fallback_address: &str) -> String {
 }
 
 pub fn generate_helpers(module: &Module) -> Result<String, String> {
-    eprintln!("[DEBUG HELPERS] Generating runtime helpers...");
     let mut asm = String::new();
-    
+
     // Import has_audio_calls for audio helper detection
     use crate::m6809::functions::has_audio_calls;
-    
+
     // Analyze module to detect which helpers are needed
     let needed = analyze_module_helpers(module);
-    eprintln!("[DEBUG HELPERS] Detected {} needed helpers: {:?}", needed.len(), needed);
     
     // Get BIOS function addresses from VECTREX.I
     let dp_to_d0 = get_bios_address("DP_to_D0", "$F1AA");
@@ -484,19 +467,15 @@ pub fn generate_helpers(module: &Module) -> Result<String, String> {
     // PLAY_MUSIC_RUNTIME and STOP_MUSIC_RUNTIME: Always emit if audio calls exist
     // (has_audio_calls already imported at top of function)
     if has_audio_calls(module) {
-        eprintln!("[DEBUG HELPERS] Emitting PLAY_MUSIC_RUNTIME helper (audio calls detected)");
         emit_play_music_runtime(&mut asm);
     }
-    
+
     // AUDIO_UPDATE: Auto-inject if PLAY_MUSIC or PLAY_SFX detected
     if has_audio_calls(module) {
-        eprintln!("[DEBUG HELPERS] Emitting AUDIO_UPDATE helper (audio calls detected)");
         emit_audio_update_helper(&mut asm);
         emit_play_sfx_runtime(&mut asm);
     }
-    
-    eprintln!("[DEBUG HELPERS] ASM length after all helpers: {}", asm.len());
-    
+
     Ok(asm)
 }
 

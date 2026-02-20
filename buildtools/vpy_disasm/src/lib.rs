@@ -167,7 +167,7 @@ pub fn disassemble_range(data: &[u8], start: usize, count: usize) -> Vec<String>
     while pc < end { 
         let op = if pc < data.len() { data[pc] } else { 0 };
         
-        // Detectar secuencias de FF (padding/datos no código)
+        // Detect sequences of FF (padding/non-code data)
         if op == 0xFF && pc + 1 < end && data.get(pc+1) == Some(&0xFF) {
             if !last_was_ff {
                 ff_start = pc;
@@ -179,7 +179,7 @@ pub fn disassemble_range(data: &[u8], start: usize, count: usize) -> Vec<String>
             continue;
         }
         
-        // Si terminó secuencia de FF, mostrar resumen
+        // If FF sequence ended, show summary
         if last_was_ff && ff_count > 0 {
             result.push(format!("{:04X}-{:04X}: [FF padding - {} bytes]", ff_start, pc - 1, ff_count));
             last_was_ff = false;
@@ -191,7 +191,7 @@ pub fn disassemble_range(data: &[u8], start: usize, count: usize) -> Vec<String>
         pc += adv;
     }
     
-    // Si terminó con FF padding
+    // If ended with FF padding
     if last_was_ff && ff_count > 0 {
         result.push(format!("{:04X}-{:04X}: [FF padding - {} bytes]", ff_start, end - 1, ff_count));
     }
