@@ -1,9 +1,0 @@
-{
-  "version": "1.0",
-  "name": "explosion",
-  "channels": ["A"],
-  "events": [
-    {"type": "noise", "tick": 0, "duration": 20, "period": 25, "velocity": 15}
-  ],
-  "totalTicks": 25
-}

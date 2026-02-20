@@ -1,3 +1,0 @@
-name = "test_debug"
-version = "1.0.0"
-entry = "src/main.vpy"

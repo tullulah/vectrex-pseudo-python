@@ -1,4 +1,0 @@
-name = "test_joystick2"
-version = "1.0.0"
-entry = "src/main.vpy"
-
